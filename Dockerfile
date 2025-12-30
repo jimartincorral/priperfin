@@ -32,7 +32,8 @@ WORKDIR /app
 ENV NODE_ENV=production
 
 # Install bash and bashio for Home Assistant add-on support
-RUN apk add --no-cache bash curl jq
+# Also install build tools for native modules (better-sqlite3)
+RUN apk add --no-cache bash curl jq python3 make g++
 
 # Install bashio
 RUN curl -J -L -o /tmp/bashio.tar.gz \
@@ -49,8 +50,9 @@ COPY --from=builder-api /prod/api ./
 # Copy the built dist folder
 COPY --from=builder-api /app/apps/api/dist ./dist
 
-# Copy Prisma schema for db push
+# Copy Prisma files for db push
 COPY --from=builder-api /app/apps/api/prisma ./prisma
+COPY --from=builder-api /app/apps/api/prisma.config.ts ./prisma.config.ts
 
 # Copy frontend build to be served by API
 COPY --from=builder-web /app/apps/web/dist ./client
