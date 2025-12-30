@@ -59,8 +59,8 @@ COPY --from=builder /app/apps/api/dist ./dist
 COPY --from=builder /app/apps/api/prisma ./prisma
 COPY --from=builder /app/apps/api/prisma.config.ts ./
 
-# Copy generated Prisma client
-COPY --from=builder /app/apps/api/src/generated ./src/generated
+# Copy generated Prisma client to where compiled code expects it
+COPY --from=builder /app/apps/api/src/generated ./dist/src/generated
 
 # Copy frontend build
 COPY --from=builder /app/apps/web/dist ./client
