@@ -20,6 +20,6 @@ async function bootstrap() {
   // or allow for custom configuration if needed globally.
   // For FileInterceptor to work, `app.use(multer().any())` is sometimes used, but not necessary with FileInterceptor.
 
-  await app.listen(process.env.PORT ?? 3000, '0.0.0.0');
+  await app.listen(process.env.PORT ?? 3000, '::');
 }
 bootstrap();
