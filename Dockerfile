@@ -59,8 +59,9 @@ COPY --from=builder /app/apps/api/dist ./dist
 COPY --from=builder /app/apps/api/prisma ./prisma
 COPY --from=builder /app/apps/api/prisma.config.ts ./
 
-# Copy generated Prisma client to where compiled code expects it
-COPY --from=builder /app/apps/api/src/generated ./dist/src/generated
+# Copy generated Prisma client (nest-cli.json now copies it to dist/src/generated during build)
+# This is a backup in case the asset copy didn't work
+COPY --from=builder /app/apps/api/dist/src/generated ./dist/src/generated
 
 # Copy frontend build
 COPY --from=builder /app/apps/web/dist ./client
