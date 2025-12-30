@@ -1,0 +1,80 @@
+{
+  "name": "priperfin-desktop",
+  "version": "1.0.3",
+  "description": "Personal Finance Tracker Desktop App",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "electron .",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder"
+  },
+  "keywords": [],
+  "author": "Jimartincorral",
+  "license": "Apache-2.0",
+  "devDependencies": {
+    "@electron/rebuild": "^4.0.2",
+    "electron": "^31.0.0",
+    "electron-builder": "^24.9.1",
+    "typescript": "^5.3.3"
+  },
+  "dependencies": {
+    "kill-port": "^2.0.1",
+    "tree-kill": "^1.2.2",
+    "@nestjs/common": "^11.0.1",
+    "@nestjs/config": "^3.2.3",
+    "@nestjs/core": "^11.0.1",
+    "@nestjs/mapped-types": "^2.1.0",
+    "@nestjs/platform-express": "^11.0.1",
+    "@nestjs/serve-static": "^5.0.4",
+    "@prisma/adapter-better-sqlite3": "^7.2.0",
+    "@prisma/client": "^7.2.0",
+    "@types/multer": "^2.0.0",
+    "archiver": "^7.0.1",
+    "better-sqlite3": "^12.5.0",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.14.3",
+    "csv-parse": "^6.1.0",
+    "dotenv": "^17.2.3",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.1",
+    "tar": "^6.2.1"
+  },
+  "build": {
+    "appId": "com.jimartincorral.priperfin",
+    "productName": "PriPerFin",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "package.json"
+    ],
+    "asarUnpack": [
+      "**/node_modules/@prisma/engines/**/*",
+      "**/node_modules/@prisma/client/**/*",
+      "**/node_modules/better-sqlite3/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "../api/dist",
+        "to": "api"
+      },
+      {
+        "from": "../api/prisma",
+        "to": "api/prisma"
+      },
+      {
+        "from": "../web/dist",
+        "to": "web"
+      }
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}

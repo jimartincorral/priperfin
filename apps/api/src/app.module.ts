@@ -19,6 +19,9 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 
 // Determine static files path: Docker container uses /app/client, dev uses relative path
 function getStaticPath(): string {
+  if (process.env.STATIC_PATH) {
+    return process.env.STATIC_PATH;
+  }
   const dockerPath = '/app/client';
   if (existsSync(dockerPath)) {
     return dockerPath;

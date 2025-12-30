@@ -7,6 +7,8 @@ apps/api/src/generated/
 # Build outputs (rebuilt by Docker)
 dist/
 apps/*/dist/
+release/
+apps/*/release/
 
 # Database (local dev only)
 *.db
