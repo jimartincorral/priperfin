@@ -1,0 +1,106 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Project Overview
+
+PriPerFin is a personal finance tracking application built as a pnpm monorepo with two apps:
+- **api**: NestJS backend with Prisma ORM and SQLite database
+- **web**: Lit-based web frontend using Vite
+
+## Commands
+
+### Development
+```bash
+pnpm dev              # Run both apps in parallel (api + web)
+pnpm build            # Build all packages
+pnpm test             # Run tests across all packages
+pnpm lint             # Lint all packages
+```
+
+### API-specific (from apps/api)
+```bash
+pnpm start:dev        # Watch mode development
+pnpm test             # Run Jest unit tests
+pnpm test:watch       # Run tests in watch mode
+pnpm test:e2e         # Run e2e tests
+pnpm lint             # ESLint with auto-fix
+pnpm format           # Prettier formatting
+```
+
+### Database (from apps/api)
+```bash
+npx prisma generate   # Regenerate Prisma client after schema changes
+npx prisma db push    # Push schema changes to database
+npx prisma studio     # Open Prisma Studio GUI
+```
+
+### Web-specific (from apps/web)
+```bash
+pnpm dev              # Vite dev server on 0.0.0.0
+pnpm build            # TypeScript compile + Vite build
+```
+
+## Architecture
+
+### Backend (apps/api)
+
+NestJS modular architecture with these domain modules:
+- **TransactionsModule**: Financial transactions with CSV import support
+- **CategoriesModule**: Hierarchical categories (income/expense/goal types)
+- **AccountsModule**: Bank accounts with debit/credit types
+- **SavingsGoalsModule**: Savings targets linked to categories
+- **ReportsModule**: Financial analytics and reports
+- **MonthlyBalancesModule**: Account balance tracking
+- **BackupModule**: Data backup/restore functionality
+- **SettingsModule**: App configuration (key-value store)
+- **AdminModule**: Administrative operations
+
+**Database**: SQLite via Prisma with better-sqlite3 adapter. Schema at `apps/api/prisma/schema.prisma`. Database path configured via `DATABASE_URL` env var.
+
+**API pattern**: REST endpoints at `/api/*`. Controllers use DTOs with class-validator for validation.
+
+### Frontend (apps/web)
+
+Lit web components with Material Design 3 theming:
+- **priperfin-app.ts**: Root component with Vaadin Router, navigation, and theme system
+- **views/**: Route components (view-expenses, view-goals, view-reports, view-settings)
+- **components/**: Reusable components (csv-wizard)
+- **api/client.ts**: HTTP client for backend communication (port 3000)
+- **i18n/**: Internationalization (en, es translations)
+
+**Routing**: Vaadin Router with paths: `/`, `/goals`, `/reports`, `/settings`
+
+### Key Data Models
+
+- **Transaction**: date, amount, description, category, account, notes, externalId (for dedup)
+- **Category**: name, icon, color, budget, type (INCOME/EXPENSE/GOAL), parent/children hierarchy
+- **Account**: name, initialBalance, type (DEBIT/CREDIT)
+- **SavingsGoal**: name, targetAmount, targetDate, savedAmount, category
+- **MonthlyBalance**: month, balance, account (unique per month+account)
+
+## Home Assistant Add-on
+
+The project is configured for deployment as a Home Assistant add-on:
+
+- `config.yaml`: Add-on configuration (name, ports, options schema)
+- `Dockerfile`: Multi-stage build with bashio for HA integration
+- `run.sh`: Startup script that reads HA config and starts the app
+- `repository.json`: Add-on repository metadata
+
+### Building the Add-on
+```bash
+docker build -t priperfin .
+```
+
+### Add-on Options
+- `database_path`: SQLite database path (default: `file:/data/priperfin.db`)
+- `backup_dir`: Backup directory path (default: `/backup/priperfin`)
+- `backup_encryption_key`: Optional encryption key for backups
+
+## Development Notes
+
+- API serves static files from `apps/web/dist` in dev, `/app/client` in Docker
+- Frontend connects to API at `http://{hostname}:3000/api`
+- Theme system supports light/dark/auto modes via `data-theme` attribute
+- Tests use Jest with ts-jest transform; test files match `*.spec.ts`

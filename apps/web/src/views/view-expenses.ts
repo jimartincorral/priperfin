@@ -1,0 +1,1484 @@
+import { LitElement, html, css } from 'lit';
+import { customElement, state } from 'lit/decorators.js';
+import { api } from '../api/client';
+import '../components/csv-wizard';
+import 'emoji-picker-element';
+
+import { i18n } from '../i18n/i18n';
+
+@customElement('view-expenses')
+export class ViewExpenses extends LitElement {
+  @state() transactions: any[] = [];
+  @state() categories: any[] = [];
+  @state() month = new Date().getMonth() + 1;
+  @state() year = new Date().getFullYear();
+  @state() loading = false;
+
+  @state() totalBalance = 0;
+  @state() verifiedBalance = 0;
+  @state() startingBalance = 0;
+  @state() balanceLoading = false;
+
+  @state() accounts: any[] = [];
+  @state() selectedAccountId: string = ''; // Empty = All Accounts
+
+  // Cost Objects (for credit cards)
+  @state() costObjects: any[] = [];
+  @state() costObjectBreakdown: any[] = [];
+
+  get selectedAccount() {
+    return this.accounts.find(a => a.id === this.selectedAccountId) || null;
+  }
+
+  get isCredit() {
+    return this.selectedAccount?.type === 'CREDIT';
+  }
+
+  @state() currency = 'USD';
+
+  @state() showAddForm = false;
+  @state() newTransaction = { date: new Date().toISOString().split('T')[0], description: '', amount: 0, categoryId: '', costObjectId: '', notes: '' };
+  @state() showWizard = false;
+  @state() transactionToDelete: string | null = null;
+  @state() showAddCategoryModal = false;
+  @state() categoryForm = { name: '', icon: '📁', color: '', type: 'EXPENSE', parentId: '' };
+  @state() showEmojiPicker = false;
+
+  @state() editingCell: { id: string, field: string } | null = null;
+  @state() editValue: any = null;
+
+  @state() sortField = 'date';
+  @state() sortDirection: 'asc' | 'desc' = 'desc';
+
+  @state() filterText = '';
+  @state() filterMinAmount: number | null = null;
+  @state() filterMaxAmount: number | null = null;
+  @state() filterCategoryId = '';
+  @state() filterDateFrom = '';
+  @state() filterDateTo = '';
+
+  @state() currentPage = 1;
+  @state() pageSize = 20;
+
+  @state() selectedTransactions: Set<string> = new Set();
+
+  @state() showColumnModal = false;
+  @state() columnConfig: { id: string, label: string, visible: boolean }[] = [
+    { id: 'select', label: 'Select', visible: true },
+    { id: 'date', label: 'common.date', visible: true },
+    { id: 'description', label: 'common.description', visible: true },
+    { id: 'categoryId', label: 'common.category', visible: true },
+    { id: 'costObjectId', label: 'cost_objects.funding_source', visible: false },
+    { id: 'amount', label: 'common.amount', visible: true },
+    { id: 'budget', label: 'expenses.budget_remaining', visible: true },
+    { id: 'notes', label: 'common.notes', visible: true },
+    { id: 'actions', label: 'common.actions', visible: true }
+  ];
+
+  get filteredTransactions() {
+    let filtered = this.transactions;
+
+    if (this.filterText) {
+      const lower = this.filterText.toLowerCase();
+      filtered = filtered.filter(t =>
+        t.description.toLowerCase().includes(lower) ||
+        (t.notes && t.notes.toLowerCase().includes(lower))
+      );
+    }
+
+    if (this.filterMinAmount !== null) {
+      filtered = filtered.filter(t => Math.abs(t.amount) >= this.filterMinAmount!);
+    }
+
+    if (this.filterMaxAmount !== null) {
+      filtered = filtered.filter(t => Math.abs(t.amount) <= this.filterMaxAmount!);
+    }
+
+    if (this.filterDateFrom) {
+      filtered = filtered.filter(t => new Date(t.date).toISOString().split('T')[0] >= this.filterDateFrom);
+    }
+
+    if (this.filterDateTo) {
+      filtered = filtered.filter(t => new Date(t.date).toISOString().split('T')[0] <= this.filterDateTo);
+    }
+
+    if (this.filterCategoryId) {
+      if (this.filterCategoryId === 'uncategorized') {
+        filtered = filtered.filter(t => !t.categoryId || t.categoryId === 'uncategorized');
+      } else {
+        const isParent = this.categories.some(c => c.id === this.filterCategoryId && !c.parentId);
+        if (isParent) {
+          const children = this.categories.filter(c => c.parentId === this.filterCategoryId).map(c => c.id);
+          const ids = [this.filterCategoryId, ...children];
+          filtered = filtered.filter(t => ids.includes(t.categoryId));
+        } else {
+          filtered = filtered.filter(t => t.categoryId === this.filterCategoryId);
+        }
+      }
+    }
+
+    return filtered.sort((a, b) => {
+      // 1. Primary Sort
+      let result = this.compare(a, b, this.sortField, this.sortDirection);
+      if (result !== 0) return result;
+
+      // 2. Secondary Sort: Date (Always Descending for latest first)
+      if (this.sortField !== 'date') {
+        result = this.compare(a, b, 'date', 'desc');
+        if (result !== 0) return result;
+      }
+
+      // 3. Tertiary Sort: Description (Alphabetical)
+      if (this.sortField !== 'description') {
+        result = this.compare(a, b, 'description', 'asc');
+        if (result !== 0) return result;
+      }
+
+      return 0;
+    });
+  }
+
+  get pagedTransactions() {
+    const total = this.filteredTransactions.length;
+    const maxPage = Math.ceil(total / this.pageSize) || 1;
+    if (this.currentPage > maxPage) this.currentPage = 1;
+
+    const start = (this.currentPage - 1) * this.pageSize;
+    return this.filteredTransactions.slice(start, start + this.pageSize);
+  }
+
+  get sortedTransactions() {
+    // Legacy getter, replaced by pagedTransactions for render
+    return this.pagedTransactions;
+  }
+
+  connectedCallback() {
+    super.connectedCallback();
+    this.showWizard = false;
+    i18n.addEventListener('lang-change', () => this.requestUpdate());
+  }
+
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    i18n.removeEventListener('lang-change', () => this.requestUpdate());
+  }
+
+  toggleSelection(id: string) {
+    const newSet = new Set(this.selectedTransactions);
+    if (newSet.has(id)) {
+      newSet.delete(id);
+    } else {
+      newSet.add(id);
+    }
+    this.selectedTransactions = newSet;
+    this.requestUpdate();
+  }
+
+  toggleSelectAll(e: Event) {
+    const checked = (e.target as HTMLInputElement).checked;
+    if (checked) {
+      this.selectedTransactions = new Set(this.pagedTransactions.map(t => t.id));
+    } else {
+      this.selectedTransactions = new Set();
+    }
+    // Force update to reflect state change if Lit doesn't detect Set mutation (it usually doesn't deeply watch Sets)
+    this.requestUpdate();
+  }
+
+  async deleteSelected() {
+    if (!confirm(`Are you sure you want to delete ${this.selectedTransactions.size} transactions?`)) return;
+
+    try {
+      for (const id of this.selectedTransactions) {
+        await api.delete(`/transactions/${id}`);
+      }
+      this.selectedTransactions = new Set();
+      await this.loadData(true);
+    } catch (e: any) {
+      alert('Failed to delete selected: ' + e.message);
+    }
+  }
+
+  async bulkUpdateCategory(categoryId: string) {
+    if (!categoryId) return;
+    try {
+      for (const id of this.selectedTransactions) {
+        await api.patch(`/transactions/${id}`, { categoryId });
+      }
+      this.selectedTransactions = new Set();
+      await this.loadData(true);
+    } catch (e: any) {
+      alert('Failed to update category: ' + e.message);
+    }
+  }
+
+  renderPaginationControls() {
+    return html`
+        <div class="pagination-controls" style="margin-bottom: 1rem;">
+            <span style="font-size: 0.875rem; color: var(--md-sys-color-on-surface-variant);">${i18n.t('table.rows_per_page')}:</span>
+            <select style="width: auto; height: 32px; padding: 0 8px;" 
+                .value="${this.pageSize}" 
+                @change="${(e: any) => { this.pageSize = parseInt(e.target.value); this.currentPage = 1; }}">
+                <option value="20">20</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
+                <option value="200">200</option>
+            </select>
+
+            <span style="font-size: 0.875rem; color: var(--md-sys-color-on-surface-variant);">
+                ${(this.currentPage - 1) * this.pageSize + 1}-${Math.min(this.currentPage * this.pageSize, this.filteredTransactions.length)} of ${this.filteredTransactions.length}
+            </span>
+
+            <div style="display: flex; gap: 8px;">
+                <button class="btn-secondary" 
+                    ?disabled="${this.currentPage === 1}"
+                    @click="${() => this.currentPage--}">
+                    <
+                </button>
+                <button class="btn-secondary" 
+                    ?disabled="${this.currentPage * this.pageSize >= this.filteredTransactions.length}"
+                    @click="${() => this.currentPage++}">
+                    >
+                </button>
+            </div>
+        </div>
+      `;
+  }
+
+  async loadBalances() {
+    this.balanceLoading = true;
+    const monthKey = `${this.year}-${String(this.month).padStart(2, '0')}`;
+
+    try {
+      const [balData, settingData, monthlyRecord] = await Promise.all([
+        api.get('/transactions/balance'),
+        api.get('/settings/balance_verified').catch(() => null),
+        api.get(`/monthly-balances/${monthKey}`).catch(() => null)
+      ]);
+
+      this.totalBalance = balData.total || 0;
+      this.verifiedBalance = settingData ? parseFloat(settingData) : 0;
+
+      if (monthlyRecord) {
+        this.startingBalance = Number(monthlyRecord.balance);
+      } else {
+        await this.suggestStartingBalance();
+      }
+    } catch (e) {
+      console.error('Failed to load balances', e);
+    } finally {
+      this.balanceLoading = false;
+    }
+  }
+
+  async suggestStartingBalance() {
+    // Calculate previous month
+    let prevMonth = this.month - 1;
+    let prevYear = this.year;
+    if (prevMonth === 0) {
+      prevMonth = 12;
+      prevYear--;
+    }
+    const prevKey = `${prevYear}-${String(prevMonth).padStart(2, '0')}`;
+
+    try {
+      // Get previous starting balance
+      const prevRecord = await api.get(`/monthly-balances/${prevKey}`).catch(() => null);
+      const prevStart = prevRecord ? Number(prevRecord.balance) : 0;
+
+      // Get previous transactions to calc net change
+      const prevTxs = await api.get('/transactions', { month: prevMonth, year: prevYear });
+
+      let income = 0;
+      let expense = 0;
+
+      prevTxs.forEach((t: any) => {
+        const cat = this.categories.find(c => c.id === t.categoryId);
+        const amount = Number(t.amount);
+        if (cat?.type === 'INCOME') income += amount;
+        else expense += amount;
+      });
+
+      this.startingBalance = prevStart + income - expense;
+      // Auto-save inferred balance? Maybe better to let user confirm. 
+      // User request says "suggest". So filling it but not saving is safer until they interact or we decide.
+      // But if we don't save, next refresh it will recalc. That's fine.
+    } catch (e) {
+      console.warn('Failed to suggest balance', e);
+    }
+  }
+
+  async handleStartingBalanceChange(e: any) {
+    const newVal = parseFloat(e.target.value);
+    if (isNaN(newVal)) return;
+
+    this.startingBalance = newVal;
+    const monthKey = `${this.year}-${String(this.month).padStart(2, '0')}`;
+    try {
+      await api.post('/monthly-balances', { month: monthKey, balance: newVal });
+    } catch (e) {
+      console.error('Failed to save monthly balance', e);
+    }
+  }
+
+  async saveNewCategory() {
+    if (!this.categoryForm.name) {
+      alert('Please enter a category name');
+      return;
+    }
+
+    try {
+      const payload = {
+        name: this.categoryForm.name,
+        icon: this.categoryForm.icon,
+        // color: this.categoryForm.color, // Color is optional/removed from UI
+        type: this.categoryForm.type,
+        parentId: this.categoryForm.parentId || null
+      };
+      await api.post('/categories', payload);
+      this.showAddCategoryModal = false;
+      this.categoryForm = { name: '', icon: '📁', color: '#006493', type: 'EXPENSE', parentId: '' };
+      await this.loadData(true);
+    } catch (e: any) {
+      console.error('Failed to save category', e);
+      alert('Failed to save category: ' + (e.message || 'Unknown error'));
+    }
+  }
+
+  get monthlyStats() {
+    let income = 0;
+    let expense = 0;
+
+    this.transactions.forEach(t => {
+      const cat = this.categories.find(c => c.id === t.categoryId);
+      const amt = Number(t.amount);
+
+      // Use category type if available, otherwise fallback to amount sign
+      const isIncome = cat ? cat.type === 'INCOME' : amt > 0;
+
+      if (isIncome) {
+        income += amt;
+      } else {
+        // Expenses are stored as negative, so subtract to get positive magnitude
+        expense -= amt;
+      }
+    });
+    return { income, expense };
+  }
+
+  async updateVerifiedBalance(e: any) {
+    const newVal = parseFloat(e.target.value);
+    if (isNaN(newVal)) return;
+
+    this.verifiedBalance = newVal;
+    try {
+      await api.post('/settings/balance_verified', { value: newVal.toString() });
+    } catch (e) {
+      console.error('Failed to save balance', e);
+    }
+  }
+
+  async handleDescriptionBlur(e: any) {
+    const desc = e.target.value;
+    if (!desc || this.newTransaction.categoryId) return; // Don't overwrite if set
+
+    try {
+      const suggestion = await api.get('/transactions/suggest', { description: desc });
+      if (suggestion && suggestion.categoryId) {
+        this.newTransaction = { ...this.newTransaction, categoryId: suggestion.categoryId };
+      }
+    } catch (e) {
+      console.error('Failed to get suggestion', e);
+    }
+  }
+
+  compare(a: any, b: any, field: string, direction: 'asc' | 'desc') {
+    let valA = a[field];
+    let valB = b[field];
+
+    if (field === 'categoryId') {
+      const catA = this.categories.find(c => c.id === a.categoryId);
+      const catB = this.categories.find(c => c.id === b.categoryId);
+      valA = catA ? catA.name : '';
+      valB = catB ? catB.name : '';
+    }
+
+    // Safe lowercasing for strings
+    if (typeof valA === 'string') valA = valA.toLowerCase();
+    if (typeof valB === 'string') valB = valB.toLowerCase();
+
+    if (valA < valB) return direction === 'asc' ? -1 : 1;
+    if (valA > valB) return direction === 'asc' ? 1 : -1;
+    return 0;
+  }
+
+  toggleSort(field: string) {
+    if (this.sortField === field) {
+      this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
+    } else {
+      this.sortField = field;
+      this.sortDirection = 'asc';
+    }
+  }
+
+  static styles = css`
+    :host { display: block; }
+    
+    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+    h1 { font: var(--md-sys-typescale-headline-medium); color: var(--md-sys-color-on-surface); margin: 0; }
+
+    /* Filters: Outlined inputs */
+    .filters { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+    select, input { 
+        height: 40px;
+        padding: 0 16px;
+        border: 1px solid var(--md-sys-color-outline); 
+        border-radius: 4px; 
+        background-color: transparent;
+        color: var(--md-sys-color-on-surface);
+        font: var(--md-sys-typescale-body-large);
+        box-sizing: border-box;
+        transition: border-color 0.2s;
+    }
+    input:focus, select:focus {
+        border-color: var(--md-sys-color-primary);
+        outline: 1px solid var(--md-sys-color-primary);
+    }
+
+    input[type="checkbox"] {
+        accent-color: var(--md-sys-color-primary);
+    }
+
+    .form-group { margin-bottom: 16px; }
+    label { display: block; margin-bottom: 8px; font: var(--md-sys-typescale-label-medium); color: var(--md-sys-color-on-surface-variant); }
+
+    select option {
+        background-color: var(--md-sys-color-surface);
+        color: var(--md-sys-color-on-surface);
+    }
+    
+    /* Buttons: MD3 configurations */
+    button {
+        height: 40px;
+        padding: 0 24px;
+        border-radius: 20px; /* Stadium shape */
+        border: none;
+        font: var(--md-sys-typescale-label-large);
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        transition: background-image 0.2s, box-shadow 0.2s, background-color 0.2s;
+    }
+    
+    /* Filled Button (Primary) */
+    .btn-primary {
+        background-color: var(--md-sys-color-primary);
+        color: var(--md-sys-color-on-primary);
+        box-shadow: 0 1px 2px rgba(0,0,0,0.12); /* Elevation 1 */
+    }
+    .btn-primary:hover {
+        box-shadow: 0 1px 3px 1px rgba(0,0,0,0.15); /* Elevation 2 */
+        background-image: linear-gradient(rgba(255,255,255,0.08), rgba(255,255,255,0.08));
+    }
+    
+    /* Tonal Button (Secondary) */
+    .btn-secondary {
+        background-color: var(--md-sys-color-secondary-container);
+        color: var(--md-sys-color-on-secondary-container);
+    }
+    .btn-secondary:hover {
+        box-shadow: 0 1px 2px rgba(0,0,0,0.12);
+        background-image: linear-gradient(rgba(29, 25, 43, 0.08), rgba(29, 25, 43, 0.08));
+    }
+
+    .btn-danger {
+        background-color: var(--md-sys-color-error);
+        color: var(--md-sys-color-on-error);
+        width: 32px; height: 32px; padding: 0;
+    }
+
+    /* Cards: Elevated */
+    .card { 
+        background: var(--md-sys-color-surface-container-low); 
+        border-radius: var(--md-sys-shape-corner-medium); 
+        padding: 24px; 
+        box-shadow: 0 1px 3px 0 rgba(0,0,0,0.12), 0 1px 2px 0 rgba(0,0,0,0.24); /* Elevation 1 */
+        margin-bottom: 24px; 
+        display: flex; gap: 32px; align-items: center; 
+        overflow: hidden; /* Prevent overflow causing scrollbars */
+    }
+    .card h2 { margin: 0; font: var(--md-sys-typescale-title-small); color: var(--md-sys-color-on-surface-variant); }
+    .card .balance { font: var(--md-sys-typescale-display-small); color: var(--md-sys-color-on-surface); line-height: 1.2; margin-top: 4px; }
+    
+    /* Badges */
+    .category-badge { display: inline-flex; align-items: center; gap: 0.5rem; padding: 6px 12px; border-radius: 8px; font: var(--md-sys-typescale-label-medium); color: white; }
+    
+    /* Table */
+    .table-container { 
+        overflow-x: auto; -webkit-overflow-scrolling: touch; 
+        border-radius: var(--md-sys-shape-corner-large); 
+        border: 1px solid var(--md-sys-color-outline-variant);
+        background: var(--md-sys-color-surface);
+    }
+    table { width: 100%; min-width: 600px; border-collapse: separate; border-spacing: 0; background: var(--md-sys-color-surface); table-layout: fixed; } 
+    th, td { padding: 12px 16px; text-align: left; border-bottom: 1px solid var(--md-sys-color-outline-variant); vertical-align: middle; position: relative; color: var(--md-sys-color-on-surface); }
+    th { background: var(--md-sys-color-surface-container); font: var(--md-sys-typescale-title-small); color: var(--md-sys-color-on-surface-variant); text-transform: none; letter-spacing: 0.1px; }
+    
+    td { font: var(--md-sys-typescale-body-medium); }
+
+    .resizer { position: absolute; right: 0; top: 0; height: 100%; width: 5px; background: transparent; cursor: col-resize; user-select: none; touch-action: none; }
+    .resizer:hover, .resizing .resizer { background: var(--md-sys-color-primary); }
+    tr:last-child td { border-bottom: none; }
+    tr:nth-child(even) { background-color: var(--md-sys-color-surface-container-high); } /* Striped rows */
+    tr:hover { background-color: var(--md-sys-color-surface-container-highest); }
+
+    .amount { font-family: 'Roboto Mono', monospace; font-weight: 500; white-space: nowrap; }
+    .amount.negative { color: var(--md-sys-color-on-surface); } /* Neutral for negative */
+    .amount.positive { color: #16a34a; } /* Custom green for income still ok */
+    
+    .col-description { max-width: 250px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .col-date { white-space: nowrap; }
+    .col-notes { max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    .pagination-controls { display: flex; justify-content: flex-end; align-items: center; gap: 16px; margin-top: 16px; }
+    .pagination-controls button { width: 32px; height: 32px; padding: 0; border-radius: 16px; min-width: 32px; }
+
+    @media (max-width: 768px) {
+        .header { flex-direction: column; align-items: flex-start; gap: 16px; }
+        .filters { flex-wrap: wrap; width: 100%; gap: 12px; }
+        .filters button, .filters select { flex-grow: 1; }
+        .card { flex-wrap: wrap; gap: 16px !important; padding: 16px; }
+        .card > div { flex: 1 1 auto; }
+        .card .balance { font-size: 28px; }
+        .col-description { max-width: 150px; } 
+        .table-container {
+            border-top-right-radius: 0;
+            border-bottom-right-radius: 0;
+            border-right: none;
+            margin-right: -1rem; /* Bleed into the padding area */
+        }
+    }
+    
+    td.editable { cursor: pointer; position: relative; transition: background-color 0.2s; }
+    td.editable:hover { background-color: var(--md-sys-color-surface-container-highest); }
+    td.editable input, td.editable select { width: 100%; height: 100%; box-sizing: border-box; background: transparent; border: none; padding: 0; font: inherit; }
+    td.editable input:focus, td.editable select:focus { outline: none; border-bottom: 2px solid var(--md-sys-color-primary); border-radius: 0; }
+
+    .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+    .modal { background: var(--md-sys-color-surface-container-high); padding: 24px; border-radius: 28px; box-shadow: 0 4px 8px rgba(0,0,0,0.2); max-width: 400px; width: 100%; color: var(--md-sys-color-on-surface); }
+    .modal h3 { font: var(--md-sys-typescale-headline-small); margin-top: 0; color: var(--md-sys-color-on-surface); margin-bottom: 16px; }
+    .modal p { color: var(--md-sys-color-on-surface-variant); font: var(--md-sys-typescale-body-medium); margin-bottom: 24px; }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+    .vertical-divider { width: 1px; height: 40px; background: var(--md-sys-color-outline-variant); }
+    .amount-input { font: var(--md-sys-typescale-headline-medium); color: var(--md-sys-color-on-surface); border: none; border-bottom: 1px solid var(--md-sys-color-outline); width: 140px; padding: 4px; outline: none; background: transparent; height: auto; }
+    .amount-input:focus { border-bottom: 2px solid var(--md-sys-color-primary); }
+    .alert-error { margin-left: auto; padding: 1rem; background: var(--md-sys-color-error-container); border-radius: 8px; color: var(--md-sys-color-on-error-container); display: flex; align-items: center; gap: 1rem; }
+    .alert-success { margin-left: auto; padding: 1rem; background: #dcfce7; border-radius: 8px; color: #14532d; display: flex; align-items: center; gap: 1rem; }
+
+    emoji-picker { 
+        position: relative;
+        width: 350px; 
+        height: 300px; 
+        margin-top: 8px; 
+        --emoji-size: 1.5rem; 
+        background: var(--md-sys-color-surface-container-high);
+        border: 1px solid var(--md-sys-color-outline-variant);
+        border-radius: 8px;
+    }
+  `;
+
+  async firstUpdated() {
+    const storedCurrency = localStorage.getItem('priperfin_currency');
+    if (storedCurrency) this.currency = storedCurrency;
+
+    const storedColumns = localStorage.getItem('priperfin_column_config');
+    if (storedColumns) {
+      try {
+        this.columnConfig = JSON.parse(storedColumns);
+      } catch (e) { console.error('Failed to parse column config', e); }
+    }
+
+    await this.loadData();
+  }
+
+  saveColumnConfig() {
+    localStorage.setItem('priperfin_column_config', JSON.stringify(this.columnConfig));
+    this.showColumnModal = false;
+  }
+
+  moveColumn(index: number, direction: 'up' | 'down') {
+    const newConfig = [...this.columnConfig];
+    if (direction === 'up' && index > 0) {
+      [newConfig[index], newConfig[index - 1]] = [newConfig[index - 1], newConfig[index]];
+    } else if (direction === 'down' && index < newConfig.length - 1) {
+      [newConfig[index], newConfig[index + 1]] = [newConfig[index + 1], newConfig[index]];
+    }
+    this.columnConfig = newConfig;
+  }
+
+  toggleColumnVisibility(id: string) {
+    this.columnConfig = this.columnConfig.map(c => c.id === id ? { ...c, visible: !c.visible } : c);
+  }
+
+  renderColumnModal() {
+    if (!this.showColumnModal) return '';
+    return html`
+        <div class="modal-overlay" @click="${() => this.showColumnModal = false}">
+            <div class="modal" @click="${(e: Event) => e.stopPropagation()}" style="max-width: 500px;">
+                <h3>${i18n.t('table.columns_title')}</h3>
+                <div style="display: flex; flex-direction: column; gap: 8px; max-height: 400px; overflow-y: auto;">
+                    ${this.columnConfig.map((col, i) => html`
+                        <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px; background: var(--md-sys-color-surface-container-high); border-radius: 4px;">
+                            <label style="display: flex; align-items: center; gap: 8px; flex-grow: 1;">
+                                <input type="checkbox" .checked="${col.visible}" ?disabled="${col.id === 'select' || col.id === 'actions'}" 
+                                    @change="${() => this.toggleColumnVisibility(col.id)}" />
+                                ${i18n.t(col.label) || col.label}
+                            </label>
+                            <div style="display: flex; gap: 4px;">
+                                <button class="btn-secondary" style="height: 24px; padding: 0 8px;" @click="${() => this.moveColumn(i, 'up')}" ?disabled="${i === 0}">↑</button>
+                                <button class="btn-secondary" style="height: 24px; padding: 0 8px;" @click="${() => this.moveColumn(i, 'down')}" ?disabled="${i === this.columnConfig.length - 1}">↓</button>
+                            </div>
+                        </div>
+                    `)}
+                </div>
+                <div class="modal-actions">
+                    <button class="btn-primary" @click="${this.saveColumnConfig}">${i18n.t('common.save')}</button>
+                </div>
+            </div>
+        </div>
+      `;
+  }
+
+  renderAddCategoryModal() {
+    if (!this.showAddCategoryModal) return '';
+    return html`
+        <div class="modal-overlay" @click="${() => this.showAddCategoryModal = false}">
+            <div class="modal" @click="${(e: Event) => e.stopPropagation()}" style="max-width: 450px;">
+                <h3>${i18n.t('settings.new_category')}</h3>
+                <div style="display: grid; gap: 1rem;">
+                    <div class="form-group">
+                        <label>${i18n.t('settings.type')}</label>
+                        <select .value="${this.categoryForm.type}" 
+                            @change="${(e: any) => this.categoryForm = { ...this.categoryForm, type: e.target.value }}">
+                            <option value="EXPENSE">${i18n.t('settings.expense_categories')}</option>
+                            <option value="GOAL">${i18n.t('settings.goal_categories')}</option>
+                            <option value="INCOME">${i18n.t('expenses.filter_income')}</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>${i18n.t('settings.category_name')}</label>
+                        <input type="text" placeholder="e.g. Groceries" .value="${this.categoryForm.name}" 
+                            @input="${(e: any) => this.categoryForm = { ...this.categoryForm, name: e.target.value }}" />
+                    </div>
+
+                    <div class="form-group">
+                        <label>${i18n.t('settings.parent_group')}</label>
+                        <select .value="${this.categoryForm.parentId}" 
+                            @change="${(e: any) => this.categoryForm = { ...this.categoryForm, parentId: e.target.value }}">
+                            <option value="">None (Top Level)</option>
+                            ${this.categories.filter(c => !c.parentId && (c.type === this.categoryForm.type || !c.type)).map(c => html`
+                                <option value="${c.id}">${c.icon} ${c.name}</option>
+                            `)}
+                        </select>
+                    </div>
+                    
+                    <div style="display: flex; gap: 1rem;">
+                        <div class="form-group">
+                            <label>${i18n.t('settings.icon')}</label>
+                            <div style="position: relative;">
+                                <div style="display: flex; gap: 0.5rem; align-items: center;">
+                                    <input type="text" placeholder="Emoji" style="width: 60px; text-align: center;" .value="${this.categoryForm.icon}" 
+                                        @input="${(e: any) => this.categoryForm = { ...this.categoryForm, icon: e.target.value }}" />
+                                    <button @click="${() => this.showEmojiPicker = !this.showEmojiPicker}" title="Pick Emoji">😀</button>
+                                </div>
+                                ${this.showEmojiPicker ? html`
+                                    <div style="position: absolute; z-index: 2000; bottom: 100%; left: 0; margin-bottom: 8px;">
+                                        <div style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 1000;" @click="${() => this.showEmojiPicker = false}"></div>
+                                        <emoji-picker @emoji-click="${(e: any) => {
+          console.log('Expense Emoji clicked:', e.detail);
+          this.categoryForm = { ...this.categoryForm, icon: e.detail.unicode };
+          this.showEmojiPicker = false;
+        }}"></emoji-picker>
+                                    </div>
+                                ` : ''}
+                            </div>
+                        </div>
+                        
+                        <!-- Color input removed -->
+                    </div>
+                </div>
+                <div class="modal-actions" style="margin-top: 1rem;">
+                    <button class="btn-secondary" @click="${() => this.showAddCategoryModal = false}">${i18n.t('common.cancel')}</button>
+                    <button class="btn-primary" @click="${this.saveNewCategory}">${i18n.t('common.save')}</button>
+                </div>
+            </div>
+        </div>
+      `;
+  }
+
+  computeSuggestions() {
+    // Create a list of known categorized transactions
+    const known: { desc: string, catId: string }[] = [];
+    this.transactions.forEach(t => {
+      if (t.categoryId && t.categoryId !== 'uncategorized') {
+        known.push({ desc: t.description.toLowerCase(), catId: t.categoryId });
+      }
+    });
+
+    // Apply suggestions to uncategorized items
+    this.transactions = this.transactions.map(t => {
+      if (!t.categoryId || t.categoryId === 'uncategorized') {
+        const td = t.description.toLowerCase();
+
+        // Find best match: loose containment or shared prefix
+        const match = known.find(k => {
+          // 1. Containment (one contains the other)
+          if (td.includes(k.desc) || k.desc.includes(td)) return true;
+
+          // 2. Shared Prefix (at least 15 chars for bank descriptions)
+          if (td.length >= 15 && k.desc.length >= 15) {
+            if (td.substring(0, 15) === k.desc.substring(0, 15)) return true;
+          }
+
+          return false;
+        });
+
+        if (match) {
+          return { ...t, _suggestion: match.catId };
+        }
+      }
+      return t;
+    });
+  }
+
+  @state() columnWidths: { [key: string]: number } = {};
+  private resizingColumn: string | null = null;
+  private startX: number = 0;
+  private startWidth: number = 0;
+
+  startResize(e: MouseEvent, column: string) {
+    e.preventDefault();
+    this.resizingColumn = column;
+    this.startX = e.pageX;
+    this.startWidth = this.columnWidths[column] || (e.target as HTMLElement).parentElement!.offsetWidth;
+
+    document.addEventListener('mousemove', this.onMouseMove);
+    document.addEventListener('mouseup', this.onMouseUp);
+    document.body.style.cursor = 'col-resize';
+  }
+
+  onMouseMove = (e: MouseEvent) => {
+    if (this.resizingColumn) {
+      const currentWidth = this.startWidth + (e.pageX - this.startX);
+      if (currentWidth > 50) { // Min width
+        this.columnWidths = { ...this.columnWidths, [this.resizingColumn]: currentWidth };
+      }
+    }
+  }
+
+  onMouseUp = () => {
+    this.resizingColumn = null;
+    document.removeEventListener('mousemove', this.onMouseMove);
+    document.removeEventListener('mouseup', this.onMouseUp);
+    document.body.style.cursor = '';
+  }
+
+  async loadData(preserveScroll = false) {
+    const scrollPos = window.scrollY;
+    this.loading = true;
+    try {
+      // Build query params, including accountId if one is selected
+      const txQuery: any = { month: this.month, year: this.year };
+      if (this.selectedAccountId) {
+        txQuery.accountId = this.selectedAccountId;
+      }
+
+      const [txs, cats, accts, costObjs] = await Promise.all([
+        api.get('/transactions', txQuery),
+        api.get('/categories'),
+        api.get('/accounts'),
+        api.get('/cost-objects')
+      ]);
+      this.transactions = txs;
+      this.categories = cats;
+      this.accounts = accts;
+      this.costObjects = costObjs;
+      await this.loadBalances();
+
+      // Load cost object breakdown for credit accounts
+      if (this.selectedAccountId && this.isCredit) {
+        this.costObjectBreakdown = await api.get('/reports/cost-object-breakdown', {
+          accountId: this.selectedAccountId
+        });
+      } else {
+        this.costObjectBreakdown = [];
+      }
+
+      // Calculate and update totalBalance to match monthly ending balance
+      // This will use the already loaded this.transactions and this.categories
+      const monthlyEndingBalance = this.startingBalance + this.monthlyStats.income - this.monthlyStats.expense;
+      this.totalBalance = monthlyEndingBalance;
+
+      if (preserveScroll) {
+        await this.updateComplete;
+        requestAnimationFrame(() => {
+          window.scrollTo(0, scrollPos);
+        });
+      }
+      this.computeSuggestions();
+      this.computeBudgetBalances();
+    } catch (e) {
+      console.error('Failed to load data', e);
+    } finally {
+      this.loading = false;
+    }
+  }
+
+  computeBudgetBalances() {
+    // Group tx by category
+    const byCat: { [key: string]: any[] } = {};
+    this.transactions.forEach(t => {
+      if (!t.categoryId) return;
+      if (!byCat[t.categoryId]) byCat[t.categoryId] = [];
+      byCat[t.categoryId].push(t);
+    });
+
+    Object.keys(byCat).forEach(catId => {
+      const cat = this.categories.find(c => c.id === catId);
+      if (!cat || !cat.budget || Number(cat.budget) === 0) return;
+
+      const budget = Number(cat.budget);
+      // Sort asc by date for calculation
+      // We clone to sort so we don't mess up original order if it matters, 
+      // though typically we just need the logic to be chronological
+      const sorted = [...byCat[catId]].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+      let currentBalance = budget;
+      sorted.forEach(t => {
+        // Add signed amount (Expense is negative, so it subtracts from budget. Income adds to it)
+        currentBalance += Number(t.amount);
+        t._budgetRemaining = currentBalance;
+      });
+    });
+
+    this.requestUpdate();
+  }
+
+  async updateCategory(txId: string, categoryId: string) {
+    try {
+      await api.patch(`/transactions/${txId}`, { categoryId });
+
+      // Check for potential bulk update
+      const tx = this.transactions.find(t => t.id === txId);
+      if (tx && categoryId !== 'uncategorized') {
+        const others = this.transactions.filter(t =>
+          t.description.toLowerCase() === tx.description.toLowerCase() &&
+          // Check if category is null (uncategorized) or explicitly 'uncategorized' if that ID exists
+          (!t.categoryId || t.categoryId === 'uncategorized') &&
+          t.id !== txId
+        );
+
+        if (others.length > 0) {
+          if (confirm(`Found ${others.length} other uncategorized transactions for "${tx.description}".Apply "${this.categories.find(c => c.id === categoryId)?.name}" to them too ? `)) {
+            await api.post('/transactions/propagate', { description: tx.description, categoryId });
+          }
+        }
+      }
+
+      await this.loadData(true);
+    } catch (e) {
+      console.error('Failed to update category', e);
+    }
+  }
+
+  async deleteTransaction(id: string) {
+    this.transactionToDelete = id;
+  }
+
+  async confirmDelete() {
+    if (!this.transactionToDelete) return;
+    const id = this.transactionToDelete;
+
+    console.log('[ViewExpenses] Confirming delete for:', id);
+    try {
+      await api.delete(`/ transactions / ${id} `);
+      console.log('[ViewExpenses] API delete success');
+      await this.loadData(true);
+      this.transactionToDelete = null;
+    } catch (e: any) {
+      console.error('Failed to delete transaction', e);
+      alert('Failed to delete: ' + (e.message || 'Unknown error'));
+    }
+  }
+
+  async handleWizardImport(e: CustomEvent) {
+    const { result } = e.detail;
+    console.log('[View Expenses] Import result:', result);
+
+    const count = result.count ?? result.newCount ?? 0;
+    alert(`Successfully imported ${count} transactions.`);
+    await this.loadData(true);
+  }
+
+  // Helper to handle select change
+  async handleCategoryChange(e: Event, tx: any) {
+    const select = e.target as HTMLSelectElement;
+    let catId: string | null = select.value;
+    if (catId === 'uncategorized' || catId === '') {
+      catId = null;
+    }
+
+    await this.updateCategory(tx.id, catId as string);
+  }
+
+  async createTransaction() {
+    try {
+      await api.post('/transactions', {
+        ...this.newTransaction,
+        date: new Date(this.newTransaction.date).toISOString(),
+        accountId: this.selectedAccountId || null
+      });
+      this.showAddForm = false;
+      this.newTransaction = { date: new Date().toISOString().split('T')[0], description: '', amount: 0, categoryId: '', costObjectId: '', notes: '' };
+      await this.loadData(true);
+    } catch (e) {
+      console.error('Failed to create transaction', e);
+      alert('Failed to create transaction');
+    }
+  }
+
+  startEditing(id: string, field: string, value: any) {
+    // Soft lock for imported transactions
+    const tx = this.transactions.find(t => t.id === id);
+    if (tx && tx.externalId) {
+      // Only lock fields that are imported (Date, Amount, Description)
+      if (['date', 'amount', 'description'].includes(field)) {
+        if (!confirm(`This transaction was imported from CSV(Locked).\nAre you sure you want to edit the ${field}?`)) {
+          return;
+        }
+      }
+    }
+
+    this.editingCell = { id, field };
+    this.editValue = value;
+    // Wait for update then focus
+    setTimeout(() => {
+      const input = this.shadowRoot?.querySelector(`#edit-${id}-${field}`) as HTMLElement;
+      if (input) input.focus();
+    }, 0);
+  }
+
+  cancelEditing() {
+    this.editingCell = null;
+    this.editValue = null;
+  }
+
+  async saveCell(id: string, field: string) {
+    if (this.editValue === null) return;
+
+    try {
+      let payload: any = {};
+      if (field === 'date') {
+        payload[field] = new Date(this.editValue).toISOString();
+      } else if (field === 'amount') {
+        payload[field] = parseFloat(this.editValue);
+      } else if (field === 'categoryId' && (this.editValue === 'uncategorized' || this.editValue === '')) {
+        payload[field] = null;
+      } else {
+        payload[field] = this.editValue;
+      }
+
+      await api.patch(`/transactions/${id}`, payload);
+      this.editingCell = null;
+      this.editValue = null;
+      await this.loadData(true);
+    } catch (e: any) {
+      console.error('Failed to save cell', e);
+      alert('Failed to save changes: ' + (e.message || JSON.stringify(e)));
+    }
+  }
+
+  handleKeyDown(e: KeyboardEvent, id: string, field: string) {
+    if (e.key === 'Enter') {
+      this.saveCell(id, field);
+    } else if (e.key === 'Escape') {
+      this.cancelEditing();
+    }
+  }
+
+  render() {
+    const symbol = this.currency === 'EUR' ? '€' : '$';
+
+    return html`
+        <div class="header">
+            <h1>${i18n.t('nav.expenses')}</h1>
+            <div class="filters">
+                <select @change="${(e: any) => { this.selectedAccountId = e.target.value; this.loadData(true); }}" .value="${this.selectedAccountId}" style="min-width: 150px;">
+                    <option value="">🏦 All Accounts</option>
+                    ${this.accounts.map(a => html`<option value="${a.id}">${a.type === 'CREDIT' ? '💳' : '🏦'} ${a.name}</option>`)}
+                </select>
+                <select @change="${(e: any) => { this.month = parseInt(e.target.value); this.loadData(true); }}" .value="${this.month}">
+                    ${Array.from({ length: 12 }, (_, i) => i + 1).map(m => {
+      const date = new Date(this.year, m - 1, 1);
+      const monthName = new Intl.DateTimeFormat(i18n.getLocale(), { month: 'long' }).format(date);
+      const capitalized = monthName.charAt(0).toUpperCase() + monthName.slice(1);
+      return html`<option value="${m}" ?selected=${this.month === m}>${capitalized}</option>`;
+    })}
+                </select>
+                <select @change="${(e: any) => { this.year = parseInt(e.target.value); this.loadData(true); }}" .value="${this.year}">
+                    <option value="2024">2024</option>
+                    <option value="2025">2025</option>
+                    <option value="2026">2026</option>
+                </select>
+                <button class="btn-secondary" @click="${() => this.loadData(true)}">${i18n.t('reports.refresh')}</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <div>
+                <div style="font-size: 0.875rem; color: var(--md-sys-color-secondary); margin-bottom: 0.25rem;">${this.isCredit ? i18n.t('expenses.amount_owed') : i18n.t('expenses.system_balance')}</div>
+                <div class="balance" style="color: ${this.isCredit ? (this.totalBalance > 0 ? 'var(--md-sys-color-error)' : '#16a34a') : (this.totalBalance >= 0 ? '#16a34a' : 'var(--md-sys-color-error)')}">
+                    ${symbol}${Math.abs(this.totalBalance).toFixed(2)}
+                </div>
+            </div>
+
+            <div class="vertical-divider"></div>
+
+            <div>
+                <div style="font-size: 0.875rem; color: var(--md-sys-color-secondary); margin-bottom: 0.25rem;">${i18n.t('expenses.verified_balance')}</div>
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <span style="font-size: 1.5rem; font-weight: 600; color: var(--md-sys-color-on-surface);">${symbol}</span>
+                    <input type="number" step="0.01" class="amount-input" .value="${this.verifiedBalance}" @change="${this.updateVerifiedBalance}" />
+                </div>
+            </div>
+
+            <div class="vertical-divider"></div>
+
+            <div>
+                <div style="font-size: 0.875rem; color: var(--md-sys-color-secondary); margin-bottom: 0.25rem;">${i18n.t('common.difference')}</div>
+                <div class="balance" style="color: ${Math.abs(this.verifiedBalance - this.totalBalance) < 0.01 ? '#16a34a' : 'var(--md-sys-color-error)'}">
+                    ${symbol}${(this.verifiedBalance - this.totalBalance).toFixed(2)}
+                </div>
+            </div>
+        </div>
+
+        <div class="card" style="display: flex; flex-direction: column; gap: 1rem; align-items: stretch;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem;">
+                <!-- Starting Balance -->
+                <div>
+                    <div style="font-size: 0.75rem; color: var(--md-sys-color-secondary); margin-bottom: 4px;">${i18n.t('expenses.starting_balance')}</div>
+                    <div style="display: flex; align-items: center; gap: 4px;">
+                        <span style="color: var(--md-sys-color-on-surface-variant);">${symbol}</span>
+                        <input type="number" step="0.01" .value="${this.startingBalance}" @change="${this.handleStartingBalanceChange}" style="width: 100%; border: none; background: transparent; font-size: 1rem; font-weight: 500; border-bottom: 1px solid var(--md-sys-color-outline);"/>
+                    </div>
+                </div>
+
+                <!-- Income -->
+                <div>
+                    <div style="font-size: 0.75rem; color: var(--md-sys-color-secondary); margin-bottom: 4px;">${i18n.t('common.income')}</div>
+                    <div style="color: #16a34a; font-weight: 500; font-size: 1rem;">
+                        +${symbol}${this.monthlyStats.income.toFixed(2)}
+                    </div>
+                </div>
+
+                <!-- Expense -->
+                <div>
+                    <div style="font-size: 0.75rem; color: var(--md-sys-color-secondary); margin-bottom: 4px;">${i18n.t('common.expenses')}</div>
+                    <div style="color: var(--md-sys-color-error); font-weight: 500; font-size: 1rem;">
+                        -${symbol}${Math.abs(this.monthlyStats.expense).toFixed(2)}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+      ${this.isCredit && this.costObjectBreakdown.length > 0 ? html`
+        <div class="card" style="margin-bottom: 1rem;">
+          <h3 style="margin: 0 0 1rem 0; font-size: 1rem; color: var(--md-sys-color-on-surface);">
+            💼 ${i18n.t('cost_objects.breakdown_title')}
+          </h3>
+          <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+            ${this.costObjectBreakdown.map(co => {
+              const total = this.costObjectBreakdown.reduce((sum, c) => sum + c.total, 0);
+              const pct = total > 0 ? ((co.total / total) * 100).toFixed(0) : 0;
+              return html`
+                <div style="display: flex; align-items: center; gap: 0.75rem;">
+                  <span style="font-size: 1.25rem;">${co.icon}</span>
+                  <span style="flex: 1; font-weight: 500;">${co.name}</span>
+                  <span style="color: var(--md-sys-color-on-surface-variant);">${pct}%</span>
+                  <span style="font-weight: 600; min-width: 80px; text-align: right;">
+                    ${this.currency === 'EUR' ? '€' : '$'}${co.total.toFixed(2)}
+                  </span>
+                </div>
+              `;
+            })}
+            <div style="border-top: 1px solid var(--md-sys-color-outline-variant); padding-top: 0.75rem; margin-top: 0.5rem; display: flex; justify-content: space-between;">
+              <span style="font-weight: 600;">${i18n.t('cost_objects.total_owed')}</span>
+              <span style="font-weight: 700; color: var(--md-sys-color-error);">
+                ${this.currency === 'EUR' ? '€' : '$'}${this.costObjectBreakdown.reduce((sum, c) => sum + c.total, 0).toFixed(2)}
+              </span>
+            </div>
+          </div>
+        </div>
+      ` : ''}
+
+      ${this.showAddForm ? html`
+        <div class="card" style="margin-bottom: 2rem; padding: 1rem; background: #f8f9fa; border-radius: 8px;">
+            <h3>${i18n.t('expenses.add_manual_title')}</h3>
+            <div style="display: flex; gap: 1rem; align-items: flex-end; flex-wrap: wrap;">
+                <label>
+                    ${i18n.t('common.date')}
+                    <input type="date" 
+                        .value="${this.newTransaction.date}"
+                        @input="${(e: any) => this.newTransaction = { ...this.newTransaction, date: e.target.value }}"
+                        style="display: block; padding: 0.5rem; border: 1px solid #ccc; border-radius: 4px"
+                    />
+                </label>
+                <label>
+                    ${i18n.t('common.description')}
+                    <input type="text" placeholder="${i18n.t('common.description')}"
+                        .value="${this.newTransaction.description}"
+                        @input="${(e: any) => this.newTransaction = { ...this.newTransaction, description: e.target.value }}"
+                        @blur="${this.handleDescriptionBlur}"
+                        style="display: block; padding: 0.5rem; border: 1px solid #ccc; border-radius: 4px"
+                    />
+                </label>
+                <label>
+                    ${i18n.t('common.amount')}
+                    <input type="number" placeholder="-10.00"
+                        .value="${this.newTransaction.amount || ''}"
+                        @input="${(e: any) => this.newTransaction = { ...this.newTransaction, amount: parseFloat(e.target.value) }}"
+                        style="display: block; padding: 0.5rem; border: 1px solid #ccc; border-radius: 4px"
+                    />
+                </label>
+                <label>
+                    ${i18n.t('common.category')}
+                    <select 
+                        .value="${this.newTransaction.categoryId}"
+                        @change="${(e: any) => {
+          if (e.target.value === 'new_category_inline') {
+            this.showAddCategoryModal = true;
+            e.target.value = '';
+            return;
+          }
+          this.newTransaction = { ...this.newTransaction, categoryId: e.target.value };
+        }}"
+                        style="display: block; padding: 0.5rem; border: 1px solid #ccc; border-radius: 4px">
+                        <option value="">-- ${i18n.t('common.category')} --</option>
+                        ${this.categories.filter(c => !c.parentId && (c.type === 'EXPENSE' || !c.type)).map(parent => html`
+                            <option value="${parent.id}">${parent.icon} ${parent.name}</option>
+                            ${this.categories.filter(c => c.parentId === parent.id).map(child => html`
+                                <option value="${child.id}">&nbsp;&nbsp;&nbsp;&nbsp;${child.icon} ${child.name}</option>
+                            `)}
+                        `)}
+                        <option disabled>──────────</option>
+                        <option value="new_category_inline">+ ${i18n.t('settings.add_category')}</option>
+                    </select>
+                </label>
+                ${this.isCredit && this.costObjects.length > 0 ? html`
+                <label>
+                    ${i18n.t('cost_objects.funding_source')}
+                    <select
+                        .value="${this.newTransaction.costObjectId}"
+                        @change="${(e: any) => this.newTransaction = { ...this.newTransaction, costObjectId: e.target.value }}"
+                        style="display: block; padding: 0.5rem; border: 1px solid #ccc; border-radius: 4px">
+                        <option value="">-- ${i18n.t('cost_objects.funding_source')} --</option>
+                        ${this.costObjects.map(co => html`
+                            <option value="${co.id}">${co.icon} ${co.name}</option>
+                        `)}
+                    </select>
+                </label>
+                ` : ''}
+                <label style="flex-grow: 1;">
+                    ${i18n.t('common.notes')}
+                    <input type="text" placeholder="${i18n.t('common.notes')}"
+                        .value="${this.newTransaction.notes || ''}"
+                        @input="${(e: any) => this.newTransaction = { ...this.newTransaction, notes: e.target.value }}"
+                        style="display: block; padding: 0.5rem; border: 1px solid #ccc; border-radius: 4px; width: 100%;"
+                    />
+                </label>
+                <button @click="${this.createTransaction}" style="background: #2563eb; color: white; border: none; padding: 0.6rem 1rem; border-radius: 4px; cursor: pointer;">${i18n.t('common.save')}</button>
+            </div>
+        </div>
+      ` : ''
+      }
+
+<div style="display: flex; flex-direction: column; gap: 16px; margin-bottom: 1rem;">
+
+            <!-- Simple search always visible -->
+            <input type="text" placeholder="${i18n.t('filters.search')}" .value="${this.filterText}" @input="${(e: any) => { this.filterText = e.target.value; this.currentPage = 1; }}" style="width: 100%; max-width: 400px; border-radius: 20px; padding: 0 20px;" />
+        </div>
+
+        <!-- Advanced Filters Row -->
+        <div style="display: flex; gap: 16px; align-items: center; flex-wrap: wrap; padding: 12px; background: var(--md-sys-color-surface-container); border-radius: 12px;">
+            <div style="display: flex; gap: 1rem;">
+                <button class="btn-primary" @click="${() => this.showAddForm = !this.showAddForm}">
+                    ${this.showAddForm ? i18n.t('common.cancel') : '+ ' + i18n.t('expenses.add_transaction')}
+                </button>
+                <button class="btn-secondary" @click="${() => this.showWizard = true}">${i18n.t('expenses.import_csv')}</button>
+            </div>
+
+            <div style="width: 1px; height: 32px; background: var(--md-sys-color-outline-variant);"></div>
+
+            <span style="font-size: 0.875rem; font-weight: 500;">${i18n.t('filters.filters')}:</span>
+            <select .value="${this.filterCategoryId}" @change="${(e: any) => { this.filterCategoryId = e.target.value; this.currentPage = 1; }}" style="width: 180px;">
+                <option value="">${i18n.t('filters.all_categories')}</option>
+                <option value="uncategorized">${i18n.t('common.uncategorized')}</option>
+                  ${this.categories.filter(c => !c.parentId && (c.type === 'EXPENSE' || !c.type)).map(parent => html`
+                      <option value="${parent.id}">${parent.icon} ${parent.name}</option>
+                      ${this.categories.filter(c => c.parentId === parent.id).map(child => html`
+                          <option value="${child.id}">&nbsp;&nbsp;&nbsp;&nbsp;${child.icon} ${child.name}</option>
+                      `)}
+                  `)}
+</select>
+  <input type="number" placeholder="${i18n.t('filters.min_amount')}" .value="${this.filterMinAmount ?? ''}" @input="${(e: any) => { this.filterMinAmount = e.target.value ? parseFloat(e.target.value) : null; this.currentPage = 1; }}" style="width: 120px;" />
+    <input type="number" placeholder="${i18n.t('filters.max_amount')}" .value="${this.filterMaxAmount ?? ''}" @input="${(e: any) => { this.filterMaxAmount = e.target.value ? parseFloat(e.target.value) : null; this.currentPage = 1; }}" style="width: 120px;" />
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <input type="date" .value="${this.filterDateFrom}" @input="${(e: any) => { this.filterDateFrom = e.target.value; this.currentPage = 1; }}" style="width: 130px;" title="${i18n.t('filters.from_date')}" />
+          <span style="color: var(--md-sys-color-on-surface-variant);"> -</span>
+            <input type="date" .value="${this.filterDateTo}" @input="${(e: any) => { this.filterDateTo = e.target.value; this.currentPage = 1; }}" style="width: 130px;" title="${i18n.t('filters.to_date')}" />
+              </div>
+              <button class="btn-secondary" style="height: 32px; padding: 0 12px;" @click="${() => { this.filterCategoryId = ''; this.filterMinAmount = null; this.filterMaxAmount = null; this.filterText = ''; this.filterDateFrom = ''; this.filterDateTo = ''; }}">${i18n.t('filters.clear')}</button>
+                <button class="btn-secondary" style="height: 32px; padding: 0 12px; margin-left: auto;" @click="${() => this.showColumnModal = true}">${i18n.t('filters.columns')}</button>
+                  </div>
+
+                  <!--Bulk Actions-->
+                    ${this.selectedTransactions.size > 0 ? html`
+            <div style="display: flex; gap: 16px; align-items: center; padding: 12px; background: var(--md-sys-color-primary-container); color: var(--md-sys-color-on-primary-container); border-radius: 12px; flex-wrap: wrap;">
+                <span style="font-weight: 500;">${this.selectedTransactions.size} ${i18n.t('bulk_actions.selected')}</span>
+                <button class="btn-secondary" @click="${this.deleteSelected}" style="background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container); border: none;">${i18n.t('bulk_actions.delete_selected')}</button>
+
+                <div style="display: flex; align-items: center; gap: 8px; margin-left: auto;">
+                    <span style="font-size: 0.875rem;">${i18n.t('bulk_actions.move_to')}:</span>
+                    <select @change="${(e: any) => this.bulkUpdateCategory(e.target.value)}" style="width: 150px; background: var(--md-sys-color-surface); color: var(--md-sys-color-on-surface);">
+                        <option value="">${i18n.t('bulk_actions.select_category')}</option>
+                        ${this.categories.filter(c => !c.parentId).map(parent => html`
+                            <option value="${parent.id}">${parent.name}</option>
+                            ${this.categories.filter(c => c.parentId === parent.id).map(child => html`
+                                <option value="${child.id}">&nbsp;&nbsp;${child.name}</option>
+                            `)}
+                        `)}
+                    </select>
+                </div>
+            </div>
+          ` : ''
+      }
+</div>
+
+      ${this.renderColumnModal()}
+        ${this.renderAddCategoryModal()}
+
+        <csv-wizard
+            ?open="${this.showWizard}"
+            .accounts="${this.accounts}"
+            @close="${() => this.showWizard = false}"
+            @import="${this.handleWizardImport}">
+        </csv-wizard>
+
+      ${this.transactionToDelete ? html`
+          <div class="modal-overlay" @click="${() => this.transactionToDelete = null}">
+              <div class="modal" @click="${(e: Event) => e.stopPropagation()}">
+                  <h3 style="margin-top: 0;">${i18n.t('common.delete')} Transaction</h3>
+                  <p>${i18n.t('common.confirm_delete')}</p>
+                  <div class="modal-actions">
+                      <button @click="${() => this.transactionToDelete = null}">${i18n.t('common.cancel')}</button>
+                      <button class="danger" style="background: #fee2e2; color: #dc2626;" @click="${this.confirmDelete}">${i18n.t('common.delete')}</button>
+                  </div>
+              </div>
+          </div>
+      ` : ''
+      }
+
+      ${this.loading ? html`<p>${i18n.t('common.loading')}</p>` : html`
+        ${this.renderPaginationControls()}
+        <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  ${this.columnConfig.map(col => {
+        if (!col.visible) return '';
+
+        switch (col.id) {
+          case 'select':
+            return html`<th style="width: 40px;"><input type="checkbox" @change="${this.toggleSelectAll}" .checked="${this.selectedTransactions.size === this.pagedTransactions.length && this.pagedTransactions.length > 0}" /></th>`;
+          case 'date':
+            return html`<th @click="${() => this.toggleSort('date')}" style="cursor: pointer; position: relative; width: ${this.columnWidths['date'] ? this.columnWidths['date'] + 'px' : 'auto'}">
+                          ${i18n.t('common.date')} ${this.sortField === 'date' ? (this.sortDirection === 'asc' ? '↑' : '↓') : ''}
+                          <div class="resizer" @mousedown="${(e: MouseEvent) => this.startResize(e, 'date')}" @click="${(e: Event) => e.stopPropagation()}"></div>
+                        </th>`;
+          case 'description':
+            return html`<th @click="${() => this.toggleSort('description')}" style="cursor: pointer; position: relative; width: ${this.columnWidths['description'] ? this.columnWidths['description'] + 'px' : 'auto'}">
+                          ${i18n.t('common.description')} ${this.sortField === 'description' ? (this.sortDirection === 'asc' ? '↑' : '↓') : ''}
+                          <div class="resizer" @mousedown="${(e: MouseEvent) => this.startResize(e, 'description')}" @click="${(e: Event) => e.stopPropagation()}"></div>
+                        </th>`;
+          case 'categoryId':
+            return html`<th @click="${() => this.toggleSort('categoryId')}" style="cursor: pointer; position: relative; width: ${this.columnWidths['categoryId'] ? this.columnWidths['categoryId'] + 'px' : 'auto'}">
+                          ${i18n.t('common.category')} ${this.sortField === 'categoryId' ? (this.sortDirection === 'asc' ? '↑' : '↓') : ''}
+                          <div class="resizer" @mousedown="${(e: MouseEvent) => this.startResize(e, 'categoryId')}" @click="${(e: Event) => e.stopPropagation()}"></div>
+                        </th>`;
+          case 'costObjectId':
+            return html`<th style="position: relative; width: ${this.columnWidths['costObjectId'] ? this.columnWidths['costObjectId'] + 'px' : 'auto'}">
+                          ${i18n.t('cost_objects.funding_source')}
+                          <div class="resizer" @mousedown="${(e: MouseEvent) => this.startResize(e, 'costObjectId')}" @click="${(e: Event) => e.stopPropagation()}"></div>
+                        </th>`;
+          case 'amount':
+            return html`<th @click="${() => this.toggleSort('amount')}" style="cursor: pointer; position: relative; width: ${this.columnWidths['amount'] ? this.columnWidths['amount'] + 'px' : 'auto'}">
+                          ${i18n.t('common.amount')} ${this.sortField === 'amount' ? (this.sortDirection === 'asc' ? '↑' : '↓') : ''}
+                          <div class="resizer" @mousedown="${(e: MouseEvent) => this.startResize(e, 'amount')}" @click="${(e: Event) => e.stopPropagation()}"></div>
+                        </th>`;
+          case 'budget':
+            return html`<th style="width: ${this.columnWidths['budget'] ? this.columnWidths['budget'] + 'px' : 'auto'}">
+                          ${i18n.t('expenses.budget_remaining')}
+                        </th>`;
+          case 'notes':
+            return html`<th @click="${() => this.toggleSort('notes')}" style="cursor: pointer; position: relative; width: ${this.columnWidths['notes'] ? this.columnWidths['notes'] + 'px' : 'auto'}">
+                          ${i18n.t('common.notes')} ${this.sortField === 'notes' ? (this.sortDirection === 'asc' ? '↑' : '↓') : ''}
+                          <div class="resizer" @mousedown="${(e: MouseEvent) => this.startResize(e, 'notes')}" @click="${(e: Event) => e.stopPropagation()}"></div>
+                        </th>`;
+          case 'actions':
+            return html`<th>${i18n.t('common.actions')}</th>`;
+          default:
+            return '';
+        }
+      })}
+                </tr>
+              </thead>
+              <tbody>
+                ${this.pagedTransactions.map(tx => {
+        const isEditingDate = this.editingCell?.id === tx.id && this.editingCell?.field === 'date';
+        const isEditingDesc = this.editingCell?.id === tx.id && this.editingCell?.field === 'description';
+        const isEditingCat = this.editingCell?.id === tx.id && this.editingCell?.field === 'categoryId';
+        const isEditingAmount = this.editingCell?.id === tx.id && this.editingCell?.field === 'amount';
+        const txDate = new Date(tx.date).toISOString().split('T')[0];
+
+        return html`
+                    <tr>
+                        ${this.columnConfig.map(col => {
+          if (!col.visible) return '';
+
+          switch (col.id) {
+            case 'select':
+              return html`<td><input type="checkbox" .checked="${this.selectedTransactions.has(tx.id)}" @change="${() => this.toggleSelection(tx.id)}" /></td>`;
+            case 'date':
+              return html`
+                                        <td class="editable col-date" @click="${() => !isEditingDate && this.startEditing(tx.id, 'date', txDate)}">
+                                            ${isEditingDate ? html`<input type="date" id="edit-${tx.id}-date" .value="${this.editValue}" @input="${(e: any) => this.editValue = e.target.value}" @blur="${() => this.saveCell(tx.id, 'date')}" @keydown="${(e: KeyboardEvent) => this.handleKeyDown(e, tx.id, 'date')}" />` : txDate}
+                                        </td>`;
+            case 'description':
+              return html`
+                                        <td class="${!tx.externalId ? 'editable' : ''} col-description" title="${tx.description}" @click="${() => !tx.externalId && !isEditingDesc && this.startEditing(tx.id, 'description', tx.description)}">
+                                            ${isEditingDesc ? html`<input type="text" id="edit-${tx.id}-description" .value="${this.editValue}" @input="${(e: any) => this.editValue = e.target.value}" @blur="${() => this.saveCell(tx.id, 'description')}" @keydown="${(e: KeyboardEvent) => this.handleKeyDown(e, tx.id, 'description')}" />` : html`${tx.description}${tx.externalId ? html`<span title="${i18n.t('common.verified_locked')}" style="cursor: help; margin-left: 4px; font-size: 0.8em; opacity: 0.5;">🔒</span>` : ''}`}
+                                        </td>`;
+            case 'categoryId':
+              return html`
+                                        <td class="editable" @click="${() => !isEditingCat && this.startEditing(tx.id, 'categoryId', tx.categoryId)}">
+                                            ${isEditingCat ? html`
+                                                <select id="edit-${tx.id}-categoryId" .value="${this.editValue}" @change="${async (e: any) => {
+                    if (e.target.value === 'new_category_inline') {
+                      this.cancelEditing();
+                      this.showAddCategoryModal = true;
+                      return;
+                    }
+                    this.editValue = e.target.value;
+                    await this.saveCell(tx.id, 'categoryId');
+                  }}" @blur="${() => { if (this.editValue !== 'new_category_inline') this.cancelEditing(); }}">
+                                                    <option value="uncategorized">${i18n.t('common.uncategorized')}</option>
+                                                    ${this.categories.filter(c => !c.parentId && (c.type === 'EXPENSE' || !c.type)).map(parent => html`<option value="${parent.id}" ?selected="${this.editValue === parent.id}">${parent.icon} ${parent.name}</option>${this.categories.filter(c => c.parentId === parent.id).map(child => html`<option value="${child.id}" ?selected="${this.editValue === child.id}">&nbsp;&nbsp;&nbsp;&nbsp;${child.icon} ${child.name}</option>`)}`)}
+                                                    <option disabled>──────────</option>
+                                                    <option value="new_category_inline">+ ${i18n.t('settings.add_category')}</option>
+                                                </select>
+                                            ` : html`${(() => {
+                  const c = this.categories.find(c => c.id === tx.categoryId);
+                  if (c) { if (c.parentId) { const p = this.categories.find(cat => cat.id === c.parentId); return html`<small style="opacity: 0.7">${p?.name} ></small> ${c.icon} ${c.name}`; } return html`${c.icon} ${c.name}`; }
+                  if (tx._suggestion) { const sugg = this.categories.find(c => c.id === tx._suggestion); return html`<div style="display: flex; align-items: center; gap: 0.5rem; justify-content: flex-start;"><span style="opacity: 0.6; font-style: italic;">? ${sugg?.name}</span><div style="display: flex; gap: 2px;"><button @click="${(e: Event) => { e.stopPropagation(); this.updateCategory(tx.id, tx._suggestion); }}" title="Accept Suggestion" style="padding: 2px 6px; background: #22c55e; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.8rem;">✔</button><button @click="${(e: Event) => { e.stopPropagation(); tx._suggestion = null; this.requestUpdate(); }}" title="Reject" style="padding: 2px 6px; background: #94a3b8; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.8rem;">✖</button></div></div>`; }
+                  return html`<span style="color: #cbd5e1; font-style: italic;">${i18n.t('common.uncategorized')}</span>`;
+                })()}`}
+                                        </td>`;
+            case 'costObjectId':
+              const isEditingCostObj = this.editingCell?.id === tx.id && this.editingCell?.field === 'costObjectId';
+              return html`
+                                        <td class="editable" @click="${() => !isEditingCostObj && this.startEditing(tx.id, 'costObjectId', tx.costObjectId)}">
+                                            ${isEditingCostObj ? html`
+                                                <select id="edit-${tx.id}-costObjectId" .value="${this.editValue || ''}" @change="${async (e: any) => {
+                    this.editValue = e.target.value || null;
+                    await this.saveCell(tx.id, 'costObjectId');
+                  }}" @blur="${() => this.cancelEditing()}">
+                                                    <option value="">-- ${i18n.t('cost_objects.unassigned')} --</option>
+                                                    ${this.costObjects.map(co => html`<option value="${co.id}" ?selected="${this.editValue === co.id}">${co.icon} ${co.name}</option>`)}
+                                                </select>
+                                            ` : html`${(() => {
+                  const co = tx.costObject;
+                  if (co) return html`${co.icon} ${co.name}`;
+                  return html`<span style="color: #cbd5e1; font-style: italic;">${i18n.t('cost_objects.unassigned')}</span>`;
+                })()}`}
+                                        </td>`;
+            case 'amount':
+              const symbol = this.currency === 'EUR' ? '€' : '$';
+              return html`
+                                        <td class="editable amount ${tx.amount < 0 ? 'negative' : 'positive'}" @click="${() => !isEditingAmount && this.startEditing(tx.id, 'amount', tx.amount)}">
+                                            ${isEditingAmount ? html`<input type="number" id="edit-${tx.id}-amount" step="0.01" .value="${this.editValue}" @input="${(e: any) => this.editValue = parseFloat(e.target.value)}" @blur="${() => this.saveCell(tx.id, 'amount')}" @keydown="${(e: KeyboardEvent) => this.handleKeyDown(e, tx.id, 'amount')}" />` : html`${tx.amount < 0 ? '-' : '+'}${symbol}${Math.abs(tx.amount).toFixed(2)}`}
+                                        </td>`;
+            case 'budget':
+              const budgetSymbol = this.currency === 'EUR' ? '€' : '$';
+              return html`
+                                        <td class="amount" style="color: var(--md-sys-color-on-surface-variant);">
+                                            ${(() => {
+                  if (tx._budgetRemaining === undefined) return '';
+                  const cat = this.categories.find(c => c.id === tx.categoryId);
+                  const budget = cat ? Number(cat.budget) : 0;
+                  return html`${budgetSymbol}${tx._budgetRemaining.toFixed(2)} / ${budget.toFixed(0)}`;
+                })()}
+                                        </td>`;
+            case 'notes':
+              return html`
+                                        <td class="editable col-notes" @click="${() => !this.editingCell && this.startEditing(tx.id, 'notes', tx.notes)}">
+                                            ${this.editingCell?.id === tx.id && this.editingCell?.field === 'notes' ? html`<input type="text" id="edit-${tx.id}-notes" .value="${this.editValue || ''}" @input="${(e: any) => this.editValue = e.target.value}" @blur="${() => this.saveCell(tx.id, 'notes')}" @keydown="${(e: KeyboardEvent) => this.handleKeyDown(e, tx.id, 'notes')}" />` : (tx.notes || '-')}
+                                        </td>`;
+            case 'actions':
+              return html`<td><button class="btn-danger" @click="${() => this.deleteTransaction(tx.id)}" title="Delete Transaction">✕</button></td>`;
+            default:
+              return '';
+          }
+        })}
+                    </tr>
+                    `;
+      })}
+              </tbody>
+            </table>
+        </div>
+
+        <div class="pagination-controls">
+            <span style="font-size: 0.875rem; color: var(--md-sys-color-on-surface-variant);">${i18n.t('table.rows_per_page')}:</span>
+            <select style="width: auto; height: 32px; padding: 0 8px;" 
+                .value="${this.pageSize}" 
+                @change="${(e: any) => { this.pageSize = parseInt(e.target.value); this.currentPage = 1; }}">
+                <option value="20">20</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
+                <option value="200">200</option>
+            </select>
+
+            <span style="font-size: 0.875rem; color: var(--md-sys-color-on-surface-variant);">
+                ${(this.currentPage - 1) * this.pageSize + 1}-${Math.min(this.currentPage * this.pageSize, this.filteredTransactions.length)} of ${this.filteredTransactions.length}
+            </span>
+
+            <div style="display: flex; gap: 8px;">
+                <button class="btn-secondary" 
+                    ?disabled="${this.currentPage === 1}"
+                    @click="${() => this.currentPage--}">
+                    &lt;
+                </button>
+                <button class="btn-secondary" 
+                    ?disabled="${this.currentPage * this.pageSize >= this.filteredTransactions.length}"
+                    @click="${() => this.currentPage++}">
+                    &gt;
+                </button>
+            </div>
+        </div>
+      `}
+`;
+  }
+}

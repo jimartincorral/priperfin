@@ -1,0 +1,47 @@
+# Dependencies
+node_modules/
+
+# Prisma generated client (regenerated during build)
+apps/api/src/generated/
+
+# Build outputs (rebuilt by Docker)
+dist/
+apps/*/dist/
+
+# Database (local dev only)
+*.db
+*.db-journal
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+*.txt
+!README.txt
+
+# Temporary files
+temp_uploads/
+.claude/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test files at root
+test_*.csv
+sample.csv
+repro*.js
+repro*.ts
+verify_api.js
+
+# pnpm
+.pnpm-store/

@@ -1,0 +1,342 @@
+import { LitElement, html, css } from 'lit';
+import { customElement, property } from 'lit/decorators.js';
+import { Router } from '@vaadin/router';
+import './views/view-expenses';
+import './views/view-goals';
+import './views/view-settings';
+import './views/view-reports';
+
+import { i18n } from './i18n/i18n';
+
+@customElement('priperfin-app')
+export class PriPerFinApp extends LitElement {
+  static styles = css`
+    :host {
+      /* Color Palette (Based on a Blue M3 Theme) */
+      --md-sys-color-primary: #006493;
+      --md-sys-color-on-primary: #ffffff;
+      --md-sys-color-primary-container: #cae6ff;
+      --md-sys-color-on-primary-container: #001e30;
+      
+      --md-sys-color-secondary: #50606e;
+      --md-sys-color-on-secondary: #ffffff;
+      --md-sys-color-secondary-container: #d3e5f5;
+      --md-sys-color-on-secondary-container: #0c1d29;
+      
+      --md-sys-color-tertiary: #65587b;
+      --md-sys-color-on-tertiary: #ffffff;
+      --md-sys-color-tertiary-container: #ebddff;
+      --md-sys-color-on-tertiary-container: #211634;
+
+      --md-sys-color-error: #ba1a1a;
+      --md-sys-color-on-error: #ffffff;
+      --md-sys-color-error-container: #ffdad6;
+      --md-sys-color-on-error-container: #410002;
+      
+      --md-sys-color-surface: #f8f9ff;
+      --md-sys-color-on-surface: #191c20;
+      --md-sys-color-surface-variant: #dee3eb;
+      --md-sys-color-on-surface-variant: #42474e;
+      
+      --md-sys-color-surface-container-lowest: #ffffff;
+      --md-sys-color-surface-container-low: #f2f4f8;
+      --md-sys-color-surface-container: #eceef2;
+      --md-sys-color-surface-container-high: #e6e8ec;
+      --md-sys-color-surface-container-highest: #e1e3e7;
+
+      --md-sys-color-outline: #72777f;
+      --md-sys-color-outline-variant: #c2c7cf;
+
+      /* Typography - Type Scale */
+      --md-sys-typescale-display-large: 400 57px/64px 'Roboto', sans-serif;
+      --md-sys-typescale-display-medium: 400 45px/52px 'Roboto', sans-serif;
+      --md-sys-typescale-display-small: 400 36px/44px 'Roboto', sans-serif;
+
+      --md-sys-typescale-headline-large: 400 32px/40px 'Roboto', sans-serif;
+      --md-sys-typescale-headline-medium: 400 28px/36px 'Roboto', sans-serif;
+      --md-sys-typescale-headline-small: 400 24px/32px 'Roboto', sans-serif;
+
+      --md-sys-typescale-title-large: 400 22px/28px 'Roboto', sans-serif;
+      --md-sys-typescale-title-medium: 500 16px/24px 'Roboto', sans-serif;
+      --md-sys-typescale-title-small: 500 14px/20px 'Roboto', sans-serif;
+
+      --md-sys-typescale-label-large: 500 14px/20px 'Roboto', sans-serif;
+      --md-sys-typescale-label-medium: 500 12px/16px 'Roboto', sans-serif;
+      --md-sys-typescale-label-small: 500 11px/16px 'Roboto', sans-serif;
+
+      --md-sys-typescale-body-large: 400 16px/24px 'Roboto', sans-serif;
+      --md-sys-typescale-body-medium: 400 14px/20px 'Roboto', sans-serif;
+      --md-sys-typescale-body-small: 400 12px/16px 'Roboto', sans-serif;
+
+      /* Shapes */
+      --md-sys-shape-corner-extra-small: 4px;
+      --md-sys-shape-corner-small: 8px;
+      --md-sys-shape-corner-medium: 12px;
+      --md-sys-shape-corner-large: 16px;
+      --md-sys-shape-corner-extra-large: 28px;
+      --md-sys-shape-corner-full: 999px;
+
+      display: flex;
+      height: 100vh; /* Fallback */
+      height: 100dvh; /* Dynamic viewport height */
+      font-family: 'Roboto', sans-serif;
+      background-color: var(--md-sys-color-surface);
+      color: var(--md-sys-color-on-surface);
+      overflow: hidden;
+    }
+
+    /* Dark Mode (System Preferred OR Manual Override) */
+    :host([data-theme="dark"]) {
+        --md-sys-color-primary: #9ecaff;
+        --md-sys-color-on-primary: #003258;
+        --md-sys-color-primary-container: #00497d;
+        --md-sys-color-on-primary-container: #cae6ff;
+
+        --md-sys-color-secondary: #baccfa;
+        --md-sys-color-on-secondary: #213242;
+        --md-sys-color-secondary-container: #38495a;
+        --md-sys-color-on-secondary-container: #d3e5f5;
+
+        --md-sys-color-tertiary: #d0bcff;
+        --md-sys-color-on-tertiary: #381e72;
+        --md-sys-color-tertiary-container: #4f378b;
+        --md-sys-color-on-tertiary-container: #ebddff;
+
+        --md-sys-color-error: #ffb4ab;
+        --md-sys-color-on-error: #690005;
+        --md-sys-color-error-container: #93000a;
+        --md-sys-color-on-error-container: #ffdad6;
+
+        --md-sys-color-surface: #191c20;
+        --md-sys-color-on-surface: #e1e2e6;
+        --md-sys-color-surface-variant: #42474e;
+        --md-sys-color-on-surface-variant: #c2c7cf;
+
+        --md-sys-color-surface-container-lowest: #0c0f13;
+        --md-sys-color-surface-container-low: #191c20;
+        --md-sys-color-surface-container: #1d2024;
+        --md-sys-color-surface-container-high: #272a2f;
+        --md-sys-color-surface-container-highest: #32353a;
+
+        --md-sys-color-outline: #8c9199;
+        --md-sys-color-outline-variant: #42474e;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :host(:not([data-theme="light"])) {
+        --md-sys-color-primary: #9ecaff;
+        --md-sys-color-on-primary: #003258;
+        --md-sys-color-primary-container: #00497d;
+        --md-sys-color-on-primary-container: #cae6ff;
+
+        --md-sys-color-secondary: #baccfa;
+        --md-sys-color-on-secondary: #213242;
+        --md-sys-color-secondary-container: #38495a;
+        --md-sys-color-on-secondary-container: #d3e5f5;
+
+        --md-sys-color-tertiary: #d0bcff;
+        --md-sys-color-on-tertiary: #381e72;
+        --md-sys-color-tertiary-container: #4f378b;
+        --md-sys-color-on-tertiary-container: #ebddff;
+
+        --md-sys-color-error: #ffb4ab;
+        --md-sys-color-on-error: #690005;
+        --md-sys-color-error-container: #93000a;
+        --md-sys-color-on-error-container: #ffdad6;
+
+        --md-sys-color-surface: #191c20;
+        --md-sys-color-on-surface: #e1e2e6;
+        --md-sys-color-surface-variant: #42474e;
+        --md-sys-color-on-surface-variant: #c2c7cf;
+
+        --md-sys-color-surface-container-lowest: #0c0f13;
+        --md-sys-color-surface-container-low: #191c20;
+        --md-sys-color-surface-container: #1d2024;
+        --md-sys-color-surface-container-high: #272a2f;
+        --md-sys-color-surface-container-highest: #32353a;
+
+        --md-sys-color-outline: #8c9199;
+        --md-sys-color-outline-variant: #42474e;
+      }
+    }
+
+    /* Desktop: Navigation Rail */
+    nav {
+      width: 80px;
+      background: var(--md-sys-color-surface); /* Nav Rail matches surface in some configs, or surface-container */
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2rem 0;
+      gap: 12px; /* M3 spec gap */
+      z-index: 2;
+    }
+    
+    .nav-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      text-decoration: none;
+      color: var(--md-sys-color-on-surface-variant);
+      width: 56px;
+      height: 56px; /* Target size */
+      padding: 4px 0;
+      border-radius: 0; 
+      transition: color 0.2s;
+    }
+    
+    .icon-container {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 56px;
+        height: 32px;
+        border-radius: 16px; /* Stadium shape */
+        transition: background-color 0.2s, color 0.2s;
+    }
+
+    .nav-item:hover .icon-container {
+      background-color: var(--md-sys-color-surface-container-highest);
+      color: var(--md-sys-color-on-surface);
+    }
+    
+    .nav-item.active {
+      color: var(--md-sys-color-on-surface);
+    }
+
+    .nav-item.active .icon-container {
+      background-color: var(--md-sys-color-secondary-container);
+      color: var(--md-sys-color-on-secondary-container);
+    }
+    
+    .nav-item.active .material-symbols-outlined {
+      font-variation-settings: 'FILL' 1;
+    }
+
+    .material-symbols-outlined {
+      font-family: 'Material Symbols Outlined';
+      font-weight: normal;
+      font-style: normal;
+      font-size: 24px;
+      display: inline-block;
+      line-height: 1;
+      text-transform: none;
+      letter-spacing: normal;
+      word-wrap: normal;
+      white-space: nowrap;
+      direction: ltr;
+    }
+    
+    .nav-label {
+      font: var(--md-sys-typescale-label-medium);
+      text-align: center;
+    }
+
+    main {
+      flex: 1;
+      padding: 1.5rem 2rem;
+      overflow-y: auto;
+      width: 100%;
+      box-sizing: border-box;
+      background-color: var(--md-sys-color-surface);
+      border-top-left-radius: 28px; /* Optional: distinctive M3 shape for content area if nav is side */
+    }
+
+    /* Mobile: Bottom Navigation Bar */
+    @media (max-width: 600px) {
+      :host {
+        flex-direction: column-reverse; /* Nav at bottom */
+      }
+      
+      nav {
+        width: 100%;
+        height: calc(64px + env(safe-area-inset-bottom, 0px));
+        flex-direction: row;
+        justify-content: space-evenly; /* Spread evenly */
+        padding: 0;
+        padding-bottom: env(safe-area-inset-bottom, 0px);
+        background: var(--md-sys-color-surface-container);
+        box-sizing: border-box;
+      }
+      
+      .nav-item {
+        width: auto;
+        min-width: 48px;
+        padding: 8px 0 10px 0;
+        height: auto;
+      }
+      
+      .icon-container {
+        width: 64px; 
+        height: 32px;
+        border-radius: 16px;
+      }
+      
+      main {
+        padding: 1rem;
+        padding-bottom: 40px; /* Reduced from 100px, 40px is reasonable spacing above the nav */
+        border-radius: 0;
+      }
+    }
+  `;
+
+  @property({ type: String }) currentPath = '/';
+
+  connectedCallback() {
+    super.connectedCallback();
+    this.applyTheme(localStorage.getItem('priperfin_theme') || 'auto');
+    window.addEventListener('theme-change', (e: any) => this.applyTheme(e.detail.theme));
+  }
+
+  applyTheme(theme: string) {
+    if (theme === 'dark') {
+      this.setAttribute('data-theme', 'dark');
+    } else if (theme === 'light') {
+      this.setAttribute('data-theme', 'light');
+    } else {
+      this.removeAttribute('data-theme'); // Auto (system)
+    }
+  }
+
+  firstUpdated() {
+    const router = new Router(this.shadowRoot?.querySelector('#outlet'));
+    router.setRoutes([
+      { path: '/', component: 'view-expenses' },
+      { path: '/goals', component: 'view-goals' },
+      { path: '/reports', component: 'view-reports' },
+      { path: '/settings', component: 'view-settings' },
+    ]);
+
+    // Listen to route changes to update active state
+    window.addEventListener('vaadin-router-location-changed', (e: any) => {
+      this.currentPath = e.detail.location.pathname;
+      this.requestUpdate();
+    });
+  }
+
+  render() {
+    return html`
+      <nav>
+        <a href="/" class="nav-item ${this.currentPath === '/' ? 'active' : ''}">
+            <div class="icon-container"><span class="material-symbols-outlined">receipt_long</span></div>
+            <span class="nav-label">${i18n.t('nav.expenses')}</span>
+        </a>
+        <a href="/goals" class="nav-item ${this.currentPath === '/goals' ? 'active' : ''}">
+            <div class="icon-container"><span class="material-symbols-outlined">savings</span></div>
+            <span class="nav-label">${i18n.t('nav.goals')}</span>
+        </a>
+        <a href="/reports" class="nav-item ${this.currentPath === '/reports' ? 'active' : ''}">
+             <div class="icon-container"><span class="material-symbols-outlined">bar_chart</span></div>
+             <span class="nav-label">${i18n.t('nav.reports')}</span>
+        </a>
+        <a href="/settings" class="nav-item ${this.currentPath === '/settings' ? 'active' : ''}">
+             <div class="icon-container"><span class="material-symbols-outlined">settings</span></div>
+             <span class="nav-label">${i18n.t('nav.settings')}</span>
+        </a>
+      </nav>
+      <main id="outlet"></main>
+    `;
+  }
+}

@@ -1,0 +1,7 @@
+[tools]
+node = "lts"
+pnpm = "latest"
+pixel = "latest" # Assuming pixel is not a typo and intended, or perhaps we don't need it? sticking to node/pnpm.
+
+[settings]
+experimental = true

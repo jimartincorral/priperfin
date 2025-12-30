@@ -1,0 +1,23 @@
+name: "Personal Finance Tracker"
+description: "A comprehensive personal finance tracker with expense tracking, savings goals, and reporting."
+version: "1.0.0"
+slug: "priperfin"
+init: false
+arch:
+  - aarch64
+  - amd64
+  - armv7
+ports:
+  3000/tcp: 3000
+map:
+  - config:rw
+  - share:rw
+  - backup:rw
+options:
+  database_path: "file:/data/priperfin.db"
+  backup_dir: "/backup/priperfin"
+  backup_encryption_key: ""
+schema:
+  database_path: str
+  backup_dir: str
+  backup_encryption_key: str?
