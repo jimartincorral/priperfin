@@ -24,6 +24,8 @@ COPY --from=deps /app/apps/api/node_modules ./apps/api/node_modules
 COPY . .
 RUN cd apps/api && npx prisma generate
 RUN pnpm --filter api build
+# Use pnpm deploy to create a standalone production bundle
+RUN pnpm deploy --filter api --prod /prod/api
 
 FROM node:20-alpine AS runner
 WORKDIR /app
@@ -31,6 +33,8 @@ ENV NODE_ENV=production
 
 # Install bash and bashio for Home Assistant add-on support
 RUN apk add --no-cache bash curl jq
+
+# Install bashio
 RUN curl -J -L -o /tmp/bashio.tar.gz \
     "https://github.com/hassio-addons/bashio/archive/v0.16.2.tar.gz" \
     && mkdir /tmp/bashio \
@@ -39,12 +43,13 @@ RUN curl -J -L -o /tmp/bashio.tar.gz \
     && ln -s /usr/lib/bashio/bashio /usr/bin/bashio \
     && rm -rf /tmp/bashio /tmp/bashio.tar.gz
 
-# Copy built application
-COPY --from=builder-api /app/apps/api/dist ./dist
-COPY --from=builder-api /app/apps/api/node_modules ./node_modules
-COPY --from=builder-api /app/apps/api/package.json ./package.json
+# Copy the deployed API (includes node_modules with resolved symlinks)
+COPY --from=builder-api /prod/api ./
 
-# Copy Prisma files for migrations
+# Copy the built dist folder
+COPY --from=builder-api /app/apps/api/dist ./dist
+
+# Copy Prisma schema for db push
 COPY --from=builder-api /app/apps/api/prisma ./prisma
 
 # Copy frontend build to be served by API
