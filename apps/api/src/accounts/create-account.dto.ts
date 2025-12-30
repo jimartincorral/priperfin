@@ -1,5 +1,5 @@
 import { IsString, IsOptional, IsNumber, IsEnum } from 'class-validator';
-import { AccountType } from '@prisma/client';
+import { AccountType } from '../generated/client';
 
 export class CreateAccountDto {
   @IsString()

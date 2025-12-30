@@ -5,7 +5,7 @@ import {
   IsEnum,
   ValidateIf,
 } from 'class-validator';
-import { CategoryType } from '@prisma/client';
+import { CategoryType } from '../generated/client';
 
 export class CreateCategoryDto {
   @IsString()
