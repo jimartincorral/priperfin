@@ -29,7 +29,7 @@ export class ApiClient {
     }
 
     async get(endpoint: string, params: Record<string, any> = {}) {
-        const url = new URL(`${this.baseUrl}${endpoint}`);
+        const url = new URL(`${this.baseUrl}${endpoint}`, window.location.origin);
         Object.keys(params).forEach(key => url.searchParams.append(key, params[key]));
 
         const response = await fetch(url.toString());
