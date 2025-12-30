@@ -2,10 +2,8 @@
 FROM node:20-alpine AS builder
 WORKDIR /app
 
-# Install pnpm
+# Install pnpm and build tools
 RUN corepack enable && corepack prepare pnpm@9.0.0 --activate
-
-# Install build dependencies for native modules
 RUN apk add --no-cache python3 make g++
 
 # Copy package files
@@ -19,12 +17,17 @@ RUN pnpm install --frozen-lockfile
 # Copy source code
 COPY . .
 
-# Generate Prisma client
-RUN cd apps/api && npx prisma generate
+# Generate Prisma client and build API
+WORKDIR /app/apps/api
+RUN npx prisma generate
+RUN echo "=== Prisma client generated ===" && ls -la src/generated/client/ || echo "Generated folder missing!"
+RUN npx nest build
+RUN echo "=== API build complete ===" && ls -la dist/ && ls -la dist/src/ || echo "Build output missing!"
 
-# Build both apps
-RUN pnpm --filter web build
-RUN pnpm --filter api build
+# Build web
+WORKDIR /app/apps/web
+RUN npm run build
+RUN echo "=== Web build complete ===" && ls -la dist/ || echo "Web build missing!"
 
 # Production stage
 FROM node:20-alpine AS runner
@@ -46,25 +49,28 @@ RUN curl -J -L -o /tmp/bashio.tar.gz \
 # Copy package.json for production install
 COPY apps/api/package.json ./
 
-# Install production dependencies with npm (avoids pnpm symlink issues)
+# Install production dependencies with npm
 RUN npm install --omit=dev
 
-# Copy built API
+# Copy built API (note: output is in dist/src/ due to tsconfig)
 COPY --from=builder /app/apps/api/dist ./dist
 
 # Copy Prisma files
 COPY --from=builder /app/apps/api/prisma ./prisma
 COPY --from=builder /app/apps/api/prisma.config.ts ./
 
-# Copy generated Prisma client (it's in dist due to nest assets config)
+# Copy generated Prisma client
 COPY --from=builder /app/apps/api/src/generated ./src/generated
 
 # Copy frontend build
 COPY --from=builder /app/apps/web/dist ./client
 
 # Copy startup script
-COPY run.sh /
+COPY run.sh /run.sh
 RUN chmod +x /run.sh
+
+# Debug: show what we have
+RUN echo "=== Final container contents ===" && ls -la dist/ && ls -la dist/src/ || echo "Missing dist!"
 
 # Create data directory
 RUN mkdir -p /data
