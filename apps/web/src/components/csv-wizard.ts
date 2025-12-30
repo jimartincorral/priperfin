@@ -190,7 +190,7 @@ export class CsvWizard extends LitElement {
             this.error = '';
 
             // First attempt: check for duplicates (force=false)
-            const response = await fetch('http://localhost:3000/api/transactions/bulk', {
+            const response = await fetch(`http://${window.location.hostname}:3000/api/transactions/bulk`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ transactions: rowsWithAccount, force: false })
@@ -276,7 +276,7 @@ export class CsvWizard extends LitElement {
             const transactionsToImport = rowsToImport;
 
             // Final import with force=true (since we've manually filtered what we want to keep)
-            const response = await fetch('http://localhost:3000/api/transactions/bulk', {
+            const response = await fetch(`http://${window.location.hostname}:3000/api/transactions/bulk`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

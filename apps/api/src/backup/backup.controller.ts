@@ -88,7 +88,11 @@ export class BackupController {
         overwrite,
         decryptionKey,
       );
-      res.status(200).json({ message: 'Backup restored successfully.' });
+      res.status(200).json({
+        message: 'Backup restored successfully.',
+        requiresReload: true,
+        hint: 'Please refresh the page to see restored data.'
+      });
     } finally {
       // Clean up the uploaded file
       await fs

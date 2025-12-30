@@ -254,7 +254,7 @@ export class ViewSettings extends LitElement {
             const { filename, downloadUrl } = response;
 
             // Download the backup file
-            const downloadResponse = await fetch(`http://localhost:3000${downloadUrl}`);
+            const downloadResponse = await fetch(`http://${window.location.hostname}:3000${downloadUrl}`);
             const blob = await downloadResponse.blob();
 
             // Create download link
@@ -297,7 +297,7 @@ export class ViewSettings extends LitElement {
                 formData.append('decryptionKey', this.decryptionKey);
             }
 
-            const response = await fetch('http://localhost:3000/api/backup/restore', {
+            const response = await fetch(`http://${window.location.hostname}:3000/api/backup/restore`, {
                 method: 'POST',
                 body: formData,
             });
