@@ -1,6 +1,6 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
-import { api } from '../api/client';
+import { api, getApiBaseUrl } from '../api/client';
 import { i18n } from '../i18n/i18n';
 
 import 'emoji-picker-element';
@@ -254,7 +254,7 @@ export class ViewSettings extends LitElement {
             const { filename, downloadUrl } = response;
 
             // Download the backup file
-            const downloadResponse = await fetch(`http://${window.location.hostname}:3000${downloadUrl}`);
+            const downloadResponse = await fetch(`${getApiBaseUrl().replace('/api', '')}${downloadUrl}`);
             const blob = await downloadResponse.blob();
 
             // Create download link
@@ -297,7 +297,7 @@ export class ViewSettings extends LitElement {
                 formData.append('decryptionKey', this.decryptionKey);
             }
 
-            const response = await fetch(`http://${window.location.hostname}:3000/api/backup/restore`, {
+            const response = await fetch(`${getApiBaseUrl()}/backup/restore`, {
                 method: 'POST',
                 body: formData,
             });

@@ -1,5 +1,23 @@
+// Helper to get base URL for API calls (handles ingress)
+export function getApiBaseUrl(): string {
+    const path = window.location.pathname;
+    if (path.includes('/api/hassio_ingress/')) {
+        // Extract the ingress base path and use relative API calls
+        const ingressMatch = path.match(/^(\/api\/hassio_ingress\/[^/]+)/);
+        return ingressMatch ? `${ingressMatch[1]}/api` : '/api';
+    } else {
+        // Direct access (development or direct port access)
+        return `http://${window.location.hostname}:3000/api`;
+    }
+}
+
 export class ApiClient {
-    private baseUrl = `http://${window.location.hostname}:3000/api`;
+    private baseUrl: string;
+
+    constructor() {
+        this.baseUrl = getApiBaseUrl();
+        console.log('[ApiClient] Base URL:', this.baseUrl);
+    }
 
     private async parseResponse(response: Response) {
         if (!response.ok) {

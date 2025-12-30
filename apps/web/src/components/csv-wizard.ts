@@ -2,6 +2,7 @@ import { LitElement, html, css } from 'lit';
 import { customElement, state, property } from 'lit/decorators.js';
 import Papa from 'papaparse';
 import { i18n } from '../i18n/i18n';
+import { getApiBaseUrl } from '../api/client';
 
 @customElement('csv-wizard')
 export class CsvWizard extends LitElement {
@@ -190,7 +191,7 @@ export class CsvWizard extends LitElement {
             this.error = '';
 
             // First attempt: check for duplicates (force=false)
-            const response = await fetch(`http://${window.location.hostname}:3000/api/transactions/bulk`, {
+            const response = await fetch(`${getApiBaseUrl()}/transactions/bulk`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ transactions: rowsWithAccount, force: false })
@@ -276,7 +277,7 @@ export class CsvWizard extends LitElement {
             const transactionsToImport = rowsToImport;
 
             // Final import with force=true (since we've manually filtered what we want to keep)
-            const response = await fetch(`http://${window.location.hostname}:3000/api/transactions/bulk`, {
+            const response = await fetch(`${getApiBaseUrl()}/transactions/bulk`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
