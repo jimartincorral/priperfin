@@ -1530,7 +1530,7 @@ export class ViewExpenses extends LitElement {
                                                     ${this.costObjects.map(co => html`<option value="${co.id}" ?selected="${this.editValue === co.id}">${co.icon} ${co.name}</option>`)}
                                                 </select>
                                             ` : html`${(() => {
-                  const co = tx.costObject;
+                  const co = this.costObjects.find(c => c.id === tx.costObjectId);
                   if (co) return html`${co.icon} ${co.name}`;
                   return html`<span style="color: #cbd5e1; font-style: italic;">${i18n.t('cost_objects.unassigned')}</span>`;
                 })()}`}
