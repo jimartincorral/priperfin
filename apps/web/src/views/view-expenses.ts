@@ -2,6 +2,7 @@ import { LitElement, html, css } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import { api } from '../api/client';
 import '../components/csv-wizard';
+import '../components/split-transaction-modal';
 import 'emoji-picker-element';
 
 import { i18n } from '../i18n/i18n';
@@ -44,6 +45,9 @@ export class ViewExpenses extends LitElement {
   @state() categoryForm = { name: '', icon: '📁', color: '', type: 'EXPENSE', parentId: '' };
   @state() showEmojiPicker = false;
 
+  @state() showSplitModal = false;
+  @state() splitTransaction: any = null;
+
   @state() editingCell: { id: string, field: string } | null = null;
   @state() editValue: any = null;
 
@@ -63,6 +67,9 @@ export class ViewExpenses extends LitElement {
   @state() selectedTransactions: Set<string> = new Set();
 
   @state() showColumnModal = false;
+
+  // Non-reactive property to preserve scroll position across renders
+  private _preservedScrollY: number | null = null;
   @state() columnConfig: { id: string, label: string, visible: boolean }[] = [
     { id: 'select', label: 'Select', visible: true },
     { id: 'date', label: 'common.date', visible: true },
@@ -248,12 +255,14 @@ export class ViewExpenses extends LitElement {
   async loadBalances() {
     this.balanceLoading = true;
     const monthKey = `${this.year}-${String(this.month).padStart(2, '0')}`;
+    const accountKey = this.selectedAccountId || 'all';
+    const verifiedBalanceKey = `balance_verified_${accountKey}_${this.year}_${this.month}`;
 
     try {
       const [balData, settingData, monthlyRecord] = await Promise.all([
-        api.get('/transactions/balance'),
-        api.get('/settings/balance_verified').catch(() => null),
-        api.get(`/monthly-balances/${monthKey}`).catch(() => null)
+        api.get('/transactions/balance', this.selectedAccountId ? { accountId: this.selectedAccountId } : {}),
+        api.get(`/settings/${verifiedBalanceKey}`).catch(() => null),
+        this.selectedAccountId ? api.get(`/monthly-balances/${monthKey}`, { accountId: this.selectedAccountId }).catch(() => null) : Promise.resolve(null)
       ]);
 
       this.totalBalance = balData.total || 0;
@@ -371,8 +380,11 @@ export class ViewExpenses extends LitElement {
     if (isNaN(newVal)) return;
 
     this.verifiedBalance = newVal;
+    const accountKey = this.selectedAccountId || 'all';
+    const verifiedBalanceKey = `balance_verified_${accountKey}_${this.year}_${this.month}`;
+
     try {
-      await api.post('/settings/balance_verified', { value: newVal.toString() });
+      await api.post(`/settings/${verifiedBalanceKey}`, { value: newVal.toString() });
     } catch (e) {
       console.error('Failed to save balance', e);
     }
@@ -424,19 +436,19 @@ export class ViewExpenses extends LitElement {
   static styles = css`
     :host { display: block; }
     
-    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
     h1 { font: var(--md-sys-typescale-headline-medium); color: var(--md-sys-color-on-surface); margin: 0; }
 
     /* Filters: Outlined inputs */
-    .filters { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
-    select, input { 
-        height: 40px;
-        padding: 0 16px;
-        border: 1px solid var(--md-sys-color-outline); 
-        border-radius: 4px; 
+    .filters { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+    select, input {
+        height: 36px;
+        padding: 0 12px;
+        border: 1px solid var(--md-sys-color-outline);
+        border-radius: 4px;
         background-color: transparent;
         color: var(--md-sys-color-on-surface);
-        font: var(--md-sys-typescale-body-large);
+        font-size: 14px;
         box-sizing: border-box;
         transition: border-color 0.2s;
     }
@@ -459,11 +471,12 @@ export class ViewExpenses extends LitElement {
     
     /* Buttons: MD3 configurations */
     button {
-        height: 40px;
-        padding: 0 24px;
-        border-radius: 20px; /* Stadium shape */
+        height: 36px;
+        padding: 0 20px;
+        border-radius: 18px; /* Stadium shape */
         border: none;
-        font: var(--md-sys-typescale-label-large);
+        font-size: 14px;
+        font-weight: 500;
         cursor: pointer;
         display: inline-flex;
         align-items: center;
@@ -500,13 +513,13 @@ export class ViewExpenses extends LitElement {
     }
 
     /* Cards: Elevated */
-    .card { 
-        background: var(--md-sys-color-surface-container-low); 
-        border-radius: var(--md-sys-shape-corner-medium); 
-        padding: 24px; 
+    .card {
+        background: var(--md-sys-color-surface-container-low);
+        border-radius: var(--md-sys-shape-corner-medium);
+        padding: 16px;
         box-shadow: 0 1px 3px 0 rgba(0,0,0,0.12), 0 1px 2px 0 rgba(0,0,0,0.24); /* Elevation 1 */
-        margin-bottom: 24px; 
-        display: flex; gap: 32px; align-items: center; 
+        margin-bottom: 16px;
+        display: flex; gap: 20px; align-items: center;
         overflow: hidden; /* Prevent overflow causing scrollbars */
     }
     .card h2 { margin: 0; font: var(--md-sys-typescale-title-small); color: var(--md-sys-color-on-surface-variant); }
@@ -522,9 +535,9 @@ export class ViewExpenses extends LitElement {
         border: 1px solid var(--md-sys-color-outline-variant);
         background: var(--md-sys-color-surface);
     }
-    table { width: 100%; min-width: 600px; border-collapse: separate; border-spacing: 0; background: var(--md-sys-color-surface); table-layout: fixed; } 
-    th, td { padding: 12px 16px; text-align: left; border-bottom: 1px solid var(--md-sys-color-outline-variant); vertical-align: middle; position: relative; color: var(--md-sys-color-on-surface); }
-    th { background: var(--md-sys-color-surface-container); font: var(--md-sys-typescale-title-small); color: var(--md-sys-color-on-surface-variant); text-transform: none; letter-spacing: 0.1px; }
+    table { width: 100%; min-width: 600px; border-collapse: separate; border-spacing: 0; background: var(--md-sys-color-surface); table-layout: auto; }
+    th, td { padding: 6px 10px; text-align: left; border-bottom: 1px solid var(--md-sys-color-outline-variant); vertical-align: middle; position: relative; color: var(--md-sys-color-on-surface); font-size: 14px; }
+    th { background: var(--md-sys-color-surface-container); font: var(--md-sys-typescale-title-small); color: var(--md-sys-color-on-surface-variant); text-transform: none; letter-spacing: 0.1px; font-size: 14px; font-weight: 500; }
     
     td { font: var(--md-sys-typescale-body-medium); }
 
@@ -538,11 +551,11 @@ export class ViewExpenses extends LitElement {
     .amount.negative { color: var(--md-sys-color-on-surface); } /* Neutral for negative */
     .amount.positive { color: #16a34a; } /* Custom green for income still ok */
     
-    .col-description { max-width: 250px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .col-description { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 300px; }
     .col-date { white-space: nowrap; }
-    .col-notes { max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .col-notes { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px; }
 
-    .pagination-controls { display: flex; justify-content: flex-end; align-items: center; gap: 16px; margin-top: 16px; }
+    .pagination-controls { display: flex; justify-content: flex-end; align-items: center; gap: 12px; margin-top: 12px; }
     .pagination-controls button { width: 32px; height: 32px; padding: 0; border-radius: 16px; min-width: 32px; }
 
     @media (max-width: 768px) {
@@ -602,6 +615,27 @@ export class ViewExpenses extends LitElement {
     }
 
     await this.loadData();
+  }
+
+  updated(changedProperties: Map<string, any>) {
+    super.updated(changedProperties);
+
+    // Restore scroll position if preserved
+    if (this._preservedScrollY !== null) {
+      const scrollTarget = this._preservedScrollY;
+      console.log('[ViewExpenses] Restoring scroll to:', scrollTarget);
+
+      // Use multiple RAFs and setTimeout to ensure DOM is fully settled
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          setTimeout(() => {
+            window.scrollTo(0, scrollTarget);
+            console.log('[ViewExpenses] Scroll restored. Current scrollY:', window.scrollY);
+          }, 10);
+        });
+      });
+      this._preservedScrollY = null;
+    }
   }
 
   saveColumnConfig() {
@@ -825,8 +859,11 @@ export class ViewExpenses extends LitElement {
 
       if (preserveScroll) {
         await this.updateComplete;
+        // Use double RAF to ensure DOM is fully painted
         requestAnimationFrame(() => {
-          window.scrollTo(0, scrollPos);
+          requestAnimationFrame(() => {
+            window.scrollTo(0, scrollPos);
+          });
         });
       }
       this.computeSuggestions();
@@ -839,12 +876,28 @@ export class ViewExpenses extends LitElement {
   }
 
   computeBudgetBalances() {
-    // Group tx by category
+    // Group tx by category (with split support)
     const byCat: { [key: string]: any[] } = {};
+
     this.transactions.forEach(t => {
-      if (!t.categoryId) return;
-      if (!byCat[t.categoryId]) byCat[t.categoryId] = [];
-      byCat[t.categoryId].push(t);
+      // If transaction has splits, create pseudo-transactions for each split
+      if (t.splits && t.splits.length > 0) {
+        t.splits.forEach((split: any) => {
+          if (!split.categoryId) return;
+          if (!byCat[split.categoryId]) byCat[split.categoryId] = [];
+          byCat[split.categoryId].push({
+            ...t,
+            amount: split.amount,
+            categoryId: split.categoryId,
+            _isSplit: true,
+          });
+        });
+      } else {
+        // No splits, use parent transaction
+        if (!t.categoryId) return;
+        if (!byCat[t.categoryId]) byCat[t.categoryId] = [];
+        byCat[t.categoryId].push(t);
+      }
     });
 
     Object.keys(byCat).forEach(catId => {
@@ -853,7 +906,7 @@ export class ViewExpenses extends LitElement {
 
       const budget = Number(cat.budget);
       // Sort asc by date for calculation
-      // We clone to sort so we don't mess up original order if it matters, 
+      // We clone to sort so we don't mess up original order if it matters,
       // though typically we just need the logic to be chronological
       const sorted = [...byCat[catId]].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
@@ -905,7 +958,7 @@ export class ViewExpenses extends LitElement {
 
     console.log('[ViewExpenses] Confirming delete for:', id);
     try {
-      await api.delete(`/ transactions / ${id} `);
+      await api.delete(`/transactions/${id}`);
       console.log('[ViewExpenses] API delete success');
       await this.loadData(true);
       this.transactionToDelete = null;
@@ -913,6 +966,21 @@ export class ViewExpenses extends LitElement {
       console.error('Failed to delete transaction', e);
       alert('Failed to delete: ' + (e.message || 'Unknown error'));
     }
+  }
+
+  openSplitModal(transaction: any) {
+    this.splitTransaction = transaction;
+    this.showSplitModal = true;
+  }
+
+  closeSplitModal() {
+    this.showSplitModal = false;
+    this.splitTransaction = null;
+  }
+
+  async handleSplitSave() {
+    await this.loadData(true);
+    this.closeSplitModal();
   }
 
   async handleWizardImport(e: CustomEvent) {
@@ -952,12 +1020,17 @@ export class ViewExpenses extends LitElement {
   }
 
   startEditing(id: string, field: string, value: any) {
+    // Capture scroll position at the start of editing
+    this._preservedScrollY = window.scrollY;
+    console.log('[ViewExpenses] Starting edit, captured scrollY:', this._preservedScrollY);
+
     // Soft lock for imported transactions
     const tx = this.transactions.find(t => t.id === id);
     if (tx && tx.externalId) {
       // Only lock fields that are imported (Date, Amount, Description)
       if (['date', 'amount', 'description'].includes(field)) {
         if (!confirm(`This transaction was imported from CSV(Locked).\nAre you sure you want to edit the ${field}?`)) {
+          this._preservedScrollY = null; // Clear if user cancels
           return;
         }
       }
@@ -965,16 +1038,19 @@ export class ViewExpenses extends LitElement {
 
     this.editingCell = { id, field };
     this.editValue = value;
-    // Wait for update then focus
+    // Wait for update then focus (prevent scroll)
     setTimeout(() => {
       const input = this.shadowRoot?.querySelector(`#edit-${id}-${field}`) as HTMLElement;
-      if (input) input.focus();
+      if (input) {
+        input.focus({ preventScroll: true });
+      }
     }, 0);
   }
 
   cancelEditing() {
     this.editingCell = null;
     this.editValue = null;
+    this._preservedScrollY = null; // Clear preserved scroll on cancel
   }
 
   async saveCell(id: string, field: string) {
@@ -982,23 +1058,43 @@ export class ViewExpenses extends LitElement {
 
     try {
       let payload: any = {};
+      let localValue: any = this.editValue;
+
       if (field === 'date') {
         payload[field] = new Date(this.editValue).toISOString();
+        localValue = payload[field];
       } else if (field === 'amount') {
         payload[field] = parseFloat(this.editValue);
+        localValue = payload[field];
       } else if (field === 'categoryId' && (this.editValue === 'uncategorized' || this.editValue === '')) {
         payload[field] = null;
+        localValue = null;
       } else {
         payload[field] = this.editValue;
       }
 
       await api.patch(`/transactions/${id}`, payload);
+
+      // Update local state directly instead of reloading
+      const txIndex = this.transactions.findIndex(t => t.id === id);
+      if (txIndex !== -1) {
+        this.transactions = this.transactions.map((t, i) =>
+          i === txIndex ? { ...t, [field]: localValue } : t
+        );
+      }
+
       this.editingCell = null;
       this.editValue = null;
-      await this.loadData(true);
+      this._preservedScrollY = null;
+
+      // Recompute budget balances if needed
+      if (field === 'categoryId' || field === 'amount') {
+        this.computeBudgetBalances();
+      }
     } catch (e: any) {
       console.error('Failed to save cell', e);
       alert('Failed to save changes: ' + (e.message || JSON.stringify(e)));
+      this._preservedScrollY = null;
     }
   }
 
@@ -1286,6 +1382,15 @@ export class ViewExpenses extends LitElement {
             @import="${this.handleWizardImport}">
         </csv-wizard>
 
+        <split-transaction-modal
+            ?open="${this.showSplitModal}"
+            .transaction="${this.splitTransaction}"
+            .categories="${this.categories}"
+            .costObjects="${this.costObjects}"
+            @close="${this.closeSplitModal}"
+            @save="${this.handleSplitSave}">
+        </split-transaction-modal>
+
       ${this.transactionToDelete ? html`
           <div class="modal-overlay" @click="${() => this.transactionToDelete = null}">
               <div class="modal" @click="${(e: Event) => e.stopPropagation()}">
@@ -1399,6 +1504,10 @@ export class ViewExpenses extends LitElement {
                                                     <option value="new_category_inline">+ ${i18n.t('settings.add_category')}</option>
                                                 </select>
                                             ` : html`${(() => {
+                  // Show split indicator if transaction has splits
+                  if (tx.splits && tx.splits.length > 0) {
+                    return html`<span style="cursor: pointer;" @click="${(e: Event) => { e.stopPropagation(); this.openSplitModal(tx); }}">🔀 Split (${tx.splits.length} items)</span>`;
+                  }
                   const c = this.categories.find(c => c.id === tx.categoryId);
                   if (c) { if (c.parentId) { const p = this.categories.find(cat => cat.id === c.parentId); return html`<small style="opacity: 0.7">${p?.name} ></small> ${c.icon} ${c.name}`; } return html`${c.icon} ${c.name}`; }
                   if (tx._suggestion) { const sugg = this.categories.find(c => c.id === tx._suggestion); return html`<div style="display: flex; align-items: center; gap: 0.5rem; justify-content: flex-start;"><span style="opacity: 0.6; font-style: italic;">? ${sugg?.name}</span><div style="display: flex; gap: 2px;"><button @click="${(e: Event) => { e.stopPropagation(); this.updateCategory(tx.id, tx._suggestion); }}" title="Accept Suggestion" style="padding: 2px 6px; background: #22c55e; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.8rem;">✔</button><button @click="${(e: Event) => { e.stopPropagation(); tx._suggestion = null; this.requestUpdate(); }}" title="Reject" style="padding: 2px 6px; background: #94a3b8; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.8rem;">✖</button></div></div>`; }
@@ -1446,7 +1555,7 @@ export class ViewExpenses extends LitElement {
                                             ${this.editingCell?.id === tx.id && this.editingCell?.field === 'notes' ? html`<input type="text" id="edit-${tx.id}-notes" .value="${this.editValue || ''}" @input="${(e: any) => this.editValue = e.target.value}" @blur="${() => this.saveCell(tx.id, 'notes')}" @keydown="${(e: KeyboardEvent) => this.handleKeyDown(e, tx.id, 'notes')}" />` : (tx.notes || '-')}
                                         </td>`;
             case 'actions':
-              return html`<td><button class="btn-danger" @click="${() => this.deleteTransaction(tx.id)}" title="Delete Transaction">✕</button></td>`;
+              return html`<td><button class="btn-secondary" @click="${(e: Event) => { e.stopPropagation(); this.openSplitModal(tx); }}" title="Split Transaction" style="margin-right: 4px;">🔀</button><button class="btn-danger" @click="${() => this.deleteTransaction(tx.id)}" title="Delete Transaction">✕</button></td>`;
             default:
               return '';
           }

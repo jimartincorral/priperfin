@@ -24,7 +24,14 @@ export class ReportsService {
     // Get expenses only
     const transactions = await this.prisma.transaction.findMany({
       where,
-      include: { category: { include: { parent: true } } },
+      include: {
+        category: { include: { parent: true } },
+        splits: {
+          include: {
+            category: { include: { parent: true } },
+          },
+        },
+      },
     });
 
     // Group by category
@@ -129,21 +136,42 @@ export class ReportsService {
 
     // Aggregate
     transactions.forEach((t) => {
-      // Determine the target bucket: Specific Category > Uncategorized
-      let targetId = 'uncategorized';
+      // If transaction has splits, aggregate each split separately
+      if (t.splits && t.splits.length > 0) {
+        t.splits.forEach((split) => {
+          let targetId = 'uncategorized';
 
-      if (t.category) {
-        targetId = t.category.id;
-      }
+          if (split.category) {
+            targetId = split.category.id;
+          }
 
-      if (categoryMap.has(targetId)) {
-        const current = categoryMap.get(targetId);
-        if (current) {
-          current.spent += Math.abs(t.amount.toNumber());
-        }
+          if (categoryMap.has(targetId)) {
+            const current = categoryMap.get(targetId);
+            if (current) {
+              current.spent += Math.abs(split.amount.toNumber());
+            }
+          } else {
+            const current = categoryMap.get('uncategorized');
+            if (current) current.spent += Math.abs(split.amount.toNumber());
+          }
+        });
       } else {
-        const current = categoryMap.get('uncategorized');
-        if (current) current.spent += Math.abs(t.amount.toNumber());
+        // No splits, use parent transaction category
+        let targetId = 'uncategorized';
+
+        if (t.category) {
+          targetId = t.category.id;
+        }
+
+        if (categoryMap.has(targetId)) {
+          const current = categoryMap.get(targetId);
+          if (current) {
+            current.spent += Math.abs(t.amount.toNumber());
+          }
+        } else {
+          const current = categoryMap.get('uncategorized');
+          if (current) current.spent += Math.abs(t.amount.toNumber());
+        }
       }
     });
 
@@ -195,7 +223,14 @@ export class ReportsService {
 
     const transactions = await this.prisma.transaction.findMany({
       where,
-      include: { category: { include: { parent: true } } },
+      include: {
+        category: { include: { parent: true } },
+        splits: {
+          include: {
+            category: { include: { parent: true } },
+          },
+        },
+      },
     });
 
     let totalIncome = 0;
@@ -203,27 +238,55 @@ export class ReportsService {
     const incomeSources = new Map<string, number>();
 
     transactions.forEach((t) => {
-      const amt = t.amount.toNumber();
-      if (amt > 0) {
-        totalIncome += amt;
-        // Group income by category if present, else 'Other Income'
-        const sourceName = t.category ? t.category.name : 'Other Income';
-        incomeSources.set(
-          sourceName,
-          (incomeSources.get(sourceName) || 0) + amt,
-        );
+      // If transaction has splits, process each split separately
+      if (t.splits && t.splits.length > 0) {
+        t.splits.forEach((split) => {
+          const amt = split.amount.toNumber();
+          if (amt > 0) {
+            totalIncome += amt;
+            const sourceName = split.category ? split.category.name : 'Other Income';
+            incomeSources.set(
+              sourceName,
+              (incomeSources.get(sourceName) || 0) + amt,
+            );
+          } else {
+            const absAmt = Math.abs(amt);
+            let targetName = 'Uncategorized';
+            if (split.category) {
+              targetName = split.category.parent
+                ? split.category.parent.name
+                : split.category.name;
+            }
+            expenseByCategory.set(
+              targetName,
+              (expenseByCategory.get(targetName) || 0) + absAmt,
+            );
+          }
+        });
       } else {
-        const absAmt = Math.abs(amt);
-        let targetName = 'Uncategorized';
-        if (t.category) {
-          targetName = t.category.parent
-            ? t.category.parent.name
-            : t.category.name;
+        // No splits, use parent transaction
+        const amt = t.amount.toNumber();
+        if (amt > 0) {
+          totalIncome += amt;
+          // Group income by category if present, else 'Other Income'
+          const sourceName = t.category ? t.category.name : 'Other Income';
+          incomeSources.set(
+            sourceName,
+            (incomeSources.get(sourceName) || 0) + amt,
+          );
+        } else {
+          const absAmt = Math.abs(amt);
+          let targetName = 'Uncategorized';
+          if (t.category) {
+            targetName = t.category.parent
+              ? t.category.parent.name
+              : t.category.name;
+          }
+          expenseByCategory.set(
+            targetName,
+            (expenseByCategory.get(targetName) || 0) + absAmt,
+          );
         }
-        expenseByCategory.set(
-          targetName,
-          (expenseByCategory.get(targetName) || 0) + absAmt,
-        );
       }
     });
 
@@ -280,7 +343,14 @@ export class ReportsService {
     // Get all transactions for this account
     const transactions = await this.prisma.transaction.findMany({
       where,
-      include: { costObject: true },
+      include: {
+        costObject: true,
+        splits: {
+          include: {
+            costObject: true,
+          },
+        },
+      },
     });
 
     // Group by cost object
@@ -300,31 +370,64 @@ export class ReportsService {
     });
 
     transactions.forEach((t) => {
-      const amt = t.amount.toNumber();
-      // Only count expenses (negative amounts) for credit card breakdown
-      if (amt >= 0) return;
+      // If transaction has splits, process each split separately
+      if (t.splits && t.splits.length > 0) {
+        t.splits.forEach((split) => {
+          const amt = split.amount.toNumber();
+          // Only count expenses (negative amounts) for credit card breakdown
+          if (amt >= 0) return;
 
-      const absAmt = Math.abs(amt);
+          const absAmt = Math.abs(amt);
 
-      if (t.costObject) {
-        const key = t.costObject.id;
-        if (!costObjectMap.has(key)) {
-          costObjectMap.set(key, {
-            id: t.costObject.id,
-            name: t.costObject.name,
-            icon: t.costObject.icon,
-            color: t.costObject.color || '#6366f1',
-            total: 0,
-            count: 0,
-          });
-        }
-        const entry = costObjectMap.get(key)!;
-        entry.total += absAmt;
-        entry.count += 1;
+          if (split.costObject) {
+            const key = split.costObject.id;
+            if (!costObjectMap.has(key)) {
+              costObjectMap.set(key, {
+                id: split.costObject.id,
+                name: split.costObject.name,
+                icon: split.costObject.icon,
+                color: split.costObject.color || '#6366f1',
+                total: 0,
+                count: 0,
+              });
+            }
+            const entry = costObjectMap.get(key)!;
+            entry.total += absAmt;
+            entry.count += 1;
+          } else {
+            const unassigned = costObjectMap.get('unassigned')!;
+            unassigned.total += absAmt;
+            unassigned.count += 1;
+          }
+        });
       } else {
-        const unassigned = costObjectMap.get('unassigned')!;
-        unassigned.total += absAmt;
-        unassigned.count += 1;
+        // No splits, use parent transaction
+        const amt = t.amount.toNumber();
+        // Only count expenses (negative amounts) for credit card breakdown
+        if (amt >= 0) return;
+
+        const absAmt = Math.abs(amt);
+
+        if (t.costObject) {
+          const key = t.costObject.id;
+          if (!costObjectMap.has(key)) {
+            costObjectMap.set(key, {
+              id: t.costObject.id,
+              name: t.costObject.name,
+              icon: t.costObject.icon,
+              color: t.costObject.color || '#6366f1',
+              total: 0,
+              count: 0,
+            });
+          }
+          const entry = costObjectMap.get(key)!;
+          entry.total += absAmt;
+          entry.count += 1;
+        } else {
+          const unassigned = costObjectMap.get('unassigned')!;
+          unassigned.total += absAmt;
+          unassigned.count += 1;
+        }
       }
     });
 

@@ -15,19 +15,20 @@ datasource db {
 }
 
 model Category {
-  id           String         @id @default(uuid())
-  name         String
-  color        String?
-  icon         String
-  budget       Decimal? // Optional monthly soft budget
-  type         CategoryType   @default(EXPENSE)
-  parentId     String?
-  parent       Category?      @relation("CategoryToCategory", fields: [parentId], references: [id], onDelete: SetNull)
-  children     Category[]     @relation("CategoryToCategory")
-  transactions Transaction[]
-  savingsGoals SavingsGoal[]
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
+  id                String              @id @default(uuid())
+  name              String
+  color             String?
+  icon              String
+  budget            Decimal? // Optional monthly soft budget
+  type              CategoryType        @default(EXPENSE)
+  parentId          String?
+  parent            Category?           @relation("CategoryToCategory", fields: [parentId], references: [id], onDelete: SetNull)
+  children          Category[]          @relation("CategoryToCategory")
+  transactions      Transaction[]
+  transactionSplits TransactionSplit[]
+  savingsGoals      SavingsGoal[]
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
 }
 
 model Account {
@@ -47,30 +48,46 @@ enum AccountType {
 }
 
 model CostObject {
-  id           String        @id @default(uuid())
-  name         String
-  color        String?
-  icon         String
-  transactions Transaction[]
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  id                String              @id @default(uuid())
+  name              String
+  color             String?
+  icon              String
+  transactions      Transaction[]
+  transactionSplits TransactionSplit[]
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
 }
 
 model Transaction {
-  id           String      @id @default(uuid())
+  id           String             @id @default(uuid())
   date         DateTime
   amount       Decimal
   description  String
   categoryId   String?
-  category     Category?   @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  category     Category?          @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   accountId    String?
-  account      Account?    @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  account      Account?           @relation(fields: [accountId], references: [id], onDelete: SetNull)
   costObjectId String?
-  costObject   CostObject? @relation(fields: [costObjectId], references: [id], onDelete: SetNull)
+  costObject   CostObject?        @relation(fields: [costObjectId], references: [id], onDelete: SetNull)
   notes        String?
-  externalId   String?     @unique
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
+  externalId   String?            @unique
+  splits       TransactionSplit[] @relation("TransactionSplits")
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+}
+
+model TransactionSplit {
+  id           String       @id @default(uuid())
+  parentId     String
+  parent       Transaction  @relation("TransactionSplits", fields: [parentId], references: [id], onDelete: Cascade)
+  amount       Decimal
+  categoryId   String?
+  category     Category?    @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  costObjectId String?
+  costObject   CostObject?  @relation(fields: [costObjectId], references: [id], onDelete: SetNull)
+  description  String?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
 }
 
 model SavingsGoal {

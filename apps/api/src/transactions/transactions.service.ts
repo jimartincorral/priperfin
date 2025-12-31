@@ -1,7 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTransactionDto } from './create-transaction.dto';
 import { GetTransactionsDto } from './get-transactions.dto';
+import { CreateSplitsDto } from './create-split.dto';
 import * as crypto from 'crypto';
 
 @Injectable()
@@ -102,7 +103,16 @@ export class TransactionsService {
     return this.prisma.transaction.findMany({
       where,
       orderBy: { date: 'desc' },
-      include: { category: true, costObject: true },
+      include: {
+        category: true,
+        costObject: true,
+        splits: {
+          include: {
+            category: true,
+            costObject: true,
+          },
+        },
+      },
     });
   }
 
@@ -389,6 +399,157 @@ export class TransactionsService {
     return this.prisma.transaction.delete({
       where: { id },
     });
+  }
+
+  async findOne(id: string) {
+    const transaction = await this.prisma.transaction.findUnique({
+      where: { id },
+      include: {
+        category: true,
+        costObject: true,
+        account: true,
+        splits: {
+          include: {
+            category: true,
+            costObject: true,
+          },
+        },
+      },
+    });
+
+    if (!transaction) {
+      throw new NotFoundException(`Transaction with ID ${id} not found`);
+    }
+
+    return transaction;
+  }
+
+  async createSplits(transactionId: string, dto: CreateSplitsDto) {
+    // Validate transaction exists
+    const transaction = await this.prisma.transaction.findUnique({
+      where: { id: transactionId },
+      include: { splits: true },
+    });
+
+    if (!transaction) {
+      throw new NotFoundException(`Transaction with ID ${transactionId} not found`);
+    }
+
+    // Validate no existing splits
+    if (transaction.splits && transaction.splits.length > 0) {
+      throw new BadRequestException('Transaction already has splits. Use update instead.');
+    }
+
+    // Validate splits sum to parent amount (±0.01 tolerance)
+    const totalSplitAmount = dto.splits.reduce((sum, split) => sum + split.amount, 0);
+    const parentAmount = transaction.amount.toNumber();
+    const diff = Math.abs(totalSplitAmount - parentAmount);
+
+    if (diff > 0.01) {
+      throw new BadRequestException(
+        `Splits sum (${totalSplitAmount}) does not match parent amount (${parentAmount})`
+      );
+    }
+
+    // Create splits in a transaction
+    return this.prisma.$transaction(async (tx) => {
+      // Create all splits
+      await tx.transactionSplit.createMany({
+        data: dto.splits.map((split) => ({
+          parentId: transactionId,
+          amount: split.amount,
+          categoryId: split.categoryId,
+          costObjectId: split.costObjectId,
+          description: split.description,
+        })),
+      });
+
+      // Return updated transaction with splits
+      return tx.transaction.findUnique({
+        where: { id: transactionId },
+        include: {
+          splits: {
+            include: {
+              category: true,
+              costObject: true,
+            },
+          },
+        },
+      });
+    });
+  }
+
+  async updateSplits(transactionId: string, dto: CreateSplitsDto) {
+    // Validate transaction exists
+    const transaction = await this.prisma.transaction.findUnique({
+      where: { id: transactionId },
+    });
+
+    if (!transaction) {
+      throw new NotFoundException(`Transaction with ID ${transactionId} not found`);
+    }
+
+    // Validate splits sum to parent amount (±0.01 tolerance)
+    const totalSplitAmount = dto.splits.reduce((sum, split) => sum + split.amount, 0);
+    const parentAmount = transaction.amount.toNumber();
+    const diff = Math.abs(totalSplitAmount - parentAmount);
+
+    if (diff > 0.01) {
+      throw new BadRequestException(
+        `Splits sum (${totalSplitAmount}) does not match parent amount (${parentAmount})`
+      );
+    }
+
+    // Update splits in a transaction (delete all, create new)
+    return this.prisma.$transaction(async (tx) => {
+      // Delete existing splits
+      await tx.transactionSplit.deleteMany({
+        where: { parentId: transactionId },
+      });
+
+      // Create new splits
+      await tx.transactionSplit.createMany({
+        data: dto.splits.map((split) => ({
+          parentId: transactionId,
+          amount: split.amount,
+          categoryId: split.categoryId,
+          costObjectId: split.costObjectId,
+          description: split.description,
+        })),
+      });
+
+      // Return updated transaction with splits
+      return tx.transaction.findUnique({
+        where: { id: transactionId },
+        include: {
+          splits: {
+            include: {
+              category: true,
+              costObject: true,
+            },
+          },
+        },
+      });
+    });
+  }
+
+  async deleteSplits(transactionId: string) {
+    // Validate transaction exists
+    const transaction = await this.prisma.transaction.findUnique({
+      where: { id: transactionId },
+      include: { splits: true },
+    });
+
+    if (!transaction) {
+      throw new NotFoundException(`Transaction with ID ${transactionId} not found`);
+    }
+
+    // Delete all splits
+    await this.prisma.transactionSplit.deleteMany({
+      where: { parentId: transactionId },
+    });
+
+    return { message: 'Splits deleted successfully' };
   }
 
   private calculateDescriptionSimilarity(desc1: string, desc2: string): number {

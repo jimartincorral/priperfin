@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Put,
   Patch,
   Delete,
   Param,
@@ -19,6 +20,7 @@ import { TransactionsService } from './transactions.service';
 import { CreateTransactionDto } from './create-transaction.dto';
 import { UpdateTransactionDto } from './update-transaction.dto';
 import { GetTransactionsDto } from './get-transactions.dto';
+import { CreateSplitsDto } from './create-split.dto';
 
 @Controller('transactions')
 export class TransactionsController {
@@ -96,6 +98,29 @@ export class TransactionsController {
   findAll(@Query() query: GetTransactionsDto) {
     return this.transactionsService.findAll(query);
   }
+
+  @Get(':id')
+  findOne(@Param('id') id: string) {
+    return this.transactionsService.findOne(id);
+  }
+
+  @Post(':id/splits')
+  @UsePipes(new ValidationPipe({ transform: true }))
+  createSplits(@Param('id') id: string, @Body() dto: CreateSplitsDto) {
+    return this.transactionsService.createSplits(id, dto);
+  }
+
+  @Put(':id/splits')
+  @UsePipes(new ValidationPipe({ transform: true }))
+  updateSplits(@Param('id') id: string, @Body() dto: CreateSplitsDto) {
+    return this.transactionsService.updateSplits(id, dto);
+  }
+
+  @Delete(':id/splits')
+  deleteSplits(@Param('id') id: string) {
+    return this.transactionsService.deleteSplits(id);
+  }
+
   @Delete(':id')
   remove(@Param('id') id: string) {
     return this.transactionsService.remove(id);
