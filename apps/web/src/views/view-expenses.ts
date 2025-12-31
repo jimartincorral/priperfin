@@ -834,9 +834,9 @@ export class ViewExpenses extends LitElement {
     document.body.style.cursor = '';
   }
 
-  async loadData(preserveScroll = false) {
+  async loadData(preserveScroll = false, isBackground = false) {
     const scrollPos = window.scrollY;
-    this.loading = true;
+    if (!isBackground) this.loading = true;
     try {
       // Build query params, including accountId if one is selected
       const txQuery: any = { month: this.month, year: this.year };
@@ -884,7 +884,7 @@ export class ViewExpenses extends LitElement {
     } catch (e) {
       console.error('Failed to load data', e);
     } finally {
-      this.loading = false;
+      if (!isBackground) this.loading = false;
     }
   }
 
@@ -955,7 +955,7 @@ export class ViewExpenses extends LitElement {
         }
       }
 
-      await this.loadData(true);
+      await this.loadData(true, true);
     } catch (e) {
       console.error('Failed to update category', e);
     }
