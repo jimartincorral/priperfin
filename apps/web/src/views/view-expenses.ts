@@ -1069,6 +1069,9 @@ export class ViewExpenses extends LitElement {
       } else if (field === 'categoryId' && (this.editValue === 'uncategorized' || this.editValue === '')) {
         payload[field] = null;
         localValue = null;
+      } else if (field === 'costObjectId' && this.editValue === '') {
+        payload[field] = null;
+        localValue = null;
       } else {
         payload[field] = this.editValue;
       }
@@ -1520,7 +1523,7 @@ export class ViewExpenses extends LitElement {
                                         <td class="editable" @click="${() => !isEditingCostObj && this.startEditing(tx.id, 'costObjectId', tx.costObjectId)}">
                                             ${isEditingCostObj ? html`
                                                 <select id="edit-${tx.id}-costObjectId" .value="${this.editValue || ''}" @change="${async (e: any) => {
-                    this.editValue = e.target.value || null;
+                    this.editValue = e.target.value;
                     await this.saveCell(tx.id, 'costObjectId');
                   }}" @blur="${() => this.cancelEditing()}">
                                                     <option value="">-- ${i18n.t('cost_objects.unassigned')} --</option>
