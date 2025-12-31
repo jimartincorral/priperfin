@@ -7,7 +7,11 @@ on:
 
 jobs:
   release:
-    runs-on: windows-latest
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      matrix:
+        os: [windows-latest, macos-latest]
 
     steps:
       - name: Checkout Code
@@ -21,16 +25,25 @@ jobs:
       - name: Install pnpm
         uses: pnpm/action-setup@v3
         with:
-          version: 9.0.0
+          version: 9
 
       - name: Install Dependencies
         run: pnpm install
 
+      - name: Generate Prisma Client
+        run: |
+          cd apps/api
+          npx prisma generate
+
       - name: Build API
-        run: pnpm --filter api build
+        run: |
+          cd apps/api
+          pnpm run build
 
       - name: Build Web
-        run: pnpm --filter web build
+        run: |
+          cd apps/web
+          pnpm run build
 
       - name: Build and Package Desktop
         env:
