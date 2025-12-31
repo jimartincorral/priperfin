@@ -173,10 +173,23 @@ export class ViewReports extends LitElement {
             backgroundColor: backgroundColors,
           }]
         },
-        options: { 
-            responsive: true, 
+        options: {
+            responsive: true,
             maintainAspectRatio: false,
             plugins: {
+                legend: {
+                    display: true,
+                    position: 'right',
+                    onClick: (_e: any, legendItem: any, legend: any) => {
+                        const index = legendItem.index;
+                        const chart = legend.chart;
+                        const meta = chart.getDatasetMeta(0);
+
+                        // Toggle visibility
+                        meta.data[index].hidden = !meta.data[index].hidden;
+                        chart.update();
+                    }
+                },
                 tooltip: {
                     callbacks: {
                         label: function(context: any) {
