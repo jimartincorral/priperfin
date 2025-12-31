@@ -1067,7 +1067,7 @@ export class ViewExpenses extends LitElement {
         </div>
 
         <div class="card" style="display: flex; flex-direction: column; gap: 1rem; align-items: stretch;">
-            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 1rem;">
                 <!-- Starting Balance -->
                 <div>
                     <div style="font-size: 0.75rem; color: var(--md-sys-color-secondary); margin-bottom: 4px;">${i18n.t('expenses.starting_balance')}</div>
@@ -1090,6 +1090,14 @@ export class ViewExpenses extends LitElement {
                     <div style="font-size: 0.75rem; color: var(--md-sys-color-secondary); margin-bottom: 4px;">${i18n.t('common.expenses')}</div>
                     <div style="color: var(--md-sys-color-error); font-weight: 500; font-size: 1rem;">
                         -${symbol}${Math.abs(this.monthlyStats.expense).toFixed(2)}
+                    </div>
+                </div>
+
+                <!-- Balance (Income - Expenses) -->
+                <div>
+                    <div style="font-size: 0.75rem; color: var(--md-sys-color-secondary); margin-bottom: 4px;">${i18n.t('common.balance')}</div>
+                    <div style="color: ${(this.monthlyStats.income - this.monthlyStats.expense) >= 0 ? '#16a34a' : 'var(--md-sys-color-error)'}; font-weight: 500; font-size: 1rem;">
+                        ${(this.monthlyStats.income - this.monthlyStats.expense) >= 0 ? '+' : '-'}${symbol}${Math.abs(this.monthlyStats.income - this.monthlyStats.expense).toFixed(2)}
                     </div>
                 </div>
             </div>

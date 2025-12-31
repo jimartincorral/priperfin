@@ -47,11 +47,17 @@ export class TransactionsController {
 
   @Post('bulk')
   createBulk(
-    @Body() body: { transactions: CreateTransactionDto[]; force?: boolean },
+    @Body()
+    body: {
+      transactions: CreateTransactionDto[];
+      force?: boolean;
+      mergeInstructions?: any[];
+    },
   ) {
     return this.transactionsService.createMany(
       body.transactions,
       body.force || false,
+      body.mergeInstructions || [],
     );
   }
 

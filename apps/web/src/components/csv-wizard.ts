@@ -29,6 +29,9 @@ export class CsvWizard extends LitElement {
     @state() selectedDuplicates: Set<string> = new Set();
     @state() dateFormat: 'YYYY-MM-DD' | 'DD.MM.YYYY' | 'MM/DD/YYYY' | 'DD/MM/YYYY' | 'DD-MM-YYYY' = 'YYYY-MM-DD';
     @state() numberFormat: 'dot' | 'comma' = 'dot'; // 'dot' = 1,234.56 (US/UK), 'comma' = 1.234,56 (EU)
+    @state() manualMatches: any[] = [];
+    @state() selectedMerges: Set<string> = new Set();
+    @state() showMergeDetails: Map<string, boolean> = new Map();
 
     static styles = css`
     :host { display: block; }
@@ -137,6 +140,10 @@ export class CsvWizard extends LitElement {
             // Strict Date Parsing
             if (dateStr) {
                 if (this.dateFormat === 'YYYY-MM-DD') {
+                    // Handle ISO 8601 formats including:
+                    // - YYYY-MM-DD
+                    // - YYYY-MM-DDTHH:mm:ss
+                    // - YYYY-MM-DDTHH:mm:ss+TZ (e.g., 2025-12-26T00:00:00+01:00)
                     date = new Date(dateStr);
                 } else if (this.dateFormat === 'DD.MM.YYYY') {
                     const [day, month, year] = dateStr.split('.');
@@ -212,7 +219,16 @@ export class CsvWizard extends LitElement {
                 return;
             }
 
-            // No duplicates, import successful
+            // If manual matches found, show Step 5
+            if (result.manualMatches && result.manualMatches.length > 0) {
+                this.manualMatches = result.manualMatches;
+                this.selectedMerges = new Set();
+                this.step = 5;
+                this.loading = false;
+                return;
+            }
+
+            // No duplicates or matches, import successful
             this.dispatchEvent(new CustomEvent('import', { detail: { result } }));
             this.close();
         } catch (error: any) {
@@ -238,6 +254,11 @@ export class CsvWizard extends LitElement {
     }
 
     async finalSubmit() {
+        // If we're on step 5 (merge review), handle merges
+        if (this.step === 5) {
+            return this.finalSubmitWithMerges();
+        }
+
         console.log('[CSV Wizard] Final submit with selected duplicates:', this.selectedDuplicates.size);
 
         const rowsWithAccount = this.processedRows.map(row => ({
@@ -295,6 +316,76 @@ export class CsvWizard extends LitElement {
         }
     }
 
+    async finalSubmitWithMerges() {
+        const rowsWithAccount = this.processedRows.map(row => ({
+            ...row,
+            accountId: this.selectedAccountId || null
+        }));
+
+        // Build merge instructions
+        const mergeInstructions = Array.from(this.selectedMerges).map(mergeKey => {
+            const [manualId, importedTempId] = mergeKey.split('|');
+            return { manualId, importedTempId };
+        });
+
+        // Validate: check for multiple merges of same manual transaction
+        const manualIds = new Set();
+        const duplicateManuals = new Set();
+
+        Array.from(this.selectedMerges).forEach(mergeKey => {
+            const [manualId] = mergeKey.split('|');
+            if (manualIds.has(manualId)) {
+                duplicateManuals.add(manualId);
+            }
+            manualIds.add(manualId);
+        });
+
+        if (duplicateManuals.size > 0) {
+            this.error = 'Cannot merge the same manual transaction multiple times. Please select only one match per manual transaction.';
+            return;
+        }
+
+        try {
+            this.loading = true;
+            this.error = '';
+
+            const response = await fetch(`${getApiBaseUrl()}/transactions/bulk`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    transactions: rowsWithAccount,
+                    force: true,
+                    mergeInstructions: mergeInstructions
+                })
+            });
+
+            const result = await response.json();
+            this.dispatchEvent(new CustomEvent('import', { detail: { result } }));
+            this.close();
+        } catch (error: any) {
+            this.error = error.message || 'Import failed';
+            this.loading = false;
+        }
+    }
+
+    toggleMerge(mergeKey: string) {
+        const newSet = new Set(this.selectedMerges);
+        if (newSet.has(mergeKey)) {
+            newSet.delete(mergeKey);
+        } else {
+            newSet.add(mergeKey);
+        }
+        this.selectedMerges = newSet;
+        this.requestUpdate();
+    }
+
+    toggleMergeDetails(mergeKey: string) {
+        const newMap = new Map(this.showMergeDetails);
+        newMap.set(mergeKey, !newMap.get(mergeKey));
+        this.showMergeDetails = newMap;
+        this.requestUpdate();
+    }
+
     close() {
         this.open = false;
         this.reset();
@@ -312,6 +403,9 @@ export class CsvWizard extends LitElement {
         this.selectedAccountId = '';
         this.duplicates = [];
         this.selectedDuplicates = new Set();
+        this.manualMatches = [];
+        this.selectedMerges = new Set();
+        this.showMergeDetails = new Map();
     }
 
     render() {
@@ -327,6 +421,7 @@ export class CsvWizard extends LitElement {
             <span class="step ${this.step === 2 ? 'active' : ''}">2. ${i18n.t('expenses.csv_wizard.step_map')}</span>
             <span class="step ${this.step === 3 ? 'active' : ''}">3. ${i18n.t('expenses.csv_wizard.step_review')}</span>
             ${this.step === 4 ? html`<span class="step active">4. ${i18n.t('csv_wizard.duplicates_title')}</span>` : ''}
+            ${this.step === 5 ? html`<span class="step active">5. ${i18n.t('csv_wizard.merge_review')}</span>` : ''}
           </div>
 
           ${this.error ? html`<div class="error">${this.error}</div>` : ''}
@@ -369,7 +464,7 @@ export class CsvWizard extends LitElement {
         <div class="mapping-row">
             <label class="mapping-label">${i18n.t('expenses.csv_wizard.date_format')}</label>
             <select class="mapping-select" .value="${this.dateFormat}" @change="${(e: any) => this.dateFormat = e.target.value}">
-                <option value="YYYY-MM-DD">YYYY-MM-DD (ISO)</option>
+                <option value="YYYY-MM-DD">ISO 8601 (YYYY-MM-DD or 2025-12-26T00:00:00+01:00)</option>
                 <option value="DD.MM.YYYY">DD.MM.YYYY (Euro e.g. 31.01.2024)</option>
                 <option value="DD-MM-YYYY">DD-MM-YYYY (e.g. 31-01-2024)</option>
                 <option value="MM/DD/YYYY">MM/DD/YYYY (US e.g. 12/31/2024)</option>
@@ -503,6 +598,103 @@ export class CsvWizard extends LitElement {
         <div class="actions">
             <button class="secondary" @click="${() => this.step = 3}">${i18n.t('expenses.csv_wizard.back')}</button>
             <button class="primary" @click="${this.finalSubmit}">${i18n.t('csv_wizard.continue')}</button>
+        </div>
+      `;
+        }
+
+        if (this.step === 5) {
+            return html`
+        <div style="background: #e0f2fe; padding: 1rem; border-radius: 8px; margin-bottom: 1rem; border-left: 4px solid #0284c7;">
+            <strong>🔗 ${i18n.t('csv_wizard.merge_detected')}</strong>
+            <p style="margin: 0.5rem 0 0 0; font-size: 0.9rem;">
+                ${i18n.t('csv_wizard.merge_found').replace('{count}', String(this.manualMatches.length))}
+            </p>
+        </div>
+
+        <div style="margin-bottom: 1rem;">
+            <p>${i18n.t('csv_wizard.merge_prompt')}</p>
+        </div>
+
+        <div style="max-height: 400px; overflow-y: auto;">
+            ${this.manualMatches.map(match => {
+                const mergeKey = `${match.manualId}|${match.importedTempId}`;
+                const isSelected = this.selectedMerges.has(mergeKey);
+                const showDetails = this.showMergeDetails.get(mergeKey) || false;
+
+                return html`
+                    <div style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 1rem; margin-bottom: 1rem; background: ${isSelected ? '#f0f9ff' : 'white'};">
+                        <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 0.5rem;">
+                            <input type="checkbox"
+                                .checked="${isSelected}"
+                                @change="${() => this.toggleMerge(mergeKey)}"
+                            />
+                            <div style="flex: 1;">
+                                <strong>${match.importedDescription}</strong>
+                                <div style="font-size: 0.85rem; color: #64748b;">
+                                    Manual: ${new Date(match.manualDate).toLocaleDateString()} • $${match.manualAmount.toFixed(2)} |
+                                    Imported: ${new Date(match.importedDate).toLocaleDateString()} • $${match.importedAmount.toFixed(2)}
+                                </div>
+                                <div style="font-size: 0.75rem; color: #94a3b8; margin-top: 0.25rem;">
+                                    Match confidence: ${match.matchScore}%
+                                </div>
+                            </div>
+                            <button class="secondary" @click="${() => this.toggleMergeDetails(mergeKey)}" style="padding: 0.25rem 0.5rem; font-size: 0.85rem;">
+                                ${showDetails ? 'Hide Details' : 'Show Details'}
+                            </button>
+                        </div>
+
+                        ${showDetails ? html`
+                            <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #e2e8f0;">
+                                <table style="width: 100%; font-size: 0.85rem;">
+                                    <thead>
+                                        <tr><th style="text-align: left;">Field</th><th style="text-align: left;">Manual</th><th style="text-align: left;">Imported</th><th style="text-align: left;">Result</th></tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td>Date</td>
+                                            <td>${new Date(match.manualDate).toLocaleDateString()}</td>
+                                            <td style="background: #fef3c7;">${new Date(match.importedDate).toLocaleDateString()}</td>
+                                            <td><strong>Use Imported</strong></td>
+                                        </tr>
+                                        <tr>
+                                            <td>Amount</td>
+                                            <td>$${match.manualAmount.toFixed(2)}</td>
+                                            <td style="background: #fef3c7;">$${match.importedAmount.toFixed(2)}</td>
+                                            <td><strong>Use Imported</strong></td>
+                                        </tr>
+                                        <tr>
+                                            <td>Category</td>
+                                            <td style="background: #dcfce7;">${match.manualCategoryId || 'None'}</td>
+                                            <td>${match.importedCategoryId || 'None'}</td>
+                                            <td><strong>Use Manual</strong></td>
+                                        </tr>
+                                        <tr>
+                                            <td>Notes</td>
+                                            <td>${match.manualNotes || '-'}</td>
+                                            <td>${match.importedNotes || '-'}</td>
+                                            <td><strong>Combine both</strong></td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                                <div style="margin-top: 0.5rem; font-size: 0.8rem; color: #64748b;">
+                                    <strong>What happens:</strong> Manual transaction deleted, imported transaction enriched with manual categorization.
+                                </div>
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+            })}
+        </div>
+
+        <div style="margin-top: 1rem; color: #666; font-size: 0.9em;">
+            * ${i18n.t('csv_wizard.merge_note')}
+        </div>
+
+        <div class="actions">
+            <button class="secondary" @click="${() => this.step = 3}">${i18n.t('expenses.csv_wizard.back')}</button>
+            <button class="primary" @click="${this.finalSubmitWithMerges}">
+                ${i18n.t('csv_wizard.continue')} (${this.selectedMerges.size} ${i18n.t('csv_wizard.merges')})
+            </button>
         </div>
       `;
         }

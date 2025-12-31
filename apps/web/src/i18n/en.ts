@@ -19,6 +19,7 @@ export const en = {
         total: 'Total',
         income: 'Income',
         expenses: 'Expenses',
+        balance: 'Balance',
         difference: 'Difference',
     },
     nav: {
@@ -176,6 +177,12 @@ export const en = {
         duplicates_select_prompt: 'Please select ANY duplicates you wish to import (unselected duplicates will be skipped):',
         duplicates_note: 'Selected duplicates will be re-imported with new IDs.',
         continue: 'Continue',
+        merge_review: 'Merge Review',
+        merge_detected: 'Potential Merges Found',
+        merge_found: 'Found {count} potential matches between manual and imported transactions.',
+        merge_prompt: 'Review the matches below and select which ones you want to merge. Bank data (date/amount) will be kept, but your manual categorization will be preserved.',
+        merge_note: 'Only selected merges will be processed. Unselected matches will be imported as separate transactions.',
+        merges: 'merges',
     },
     filters: {
         search: 'Search...',

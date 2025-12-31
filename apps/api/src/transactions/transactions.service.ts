@@ -238,13 +238,23 @@ export class TransactionsService {
     }
   }
 
-  async createMany(dtos: CreateTransactionDto[], force: boolean = false) {
+  async createMany(
+    dtos: CreateTransactionDto[],
+    force: boolean = false,
+    mergeInstructions: any[] = [],
+  ) {
     if (!dtos || !Array.isArray(dtos)) {
       console.warn(
         '[TransactionsService] createMany called with invalid dtos:',
         dtos,
       );
-      return { newCount: 0, duplicateCount: 0, duplicates: [] };
+      return {
+        newCount: 0,
+        duplicateCount: 0,
+        duplicates: [],
+        manualMatchCount: 0,
+        manualMatches: [],
+      };
     }
 
     const enhancedDtos = await Promise.all(
@@ -297,11 +307,30 @@ export class TransactionsService {
           description: d.description,
           externalId: d.externalId,
         })),
+        manualMatchCount: 0,
+        manualMatches: [],
+      };
+    }
+
+    // Find manual matches (only for new transactions, not duplicates)
+    const manualMatches = await this.findManualMatches(
+      enhancedDtos,
+      newTransactions,
+    );
+
+    // If force=false and manual matches exist, return them for user review
+    if (!force && manualMatches.length > 0) {
+      return {
+        newCount: newTransactions.length,
+        duplicateCount: 0,
+        duplicates: [],
+        manualMatchCount: manualMatches.length,
+        manualMatches: manualMatches,
       };
     }
 
     // If force=true, import everything (including duplicates by regenerating their IDs)
-    const transactionsToImport = force
+    let transactionsToImport = force
       ? enhancedDtos.map((d) => {
           // Check if it's already in DB
           if (d.externalId && existingIds.has(d.externalId)) {
@@ -320,8 +349,22 @@ export class TransactionsService {
         })
       : newTransactions;
 
+    // Execute merges if merge instructions provided
+    if (force && mergeInstructions && mergeInstructions.length > 0) {
+      transactionsToImport = await this.executeMerges(
+        mergeInstructions,
+        transactionsToImport,
+      );
+    }
+
     if (transactionsToImport.length === 0) {
-      return { newCount: 0, duplicateCount: duplicates.length, duplicates: [] };
+      return {
+        newCount: 0,
+        duplicateCount: duplicates.length,
+        duplicates: [],
+        manualMatchCount: 0,
+        manualMatches: [],
+      };
     }
 
     const result = await this.prisma.transaction.createMany({
@@ -332,6 +375,8 @@ export class TransactionsService {
       newCount: result.count,
       duplicateCount: force ? 0 : duplicates.length,
       duplicates: [],
+      manualMatchCount: 0,
+      manualMatches: [],
     };
   }
 
@@ -344,5 +389,219 @@ export class TransactionsService {
     return this.prisma.transaction.delete({
       where: { id },
     });
+  }
+
+  private calculateDescriptionSimilarity(desc1: string, desc2: string): number {
+    const lower1 = desc1.toLowerCase();
+    const lower2 = desc2.toLowerCase();
+
+    // Check substring match
+    if (lower1.includes(lower2) || lower2.includes(lower1)) {
+      return 100;
+    }
+
+    // Levenshtein distance
+    const distance = this.levenshteinDistance(lower1, lower2);
+    const maxLen = Math.max(desc1.length, desc2.length);
+    const similarity = ((maxLen - distance) / maxLen) * 100;
+
+    return similarity;
+  }
+
+  private levenshteinDistance(str1: string, str2: string): number {
+    const matrix: number[][] = [];
+
+    for (let i = 0; i <= str2.length; i++) {
+      matrix[i] = [i];
+    }
+
+    for (let j = 0; j <= str1.length; j++) {
+      matrix[0][j] = j;
+    }
+
+    for (let i = 1; i <= str2.length; i++) {
+      for (let j = 1; j <= str1.length; j++) {
+        if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
+          matrix[i][j] = matrix[i - 1][j - 1];
+        } else {
+          matrix[i][j] = Math.min(
+            matrix[i - 1][j - 1] + 1,
+            matrix[i][j - 1] + 1,
+            matrix[i - 1][j] + 1,
+          );
+        }
+      }
+    }
+
+    return matrix[str2.length][str1.length];
+  }
+
+  private calculateMatchScore(
+    daysDiff: number,
+    amountDiff: number,
+    amountPercent: number,
+    descScore: number,
+  ): number {
+    // Weighted scoring: description (50%), date (30%), amount (20%)
+    const dateScore = Math.max(0, 100 - daysDiff * 33.33); // 3 days = 0 score
+    const amountScore = Math.max(
+      0,
+      100 - Math.max(amountDiff * 100, amountPercent * 50),
+    );
+
+    return descScore * 0.5 + dateScore * 0.3 + amountScore * 0.2;
+  }
+
+  private async findManualMatches(
+    allDtos: CreateTransactionDto[],
+    newDtos: CreateTransactionDto[],
+  ): Promise<any[]> {
+    if (newDtos.length === 0) return [];
+
+    // Calculate date range from newDtos
+    const dates = newDtos.map((d) => new Date(d.date));
+    const minDate = new Date(
+      Math.min(...dates.map((d) => d.getTime())) - 30 * 24 * 60 * 60 * 1000,
+    );
+    const maxDate = new Date(
+      Math.max(...dates.map((d) => d.getTime())) + 30 * 24 * 60 * 60 * 1000,
+    );
+
+    // Fetch manual transactions in date range
+    const manualTransactions = await this.prisma.transaction.findMany({
+      where: {
+        externalId: null,
+        date: { gte: minDate, lte: maxDate },
+      },
+      select: {
+        id: true,
+        date: true,
+        amount: true,
+        description: true,
+        categoryId: true,
+        costObjectId: true,
+        notes: true,
+      },
+    });
+
+    const matches: any[] = [];
+
+    // For each imported transaction, find fuzzy matches
+    newDtos.forEach((imported, importedIndex) => {
+      const importedDate = new Date(imported.date);
+      const importedAmount = imported.amount;
+
+      manualTransactions.forEach((manual) => {
+        const manualDate = new Date(manual.date);
+        const daysDiff = Math.abs(
+          (manualDate.getTime() - importedDate.getTime()) /
+            (1000 * 60 * 60 * 24),
+        );
+
+        // Check date proximity (±3 days)
+        if (daysDiff > 3) return;
+
+        // Check amount similarity
+        const amountDiff = Math.abs(manual.amount.toNumber() - importedAmount);
+        const amountPercent = (amountDiff / Math.abs(importedAmount)) * 100;
+        if (amountDiff > 0.5 && amountPercent > 1) return;
+
+        // Check description similarity (use helper method)
+        const descScore = this.calculateDescriptionSimilarity(
+          manual.description,
+          imported.description,
+        );
+        if (descScore < 50) return; // Threshold: 50% similarity
+
+        // Calculate overall match score
+        const matchScore = this.calculateMatchScore(
+          daysDiff,
+          amountDiff,
+          amountPercent,
+          descScore,
+        );
+
+        matches.push({
+          manualId: manual.id,
+          importedTempId: `import-${importedIndex}`,
+          manualDate: manual.date.toISOString(),
+          importedDate: imported.date,
+          manualAmount: manual.amount.toNumber(),
+          importedAmount: importedAmount,
+          manualDescription: manual.description,
+          importedDescription: imported.description,
+          manualCategoryId: manual.categoryId,
+          importedCategoryId: imported.categoryId || null,
+          manualNotes: manual.notes,
+          importedNotes: imported.notes || null,
+          matchScore: Math.round(matchScore),
+        });
+      });
+    });
+
+    // Sort by match score (highest first)
+    return matches.sort((a, b) => b.matchScore - a.matchScore);
+  }
+
+  private async executeMerges(
+    mergeInstructions: any[],
+    importedDtos: any[],
+  ): Promise<any[]> {
+    const processedIndices = new Set<number>();
+
+    for (const instruction of mergeInstructions) {
+      const { manualId, importedTempId } = instruction;
+
+      // Find the imported DTO by tempId
+      const importedIndex = parseInt(importedTempId.replace('import-', ''));
+      const importedDto = importedDtos[importedIndex];
+
+      if (!importedDto || processedIndices.has(importedIndex)) continue;
+
+      // Fetch manual transaction
+      const manual = await this.prisma.transaction.findUnique({
+        where: { id: manualId },
+      });
+
+      if (!manual) {
+        console.warn(
+          `Manual transaction ${manualId} not found, skipping merge`,
+        );
+        continue;
+      }
+
+      // Merge logic: Prefer manual categoryId/costObjectId, concatenate notes
+      const mergedData = {
+        ...importedDto,
+        categoryId: manual.categoryId || importedDto.categoryId || null,
+        costObjectId: manual.costObjectId || importedDto.costObjectId || null,
+        notes: this.mergeNotes(manual.notes, importedDto.notes || null),
+      };
+
+      // Execute in transaction
+      await this.prisma.$transaction(async (tx) => {
+        // Create merged transaction (imported)
+        await tx.transaction.create({ data: mergedData });
+
+        // Delete manual transaction
+        await tx.transaction.delete({ where: { id: manualId } });
+      });
+
+      // Mark this index as processed
+      processedIndices.add(importedIndex);
+    }
+
+    // Remove merged transactions from the list
+    return importedDtos.filter((_, index) => !processedIndices.has(index));
+  }
+
+  private mergeNotes(
+    manualNotes: string | null,
+    importedNotes: string | null,
+  ): string | null {
+    if (!manualNotes && !importedNotes) return null;
+    if (!manualNotes) return importedNotes;
+    if (!importedNotes) return manualNotes;
+    return `Manual: ${manualNotes} | Imported: ${importedNotes}`;
   }
 }
