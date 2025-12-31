@@ -778,6 +778,19 @@ export class ViewExpenses extends LitElement {
             if (td.substring(0, 15) === k.desc.substring(0, 15)) return true;
           }
 
+          // 3. Token Similarity (Jaccard Index)
+          // Catches cases like "ANYTIME-ES-4 Xplor" vs "ANYTIME-ES-6 Xplor"
+          const t1 = new Set(td.split(/[^a-z0-9]+/).filter(x => x.length > 2));
+          const t2 = new Set(k.desc.split(/[^a-z0-9]+/).filter(x => x.length > 2));
+          
+          if (t1.size > 0 && t2.size > 0) {
+            let intersection = 0;
+            t1.forEach(token => { if (t2.has(token)) intersection++; });
+            const union = new Set([...t1, ...t2]).size;
+            // > 40% similarity
+            if (union > 0 && (intersection / union) > 0.4) return true;
+          }
+
           return false;
         });
 
