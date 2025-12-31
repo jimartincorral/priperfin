@@ -1,7 +1,6 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { api } from '../api/client';
-import { i18n } from '../i18n/i18n';
 
 interface SplitItem {
   amount: number;

@@ -45,6 +45,15 @@ export class ApiClient {
         return this.parseResponse(response);
     }
 
+    async put(endpoint: string, data: any) {
+        const response = await fetch(`${this.baseUrl}${endpoint}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data),
+        });
+        return this.parseResponse(response);
+    }
+
     async upload(endpoint: string, file: File) {
         const formData = new FormData();
         formData.append('file', file);
