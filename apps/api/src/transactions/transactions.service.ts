@@ -31,7 +31,47 @@ export class TransactionsService {
     });
   }
 
-  // ... (rest of methods)
+  async getBalance() {
+    const result = await this.prisma.transaction.aggregate({
+      _sum: { amount: true },
+    });
+    return { total: result._sum.amount ? result._sum.amount.toNumber() : 0 };
+  }
+
+  async getAccountBalance(accountId: string) {
+    const account = await this.prisma.account.findUnique({
+      where: { id: accountId },
+    });
+
+    if (!account) {
+      return { balance: 0, type: 'DEBIT' };
+    }
+
+    const result = await this.prisma.transaction.aggregate({
+      where: { accountId },
+      _sum: { amount: true },
+    });
+
+    const txSum = result._sum.amount?.toNumber() || 0;
+    const initialBalance = account.initialBalance.toNumber();
+
+    if (account.type === 'CREDIT') {
+      // For credit accounts: owed = initial - sum
+      // (purchases are negative, so -(-50) = +50 to debt; payments are positive, so -(+100) = -100 to debt)
+      return {
+        balance: initialBalance - txSum,
+        type: 'CREDIT',
+        accountName: account.name,
+      };
+    }
+
+    // For debit accounts: balance = initial + sum
+    return {
+      balance: initialBalance + txSum,
+      type: 'DEBIT',
+      accountName: account.name,
+    };
+  }
 
   async suggestCategory(description: string) {
     if (!description) return { categoryId: null };
