@@ -102,7 +102,9 @@ export class ReportsService {
       let familyName = c.name;
       if (c.parentId && catLookup.has(c.parentId)) {
         const parent = catLookup.get(c.parentId);
-        familyName = `${parent.icon} ${parent.name}`;
+        if (parent) {
+          familyName = `${parent.icon} ${parent.name}`;
+        }
       } else if (!c.parentId) {
         familyName = `${c.icon} ${c.name}`;
       }
