@@ -50,6 +50,9 @@ function startApi() {
   console.log('Script:', paths.script);
   console.log('DB URL:', dbUrl);
   console.log('Static Path:', paths.static);
+  console.log('CWD:', paths.cwd);
+  console.log('isDev:', isDev);
+  console.log('resourcesPath:', process.resourcesPath);
 
   const env = {
     ...process.env,
@@ -60,6 +63,13 @@ function startApi() {
     ELECTRON_RUN_AS_NODE: '1',
     NODE_PATH: isDev ? undefined : path.join(process.resourcesPath, 'app.asar', 'node_modules'),
   };
+
+  console.log('Environment variables for API:');
+  console.log('  PORT:', env.PORT);
+  console.log('  DATABASE_URL:', env.DATABASE_URL);
+  console.log('  STATIC_PATH:', env.STATIC_PATH);
+  console.log('  NODE_ENV:', env.NODE_ENV);
+  console.log('  NODE_PATH:', env.NODE_PATH);
 
   apiProcess = childProcess.spawn(process.execPath, [paths.script], {
     cwd: paths.cwd,

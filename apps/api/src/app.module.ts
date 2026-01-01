@@ -19,14 +19,25 @@ import { ConfigModule } from '@nestjs/config';
 
 // Determine static files path: Docker container uses /app/client, dev uses relative path
 function getStaticPath(): string {
+  console.log('[getStaticPath] process.env.STATIC_PATH:', process.env.STATIC_PATH);
+  console.log('[getStaticPath] __dirname:', __dirname);
+
   if (process.env.STATIC_PATH) {
+    console.log('[getStaticPath] Using STATIC_PATH:', process.env.STATIC_PATH);
     return process.env.STATIC_PATH;
   }
   const dockerPath = '/app/client';
   if (existsSync(dockerPath)) {
+    console.log('[getStaticPath] Using Docker path:', dockerPath);
     return dockerPath;
   }
-  return join(__dirname, '../..', 'web/dist');
+
+  // Fallback: try to find web/dist relative to current location
+  const fallbackPath = join(__dirname, '../..', 'web/dist');
+  console.log('[getStaticPath] Using fallback path:', fallbackPath);
+  console.log('[getStaticPath] Fallback exists?', existsSync(fallbackPath));
+
+  return fallbackPath;
 }
 
 @Module({
