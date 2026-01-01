@@ -844,16 +844,25 @@ export class ViewExpenses extends LitElement {
         txQuery.accountId = this.selectedAccountId;
       }
 
-      const [txs, cats, accts, costObjs] = await Promise.all([
+      // Fetch data independently to prevent one failure from blocking others
+      const [txsResult, catsResult, acctsResult, costObjsResult] = await Promise.allSettled([
         api.get('/transactions', txQuery),
         api.get('/categories'),
         api.get('/accounts'),
         api.get('/cost-objects')
       ]);
-      this.transactions = txs;
-      this.categories = cats;
-      this.accounts = accts;
-      this.costObjects = costObjs;
+
+      if (txsResult.status === 'fulfilled') {
+        this.transactions = txsResult.value;
+      } else {
+        console.error('Failed to load transactions', txsResult.reason);
+        alert('Failed to load transactions. Check console for details.');
+      }
+
+      if (catsResult.status === 'fulfilled') this.categories = catsResult.value;
+      if (acctsResult.status === 'fulfilled') this.accounts = acctsResult.value;
+      if (costObjsResult.status === 'fulfilled') this.costObjects = costObjsResult.value;
+
       await this.loadBalances();
 
       // Load cost object breakdown for credit accounts
