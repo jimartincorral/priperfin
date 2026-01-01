@@ -31,12 +31,10 @@ export class PrismaService extends PrismaClient implements OnModuleInit {
   private async validateSchema() {
     try {
       // Try to query a transaction with suggestedCategoryId to verify column exists
-      // Using raw query ensures we check the column exists without Prisma type checks
-      await this.$queryRaw`
-        SELECT suggestedCategoryId
-        FROM Transaction
-        LIMIT 1
-      `;
+      // Use Prisma's API to avoid SQL syntax issues with table names
+      await this.transaction.findFirst({
+        select: { suggestedCategoryId: true },
+      });
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : String(error);
