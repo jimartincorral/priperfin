@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.2] - 2026-01-02
+
+### 🐛 Fixes
+
+- **Schema Sync Reliability**: Fixed critical issue where database schema sync failures were silently ignored during startup, causing runtime errors when expected columns were missing. Schema sync failures now properly halt startup with clear error messages.
+- **Startup Validation**: Added database schema validation on app startup to detect missing columns early and provide actionable remediation steps before serving requests.
+
 ## [1.1.0] - 2026-01-01
 
 ### ✨ Features
