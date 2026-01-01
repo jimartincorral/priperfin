@@ -70,6 +70,7 @@ model Transaction {
   costObjectId String?
   costObject   CostObject?        @relation(fields: [costObjectId], references: [id], onDelete: SetNull)
   notes        String?
+  suggestedCategoryId String?     // New field for ML suggestions
   externalId   String?            @unique
   splits       TransactionSplit[] @relation("TransactionSplits")
   createdAt    DateTime           @default(now())

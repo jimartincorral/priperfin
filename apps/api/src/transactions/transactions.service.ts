@@ -19,15 +19,20 @@ export class TransactionsService {
 
   async create(dto: CreateTransactionDto) {
     // Attempt categorization if missing
+    let suggestedCategoryId = null;
     if (!dto.categoryId || dto.categoryId === 'uncategorized') {
       const suggestion = await this.suggestCategory(dto.description);
       if (suggestion.categoryId) {
-        dto.categoryId = suggestion.categoryId;
+        // Do NOT auto-apply. Just suggest.
+        suggestedCategoryId = suggestion.categoryId;
       }
     }
 
     return this.prisma.transaction.create({
-      data: dto,
+      data: {
+        ...dto,
+        suggestedCategoryId,
+      },
     });
   }
 
@@ -299,16 +304,20 @@ export class TransactionsService {
     const enhancedDtos = await Promise.all(
       dtos.map(async (dto) => {
         let categoryId = dto.categoryId;
+        let suggestedCategoryId = null;
+
         if (!categoryId || categoryId === 'uncategorized') {
           const suggestion = await this.suggestCategory(dto.description);
           if (suggestion && suggestion.categoryId) {
-            categoryId = suggestion.categoryId;
+            // Do NOT auto-apply. Just suggest.
+            suggestedCategoryId = suggestion.categoryId;
           }
         }
 
         return {
           ...dto,
           categoryId,
+          suggestedCategoryId,
           externalId: dto.externalId || this.generateHash(dto),
         };
       }),

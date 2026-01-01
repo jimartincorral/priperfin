@@ -765,6 +765,11 @@ export class ViewExpenses extends LitElement {
 
     // Apply suggestions to uncategorized items
     this.transactions = this.transactions.map(t => {
+      // Prioritize Backend Suggestion (ML)
+      if (t.suggestedCategoryId && (!t.categoryId || t.categoryId === 'uncategorized')) {
+         return { ...t, _suggestion: t.suggestedCategoryId };
+      }
+
       if (!t.categoryId || t.categoryId === 'uncategorized') {
         const td = t.description.toLowerCase();
 
