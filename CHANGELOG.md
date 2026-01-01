@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.4] - 2026-01-02
+
+### 🐛 Fixes
+
+- **Prisma 7 Compatibility**: Removed deprecated `--skip-generate` flag from schema sync command for compatibility with Prisma 7.x.
+
 ## [1.1.3] - 2026-01-02
 
 ### 🐛 Fixes
