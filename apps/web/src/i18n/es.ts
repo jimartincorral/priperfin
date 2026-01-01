@@ -95,6 +95,7 @@ export const es = {
         sankey_chart: 'Flujo de Fondos (gráfico de Sankey)',
         recent_activity: 'Actividad Reciente',
         all_accounts: 'Todas las Cuentas',
+        group_by_parent: 'Agrupar por Categoría Padre',
     },
     settings: {
         title: 'Configuración',
