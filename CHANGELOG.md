@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.5] - 2026-01-02
+
+### 🐛 Fixes
+
+- **Schema Validation**: Fixed SQL syntax error in schema validation by using Prisma's API instead of raw SQL queries.
+
 ## [1.1.4] - 2026-01-02
 
 ### 🐛 Fixes
