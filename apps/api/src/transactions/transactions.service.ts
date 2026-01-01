@@ -287,6 +287,8 @@ export class TransactionsService {
     force: boolean = false,
     mergeInstructions: any[] = [],
   ) {
+    console.log(`[TransactionsService] createMany called with ${dtos?.length} transactions, force=${force}`);
+
     if (!dtos || !Array.isArray(dtos)) {
       console.warn(
         '[TransactionsService] createMany called with invalid dtos:',
@@ -343,6 +345,8 @@ export class TransactionsService {
     const duplicates = enhancedDtos.filter(
       (d) => d.externalId && existingIds.has(d.externalId),
     );
+
+    console.log(`[TransactionsService] createMany: ${newTransactions.length} new, ${duplicates.length} duplicates`);
 
     // If force=false and duplicates exist, return them for user review
     if (!force && duplicates.length > 0) {
