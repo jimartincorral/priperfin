@@ -1131,6 +1131,24 @@ export class ViewExpenses extends LitElement {
     }
   }
 
+  async checkDatabase() {
+    try {
+      const result = await api.get('/admin/diagnostics');
+      const msg = `Database Diagnostics:
+Transactions: ${result.counts?.transactions}
+Categories: ${result.counts?.categories}
+Accounts: ${result.counts?.accounts}
+Cost Objects: ${result.counts?.costObjects}
+Splits: ${result.counts?.splits}
+
+Tables: ${result.tables?.join(', ')}`;
+      alert(msg);
+      console.log('Diagnostics:', result);
+    } catch (e: any) {
+      alert('Failed to check database: ' + e.message);
+    }
+  }
+
   render() {
     const symbol = this.currency === 'EUR' ? '€' : '$';
 
@@ -1372,6 +1390,7 @@ export class ViewExpenses extends LitElement {
               </div>
               <button class="btn-secondary" style="height: 32px; padding: 0 12px;" @click="${() => { this.filterCategoryId = ''; this.filterMinAmount = null; this.filterMaxAmount = null; this.filterText = ''; this.filterDateFrom = ''; this.filterDateTo = ''; }}">${i18n.t('filters.clear')}</button>
                 <button class="btn-secondary" style="height: 32px; padding: 0 12px; margin-left: auto;" @click="${() => this.showColumnModal = true}">${i18n.t('filters.columns')}</button>
+                <button class="btn-secondary" style="height: 32px; padding: 0 12px; margin-left: 8px; background-color: #fef9c3; color: #854d0e;" @click="${this.checkDatabase}">⚠️ Debug DB</button>
                   </div>
 
                   <!--Bulk Actions-->
