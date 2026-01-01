@@ -29,7 +29,17 @@ mkdir -p /data
 # Run Prisma schema push (works with driver adapters, unlike migrate deploy)
 bashio::log.info "Syncing database schema..."
 cd /app
-npx prisma db push --schema=prisma/schema.prisma --skip-generate --accept-data-loss || bashio::log.warning "Schema sync failed"
+
+# Run db push and make failures fatal (don't continue with broken schema)
+# Keep --accept-data-loss to avoid hanging on prompts in non-interactive context
+if ! npx prisma db push --schema=prisma/schema.prisma --skip-generate --accept-data-loss; then
+  bashio::log.error "Failed to sync database schema!"
+  bashio::log.error "The database schema is out of sync with the application."
+  bashio::log.error "Please check logs above for details."
+  exit 1
+fi
+
+bashio::log.info "Database schema synchronized successfully"
 
 # Start the application
 bashio::log.info "Starting application on port ${PORT}..."

@@ -28,7 +28,51 @@ export class PrismaService extends PrismaClient implements OnModuleInit {
     super({ adapter });
   }
 
+  private async validateSchema() {
+    try {
+      // Try to query a transaction with suggestedCategoryId to verify column exists
+      // Using raw query ensures we check the column exists without Prisma type checks
+      await this.$queryRaw`
+        SELECT suggestedCategoryId
+        FROM Transaction
+        LIMIT 1
+      `;
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+
+      if (
+        errorMessage.includes('suggestedCategoryId') ||
+        errorMessage.includes('no such column')
+      ) {
+        console.error('[PrismaService] Database schema validation failed!');
+        console.error(
+          '[PrismaService] The Transaction table is missing the suggestedCategoryId column.',
+        );
+        console.error(
+          '[PrismaService] This usually means the database was not properly migrated.',
+        );
+        console.error('[PrismaService]');
+        console.error(
+          '[PrismaService] To fix this, run: npx prisma db push --schema=prisma/schema.prisma',
+        );
+        console.error(
+          '[PrismaService] Or restart the add-on to trigger automatic schema sync.',
+        );
+
+        throw new Error(
+          'Database schema is out of sync. Missing required column: Transaction.suggestedCategoryId. ' +
+            'Please run: npx prisma db push --schema=prisma/schema.prisma',
+        );
+      }
+
+      // Re-throw other errors
+      throw error;
+    }
+  }
+
   async onModuleInit() {
     await this.$connect();
+    await this.validateSchema();
   }
 }
