@@ -14,7 +14,6 @@ import {
 } from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
-import { execSync } from 'child_process';
 import archiver from 'archiver';
 // @ts-expect-error - tar package has incomplete type definitions
 import * as tar from 'tar';
@@ -453,39 +452,59 @@ export class BackupService {
       // Reconnect to the new database
       await this.prisma.$connect();
 
-      // Run migrations to ensure schema is up-to-date
-      this.logger.log('Running database schema sync...');
+      // Run manual schema patch to ensure compatibility without data loss
+      this.logger.log('Patching database schema manually...');
       try {
-        const isWin = process.platform === 'win32';
-        const prismaBin = path.join(
-          process.cwd(),
-          'node_modules',
-          '.bin',
-          isWin ? 'prisma.cmd' : 'prisma',
+        // 1. Create CostObject table
+        await this.prisma.$executeRawUnsafe(`
+          CREATE TABLE IF NOT EXISTS "CostObject" (
+            "id" TEXT NOT NULL PRIMARY KEY,
+            "name" TEXT NOT NULL,
+            "color" TEXT,
+            "icon" TEXT NOT NULL,
+            "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            "updatedAt" DATETIME NOT NULL
+          );
+        `);
+
+        // 2. Create TransactionSplit table
+        await this.prisma.$executeRawUnsafe(`
+          CREATE TABLE IF NOT EXISTS "TransactionSplit" (
+            "id" TEXT NOT NULL PRIMARY KEY,
+            "parentId" TEXT NOT NULL,
+            "amount" DECIMAL NOT NULL,
+            "categoryId" TEXT,
+            "costObjectId" TEXT,
+            "description" TEXT,
+            "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            "updatedAt" DATETIME NOT NULL,
+            CONSTRAINT "TransactionSplit_parentId_fkey" FOREIGN KEY ("parentId") REFERENCES "Transaction" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+            CONSTRAINT "TransactionSplit_categoryId_fkey" FOREIGN KEY ("categoryId") REFERENCES "Category" ("id") ON DELETE SET NULL ON UPDATE CASCADE,
+            CONSTRAINT "TransactionSplit_costObjectId_fkey" FOREIGN KEY ("costObjectId") REFERENCES "CostObject" ("id") ON DELETE SET NULL ON UPDATE CASCADE
+          );
+        `);
+
+        // 3. Add costObjectId to Transaction if missing
+        const tableInfo: any[] = await this.prisma.$queryRawUnsafe(
+          'PRAGMA table_info("Transaction")',
         );
-        const hasLocalBin = await fs
-          .stat(prismaBin)
-          .then(() => true)
-          .catch(() => false);
+        const hasCostObject = tableInfo.some(
+          (col) => col.name === 'costObjectId',
+        );
 
-        const command = hasLocalBin
-          ? `"${prismaBin}"`
-          : (isWin ? 'npx.cmd' : 'npx') + ' prisma';
+        if (!hasCostObject) {
+          this.logger.log(
+            'Adding costObjectId column to Transaction table...',
+          );
+          await this.prisma.$executeRawUnsafe(
+            'ALTER TABLE "Transaction" ADD COLUMN "costObjectId" TEXT',
+          );
+        }
 
-        this.logger.log(`Using command: ${command}`);
-        this.logger.log(`CWD: ${process.cwd()}`);
-
-        execSync(`${command} db push --skip-generate --accept-data-loss`, {
-          cwd: process.cwd(),
-          env: { ...process.env, DATABASE_URL: dbUrl },
-          stdio: 'inherit',
-        });
-        this.logger.log('Schema sync completed successfully');
+        this.logger.log('Manual schema patching completed.');
       } catch (error) {
-        this.logger.error('Failed to run schema sync:', error.message);
-        // We log error but don't throw, as the DB restore might still be usable
-        // and we don't want to roll back the file copy if it succeeded.
-        // However, if schema is very different, app might crash later.
+        this.logger.error('Failed to patch schema manually:', error.message);
+        // Continue, as the DB might be mostly functional
       }
 
       this.logger.log('Database restore completed.');
