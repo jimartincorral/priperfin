@@ -28,6 +28,8 @@ export class ViewReports extends LitElement {
   @state() year = new Date().getFullYear();
   @state() accounts: any[] = [];
   @state() selectedAccountId = '';
+  @state() groupByCategory = false; // Toggle for parent category grouping
+  @state() breakdownData: any[] = []; // Store raw API response
 
   @query('#breakdownChart') breakdownCanvas!: HTMLCanvasElement;
   @query('#sankeyChart') sankeyCanvas!: HTMLCanvasElement;
@@ -140,8 +142,10 @@ export class ViewReports extends LitElement {
         api.get('/reports/sankey', params)
       ]);
 
+      this.breakdownData = breakdown;
+      
       await this.updateComplete; // Ensure DOM is ready
-      this.renderBreakdown(breakdown);
+      this.renderBreakdown();
       this.renderSankey(sankey);
     } catch (e: any) {
       console.error(e);
@@ -151,10 +155,39 @@ export class ViewReports extends LitElement {
     }
   }
 
-  renderBreakdown(data: any[]) {
+  renderBreakdown() {
     try {
       if (this.breakdownChart) this.breakdownChart.destroy();
       if (!this.breakdownCanvas) return;
+
+      let data = this.breakdownData || [];
+
+      // Aggregation Logic
+      if (this.groupByCategory) {
+        const familyMap = new Map<string, { name: string, spent: number, color: string }>();
+        
+        data.forEach(item => {
+          const familyId = item.familyId || item.id; // Fallback to ID if no family
+          // Use familyName if available (from Backend update), else item.name
+          // If we grouped by parent on backend, we'd have this. 
+          // Since we are aggregating on frontend, we need to know the parent name.
+          // The updated backend returns 'familyName'.
+          const familyName = item.familyName || item.name;
+          
+          if (!familyMap.has(familyId)) {
+            familyMap.set(familyId, {
+              name: familyName,
+              spent: 0,
+              color: item.color // Use color of first child (usually they share base hue)
+            });
+          }
+          
+          const entry = familyMap.get(familyId)!;
+          entry.spent += item.spent;
+        });
+
+        data = Array.from(familyMap.values()).sort((a, b) => b.spent - a.spent);
+      }
 
       if (!data || data.length === 0) return;
 
@@ -167,9 +200,9 @@ export class ViewReports extends LitElement {
       this.breakdownChart = new Chart(this.breakdownCanvas, {
         type: 'doughnut',
         data: {
-          labels: data.map(d => d.name),
+          labels: data.map((d: any) => d.name),
           datasets: [{
-            data: data.map(d => d.spent),
+            data: data.map((d: any) => d.spent),
             backgroundColor: backgroundColors,
           }]
         },
@@ -274,6 +307,10 @@ export class ViewReports extends LitElement {
                 <option value="2025">2025</option>
                 <option value="2026">2026</option>
             </select>
+            <label style="display: flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer; color: var(--md-sys-color-on-surface);">
+                <input type="checkbox" .checked="${this.groupByCategory}" @change="${(e: any) => { this.groupByCategory = e.target.checked; this.renderBreakdown(); }}" />
+                ${i18n.t('reports.group_by_parent') || 'Group by Parent'}
+            </label>
             <button @click="${this.loadData}">${i18n.t('reports.refresh')}</button>
         </div>
       </div>

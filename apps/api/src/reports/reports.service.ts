@@ -44,6 +44,7 @@ export class ReportsService {
         budget: number;
         icon: string;
         familyId?: string;
+        familyName?: string;
       }
     >();
 
@@ -52,6 +53,10 @@ export class ReportsService {
       where: { type: 'EXPENSE' },
       orderBy: { name: 'asc' },
     });
+
+    // Create a lookup for categories to find parent names
+    const catLookup = new Map<string, { name: string; icon: string }>();
+    categories.forEach(c => catLookup.set(c.id, { name: c.name, icon: c.icon }));
 
     // 1. Group by Family (Parent ID or Self ID if top-level)
     const familyMap = new Map<string, string[]>(); // familyId -> list of categoryIds
@@ -92,6 +97,15 @@ export class ReportsService {
     categories.forEach((c) => {
       const familyId = c.parentId || c.id;
       const baseColor = familyBaseColors.get(familyId) || '#cccccc';
+      
+      // Resolve Family Name
+      let familyName = c.name;
+      if (c.parentId && catLookup.has(c.parentId)) {
+        const parent = catLookup.get(c.parentId);
+        familyName = `${parent.icon} ${parent.name}`;
+      } else if (!c.parentId) {
+        familyName = `${c.icon} ${c.name}`;
+      }
 
       // Calculate shade
       let finalColor = baseColor;
@@ -121,6 +135,7 @@ export class ReportsService {
         spent: 0,
         budget: c.budget ? c.budget.toNumber() : 0,
         familyId: familyId, // Used for sorting
+        familyName: familyName, // For grouping
       });
     });
 
@@ -132,6 +147,7 @@ export class ReportsService {
       spent: 0,
       budget: 0,
       familyId: 'zzzzzz', // Ensure it's last
+      familyName: 'Uncategorized',
     });
 
     // Aggregate
