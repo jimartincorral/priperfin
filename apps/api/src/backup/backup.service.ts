@@ -14,6 +14,7 @@ import {
 } from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
+import { execSync } from 'child_process';
 import archiver from 'archiver';
 // @ts-expect-error - tar package has incomplete type definitions
 import * as tar from 'tar';
@@ -451,6 +452,22 @@ export class BackupService {
 
       // Reconnect to the new database
       await this.prisma.$connect();
+
+      // Run migrations to ensure schema is up-to-date
+      this.logger.log('Running database migrations...');
+      try {
+        execSync('npx prisma migrate deploy', {
+          cwd: process.cwd(),
+          env: { ...process.env, DATABASE_URL: dbUrl },
+          stdio: 'inherit',
+        });
+        this.logger.log('Migrations completed successfully');
+      } catch (error) {
+        this.logger.error('Failed to run migrations:', error.message);
+        throw new InternalServerErrorException(
+          'Failed to update database schema after restore',
+        );
+      }
 
       this.logger.log('Database restore completed.');
 
