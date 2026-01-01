@@ -33,9 +33,63 @@ function getApiPaths() {
   }
 }
 
-function startApi() {
+async function initializeDatabase(dbPath: string, cwd: string) {
+  // Check if database exists and has tables
+  const dbExists = fs.existsSync(dbPath);
+
+  console.log('Database exists:', dbExists);
+  console.log('Initializing database schema...');
+
+  // Run prisma db push to create/update schema
+  return new Promise<void>((resolve, reject) => {
+    const env = {
+      ...process.env,
+      DATABASE_URL: `file:${dbPath}`,
+    };
+
+    // Use npx prisma db push to create the schema
+    const prismaProcess = childProcess.spawn(
+      process.platform === 'win32' ? 'npx.cmd' : 'npx',
+      ['prisma', 'db', 'push', '--skip-generate', '--accept-data-loss'],
+      {
+        cwd: cwd,
+        env: env,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      }
+    );
+
+    let output = '';
+    prismaProcess.stdout?.on('data', (data) => {
+      output += data.toString();
+      console.log(`[Prisma]: ${data}`);
+    });
+
+    prismaProcess.stderr?.on('data', (data) => {
+      output += data.toString();
+      console.error(`[Prisma Error]: ${data}`);
+    });
+
+    prismaProcess.on('close', (code) => {
+      if (code === 0) {
+        console.log('Database schema initialized successfully');
+        resolve();
+      } else {
+        console.error('Failed to initialize database schema');
+        console.error('Output:', output);
+        reject(new Error(`Prisma db push failed with code ${code}`));
+      }
+    });
+
+    prismaProcess.on('error', (err) => {
+      console.error('Failed to run prisma:', err);
+      reject(err);
+    });
+  });
+}
+
+async function startApi() {
   const paths = getApiPaths();
-  
+
   if (!fs.existsSync(paths.script)) {
     console.error('API script not found at:', paths.script);
     return;
@@ -53,6 +107,14 @@ function startApi() {
   console.log('CWD:', paths.cwd);
   console.log('isDev:', isDev);
   console.log('resourcesPath:', process.resourcesPath);
+
+  // Initialize database schema if needed
+  try {
+    await initializeDatabase(dbPath, paths.cwd);
+  } catch (error) {
+    console.error('Database initialization failed:', error);
+    // Continue anyway - the API will handle the error
+  }
 
   const env = {
     ...process.env,
@@ -123,8 +185,8 @@ function createWindow() {
   });
 }
 
-app.on('ready', () => {
-  startApi();
+app.on('ready', async () => {
+  await startApi();
   createWindow();
 });
 
