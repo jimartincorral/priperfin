@@ -6,7 +6,6 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service'; // Assuming PrismaService is needed
-import { exec, execSync } from 'child_process';
 import {
   createReadStream,
   createWriteStream,
@@ -16,7 +15,7 @@ import {
 import * as path from 'path';
 import * as crypto from 'crypto';
 import archiver from 'archiver';
-// @ts-ignore
+// @ts-expect-error - tar package has incomplete type definitions
 import * as tar from 'tar';
 import { pipeline } from 'stream/promises';
 
@@ -65,12 +64,7 @@ export class BackupService {
   }
 
   private async getDatabaseUrl(): Promise<string> {
-    const dbUrl = this.configService.get<string>('DATABASE_URL');
-    if (!dbUrl) {
-      throw new InternalServerErrorException(
-        'DATABASE_URL is not set in environment variables.',
-      );
-    }
+    const dbUrl = process.env.DATABASE_URL || 'file:./dev.db';
     return dbUrl;
   }
 

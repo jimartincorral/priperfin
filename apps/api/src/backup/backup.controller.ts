@@ -7,7 +7,6 @@ import {
   UseInterceptors,
   UploadedFile,
   Body,
-  Query,
 } from '@nestjs/common';
 import { BackupService } from './backup.service';
 import { Response } from 'express';
@@ -25,8 +24,7 @@ export class BackupController {
     @Body('encryptionKey') encryptionKey: string | undefined,
     @Res() res: Response,
   ) {
-    const { filename, filePath } =
-      await this.backupService.createBackup(encryptionKey);
+    const { filename } = await this.backupService.createBackup(encryptionKey);
     // For direct download after creation, or just return metadata
     res.status(201).json({
       message: 'Backup created successfully',
@@ -91,7 +89,7 @@ export class BackupController {
       res.status(200).json({
         message: 'Backup restored successfully.',
         requiresReload: true,
-        hint: 'Please refresh the page to see restored data.'
+        hint: 'Please refresh the page to see restored data.',
       });
     } finally {
       // Clean up the uploaded file

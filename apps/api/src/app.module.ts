@@ -15,7 +15,7 @@ import { MonthlyBalancesModule } from './monthly-balances/monthly-balances.modul
 import { BackupModule } from './backup/backup.module';
 import { AccountsModule } from './accounts/accounts.module';
 import { CostObjectsModule } from './cost-objects/cost-objects.module';
-import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ConfigModule } from '@nestjs/config';
 
 // Determine static files path: Docker container uses /app/client, dev uses relative path
 function getStaticPath(): string {

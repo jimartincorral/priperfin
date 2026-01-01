@@ -244,7 +244,9 @@ export class ReportsService {
           const amt = split.amount.toNumber();
           if (amt > 0) {
             totalIncome += amt;
-            const sourceName = split.category ? split.category.name : 'Other Income';
+            const sourceName = split.category
+              ? split.category.name
+              : 'Other Income';
             incomeSources.set(
               sourceName,
               (incomeSources.get(sourceName) || 0) + amt,
@@ -356,7 +358,14 @@ export class ReportsService {
     // Group by cost object
     const costObjectMap = new Map<
       string,
-      { id: string | null; name: string; icon: string; color: string; total: number; count: number }
+      {
+        id: string | null;
+        name: string;
+        icon: string;
+        color: string;
+        total: number;
+        count: number;
+      }
     >();
 
     // Add "Unassigned" bucket

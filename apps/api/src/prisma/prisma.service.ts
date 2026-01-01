@@ -12,7 +12,11 @@ export class PrismaService extends PrismaClient implements OnModuleInit {
     let dbPath = rawUrl.replace('file:', '');
 
     // Resolve relative paths based on CWD
-    if (!dbPath.includes(':') && !dbPath.startsWith('/') && !dbPath.startsWith('\\')) {
+    if (
+      !dbPath.includes(':') &&
+      !dbPath.startsWith('/') &&
+      !dbPath.startsWith('\\')
+    ) {
       dbPath = path.join(process.cwd(), dbPath);
     }
 

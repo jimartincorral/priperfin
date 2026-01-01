@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTransactionDto } from './create-transaction.dto';
 import { GetTransactionsDto } from './get-transactions.dto';
@@ -432,22 +436,29 @@ export class TransactionsService {
     });
 
     if (!transaction) {
-      throw new NotFoundException(`Transaction with ID ${transactionId} not found`);
+      throw new NotFoundException(
+        `Transaction with ID ${transactionId} not found`,
+      );
     }
 
     // Validate no existing splits
     if (transaction.splits && transaction.splits.length > 0) {
-      throw new BadRequestException('Transaction already has splits. Use update instead.');
+      throw new BadRequestException(
+        'Transaction already has splits. Use update instead.',
+      );
     }
 
     // Validate splits sum to parent amount (±0.01 tolerance)
-    const totalSplitAmount = dto.splits.reduce((sum, split) => sum + split.amount, 0);
+    const totalSplitAmount = dto.splits.reduce(
+      (sum, split) => sum + split.amount,
+      0,
+    );
     const parentAmount = transaction.amount.toNumber();
     const diff = Math.abs(totalSplitAmount - parentAmount);
 
     if (diff > 0.01) {
       throw new BadRequestException(
-        `Splits sum (${totalSplitAmount}) does not match parent amount (${parentAmount})`
+        `Splits sum (${totalSplitAmount}) does not match parent amount (${parentAmount})`,
       );
     }
 
@@ -486,17 +497,22 @@ export class TransactionsService {
     });
 
     if (!transaction) {
-      throw new NotFoundException(`Transaction with ID ${transactionId} not found`);
+      throw new NotFoundException(
+        `Transaction with ID ${transactionId} not found`,
+      );
     }
 
     // Validate splits sum to parent amount (±0.01 tolerance)
-    const totalSplitAmount = dto.splits.reduce((sum, split) => sum + split.amount, 0);
+    const totalSplitAmount = dto.splits.reduce(
+      (sum, split) => sum + split.amount,
+      0,
+    );
     const parentAmount = transaction.amount.toNumber();
     const diff = Math.abs(totalSplitAmount - parentAmount);
 
     if (diff > 0.01) {
       throw new BadRequestException(
-        `Splits sum (${totalSplitAmount}) does not match parent amount (${parentAmount})`
+        `Splits sum (${totalSplitAmount}) does not match parent amount (${parentAmount})`,
       );
     }
 
@@ -541,7 +557,9 @@ export class TransactionsService {
     });
 
     if (!transaction) {
-      throw new NotFoundException(`Transaction with ID ${transactionId} not found`);
+      throw new NotFoundException(
+        `Transaction with ID ${transactionId} not found`,
+      );
     }
 
     // Delete all splits

@@ -4,9 +4,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-PriPerFin is a personal finance tracking application built as a pnpm monorepo with two apps:
+PriPerFin is a personal finance tracking application built as a pnpm monorepo with three apps:
 - **api**: NestJS backend with Prisma ORM and SQLite database
 - **web**: Lit-based web frontend using Vite
+- **desktop**: Electron-based desktop application
 
 ## Commands
 
@@ -79,24 +80,47 @@ Lit web components with Material Design 3 theming:
 - **SavingsGoal**: name, targetAmount, targetDate, savedAmount, category
 - **MonthlyBalance**: month, balance, account (unique per month+account)
 
-## Home Assistant Add-on
+## Deployment
 
-The project is configured for deployment as a Home Assistant add-on:
+### Home Assistant Add-on
 
-- `config.yaml`: Add-on configuration (name, ports, options schema)
-- `Dockerfile`: Multi-stage build with bashio for HA integration
-- `run.sh`: Startup script that reads HA config and starts the app
-- `repository.json`: Add-on repository metadata
+**Installation:**
+1. Add the PriPerFin add-on repository to Home Assistant
+2. Navigate to Settings → Add-ons → Add-on Store
+3. Find "Personal Finance Tracker" and click Install
+4. Configure options (optional) and click Start
+5. Access via the sidebar panel or Ingress
 
-### Building the Add-on
-```bash
-docker build -t priperfin .
-```
-
-### Add-on Options
-- `database_path`: SQLite database path (default: `file:/data/priperfin.db`)
-- `backup_dir`: Backup directory path (default: `/backup/priperfin`)
+**Configuration Options:**
+- `database_path`: SQLite database location (default: `file:/data/priperfin.db`)
+- `backup_dir`: Backup storage directory (default: `/backup/priperfin`)
 - `backup_encryption_key`: Optional encryption key for backups
+
+The add-on runs on port 3000 with Ingress support and is available on aarch64, amd64, and armv7 architectures.
+
+### Windows Desktop App
+
+**Installation:**
+1. Download the latest Windows installer from [GitHub Releases](https://github.com/jimartincorral/priperfin/releases)
+2. Run the NSIS installer (.exe file)
+3. Choose installation directory (or use default)
+4. Complete the installation wizard
+5. Launch PriPerFin from the Start Menu or desktop shortcut
+
+**Data Storage:**
+The app stores its SQLite database locally in the user data directory. The database and backups persist across updates.
+
+### MacOS Desktop App
+
+**Installation:**
+1. Download the latest MacOS package from [GitHub Releases](https://github.com/jimartincorral/priperfin/releases)
+2. Open the downloaded .dmg file
+3. Drag PriPerFin to the Applications folder
+4. Launch PriPerFin from Applications
+5. If prompted, allow the app in System Preferences → Security & Privacy
+
+**Data Storage:**
+The app stores its SQLite database locally in the user data directory. The database and backups persist across updates.
 
 ## Development Notes
 
