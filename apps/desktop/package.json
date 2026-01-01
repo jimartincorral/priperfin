@@ -1,6 +1,6 @@
 {
   "name": "priperfin-desktop",
-  "version": "1.0.17",
+  "version": "1.0.18",
   "description": "Personal Finance Tracker Desktop App",
   "main": "dist/main.js",
   "scripts": {
@@ -42,7 +42,8 @@
     "dotenv": "^17.2.3",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
-    "tar": "^6.2.1"
+    "tar": "^6.2.1",
+    "prisma": "^7.2.0"
   },
   "build": {
     "appId": "com.jimartincorral.priperfin",
