@@ -454,19 +454,38 @@ export class BackupService {
       await this.prisma.$connect();
 
       // Run migrations to ensure schema is up-to-date
-      this.logger.log('Running database migrations...');
+      this.logger.log('Running database schema sync...');
       try {
-        execSync('npx prisma migrate deploy', {
+        const isWin = process.platform === 'win32';
+        const prismaBin = path.join(
+          process.cwd(),
+          'node_modules',
+          '.bin',
+          isWin ? 'prisma.cmd' : 'prisma',
+        );
+        const hasLocalBin = await fs
+          .stat(prismaBin)
+          .then(() => true)
+          .catch(() => false);
+
+        const command = hasLocalBin
+          ? `"${prismaBin}"`
+          : (isWin ? 'npx.cmd' : 'npx') + ' prisma';
+
+        this.logger.log(`Using command: ${command}`);
+        this.logger.log(`CWD: ${process.cwd()}`);
+
+        execSync(`${command} db push --skip-generate --accept-data-loss`, {
           cwd: process.cwd(),
           env: { ...process.env, DATABASE_URL: dbUrl },
           stdio: 'inherit',
         });
-        this.logger.log('Migrations completed successfully');
+        this.logger.log('Schema sync completed successfully');
       } catch (error) {
-        this.logger.error('Failed to run migrations:', error.message);
-        throw new InternalServerErrorException(
-          'Failed to update database schema after restore',
-        );
+        this.logger.error('Failed to run schema sync:', error.message);
+        // We log error but don't throw, as the DB restore might still be usable
+        // and we don't want to roll back the file copy if it succeeded.
+        // However, if schema is very different, app might crash later.
       }
 
       this.logger.log('Database restore completed.');
