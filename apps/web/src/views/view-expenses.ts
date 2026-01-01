@@ -1390,7 +1390,6 @@ Tables: ${result.tables?.join(', ')}`;
               </div>
               <button class="btn-secondary" style="height: 32px; padding: 0 12px;" @click="${() => { this.filterCategoryId = ''; this.filterMinAmount = null; this.filterMaxAmount = null; this.filterText = ''; this.filterDateFrom = ''; this.filterDateTo = ''; }}">${i18n.t('filters.clear')}</button>
                 <button class="btn-secondary" style="height: 32px; padding: 0 12px; margin-left: auto;" @click="${() => this.showColumnModal = true}">${i18n.t('filters.columns')}</button>
-                <button class="btn-secondary" style="height: 32px; padding: 0 12px; margin-left: 8px; background-color: #fef9c3; color: #854d0e;" @click="${this.checkDatabase}">⚠️ Debug DB</button>
                   </div>
 
                   <!--Bulk Actions-->
