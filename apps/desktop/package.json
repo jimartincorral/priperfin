@@ -12,6 +12,10 @@
   "keywords": [],
   "author": "Jimartincorral",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jimartincorral/priperfin.git"
+  },
   "devDependencies": {
     "@electron/rebuild": "^4.0.2",
     "electron": "^31.0.0",
