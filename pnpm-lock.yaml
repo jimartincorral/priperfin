@@ -55,6 +55,9 @@ importers:
       dotenv:
         specifier: ^17.2.3
         version: 17.2.3
+      prisma:
+        specifier: ^7.2.0
+        version: 7.2.0(@types/react@19.2.7)(better-sqlite3@12.5.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(typescript@5.9.3)
       reflect-metadata:
         specifier: ^0.2.2
         version: 0.2.2
@@ -119,9 +122,6 @@ importers:
       prettier:
         specifier: ^3.4.2
         version: 3.7.4
-      prisma:
-        specifier: ^7.2.0
-        version: 7.2.0(@types/react@19.2.7)(better-sqlite3@12.5.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(typescript@5.9.3)
       source-map-support:
         specifier: ^0.5.21
         version: 0.5.21
@@ -197,6 +197,9 @@ importers:
       kill-port:
         specifier: ^2.0.1
         version: 2.0.1
+      prisma:
+        specifier: ^7.2.0
+        version: 7.2.0(@types/react@19.2.7)(better-sqlite3@12.5.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(typescript@5.9.3)
       reflect-metadata:
         specifier: ^0.2.2
         version: 0.2.2
