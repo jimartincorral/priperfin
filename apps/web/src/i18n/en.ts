@@ -86,6 +86,21 @@ export const en = {
         },
         should_have_saved: 'Should Have Saved',
         unassigned_savings: 'Unassigned Savings',
+        filter: {
+            filter_by: 'Filter By',
+            add: 'Add Filter',
+            clear_all: 'Clear All',
+            operator: 'Operator',
+            value: 'Value',
+            op: {
+                contains: 'contains',
+                equals: 'equals',
+                gt: 'greater than',
+                lt: 'less than',
+                gte: 'greater or equal',
+                lte: 'less or equal',
+            }
+        }
     },
     reports: {
         title: 'Financial Reports',

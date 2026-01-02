@@ -4,6 +4,13 @@ import { api } from '../api/client';
 
 import { i18n } from '../i18n/i18n';
 
+interface Filter {
+  id: string;
+  field: string;
+  operator: string;
+  value: string;
+}
+
 @customElement('view-goals')
 export class ViewGoals extends LitElement {
   @state() goals: any[] = [];
@@ -21,9 +28,20 @@ export class ViewGoals extends LitElement {
   @state() sortField = 'targetDate';
   @state() sortDirection: 'asc' | 'desc' = 'asc';
 
+  @state() filters: Filter[] = [];
+  @state() filterField: string = 'name';
+  @state() filterOperator: string = 'contains';
+  @state() filterValue: string = '';
+
   get sortedGoals() {
-    const goalsArray = Array.isArray(this.goals) ? this.goals : [];
-    return [...goalsArray].sort((a, b) => {
+    let goalsArray = Array.isArray(this.goals) ? [...this.goals] : [];
+
+    // Apply Filters
+    if (this.filters.length > 0) {
+      goalsArray = goalsArray.filter(g => this.checkFilter(g));
+    }
+
+    return goalsArray.sort((a, b) => {
       let valA = a[this.sortField];
       let valB = b[this.sortField];
 
@@ -42,6 +60,100 @@ export class ViewGoals extends LitElement {
       if (valA > valB) return this.sortDirection === 'asc' ? 1 : -1;
       return 0;
     });
+  }
+
+  checkFilter(goal: any) {
+      return this.filters.every(filter => {
+          let goalValue = goal[filter.field];
+          
+          if (filter.field === 'categoryId') {
+             const cat = this.categories.find(c => c.id === goal.categoryId);
+             goalValue = cat ? cat.name : ''; 
+          } else if (filter.field === 'status') {
+             const targetAmount = Number(goal.targetAmount || 0);
+             const savedAmount = Number(goal.savedAmount || 0);
+             const percent = targetAmount > 0 ? (savedAmount / targetAmount) * 100 : 0;
+             const shouldHave = Number(goal.shouldHaveSaved || 0);
+             const diff = savedAmount - shouldHave;
+             
+             if (percent >= 100) goalValue = 'completed';
+             else if (diff < 0) goalValue = 'at_risk';
+             else goalValue = 'on_track';
+          }
+
+          let filterVal: any = filter.value;
+          let itemVal: any = goalValue;
+
+          // Numeric handling
+          if (['targetAmount', 'savedAmount'].includes(filter.field)) {
+             itemVal = Number(itemVal || 0);
+             filterVal = Number(filterVal);
+          } else if (['startDate', 'targetDate'].includes(filter.field)) {
+             itemVal = itemVal ? new Date(itemVal).getTime() : 0;
+             filterVal = filterVal ? new Date(filterVal).getTime() : 0;
+          } else {
+             itemVal = String(itemVal || '').toLowerCase();
+             filterVal = String(filterVal).toLowerCase();
+          }
+
+          switch (filter.operator) {
+            case 'contains': return typeof itemVal === 'string' && itemVal.includes(filterVal);
+            case 'equals': return itemVal == filterVal;
+            case 'gt': return itemVal > filterVal;
+            case 'lt': return itemVal < filterVal;
+            case 'gte': return itemVal >= filterVal;
+            case 'lte': return itemVal <= filterVal;
+            default: return true;
+          }
+      });
+  }
+
+  addFilter() {
+    // Basic validation
+    if (!this.filterValue && this.filterOperator === 'contains') return;
+
+    this.filters = [
+      ...this.filters,
+      {
+        id: Math.random().toString(36).substring(7),
+        field: this.filterField,
+        operator: this.filterOperator,
+        value: this.filterValue
+      }
+    ];
+    this.filterValue = ''; 
+    this.saveFilters();
+  }
+
+  removeFilter(id: string) {
+    this.filters = this.filters.filter(f => f.id !== id);
+    this.saveFilters();
+  }
+
+  clearFilters() {
+    this.filters = [];
+    this.saveFilters();
+  }
+
+  saveFilters() {
+      localStorage.setItem('priperfin_goals_filters', JSON.stringify(this.filters));
+  }
+
+  getFieldLabel(field: string) {
+      switch(field) {
+          case 'name': return i18n.t('goals.goal_name');
+          case 'categoryId': return i18n.t('common.category');
+          case 'startDate': return i18n.t('goals.start_date');
+          case 'targetDate': return i18n.t('goals.target_date');
+          case 'targetAmount': return i18n.t('goals.target_amount');
+          case 'savedAmount': return i18n.t('goals.current_saved');
+          case 'status': return i18n.t('goals.status.on_track');
+          default: return field;
+      }
+  }
+
+  getOperatorLabel(op: string) {
+      return i18n.t(`goals.filter.op.${op}`) || op;
   }
 
   toggleSort(field: string) {
@@ -172,6 +284,62 @@ export class ViewGoals extends LitElement {
         font: var(--md-sys-typescale-title-small);
     }
 
+    /* Filter Styles */
+    .filter-controls {
+        margin-bottom: 1rem;
+        background: var(--md-sys-color-surface-container);
+        padding: 16px;
+        border-radius: var(--md-sys-shape-corner-medium);
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+    .filter-row {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+    .filter-row select, .filter-row input {
+        height: 36px;
+        padding: 0 12px;
+        border: 1px solid var(--md-sys-color-outline);
+        border-radius: 4px;
+        background: var(--md-sys-color-surface);
+        color: var(--md-sys-color-on-surface);
+    }
+    .chip-container {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+    .chip {
+        display: inline-flex;
+        align-items: center;
+        background: var(--md-sys-color-secondary-container);
+        color: var(--md-sys-color-on-secondary-container);
+        padding: 4px 12px;
+        border-radius: 16px;
+        font: var(--md-sys-typescale-label-medium);
+        gap: 8px;
+    }
+    .chip button {
+        background: none;
+        border: none;
+        color: inherit;
+        cursor: pointer;
+        padding: 0;
+        font-size: 16px;
+        width: auto;
+        height: auto;
+        display: flex;
+    }
+    .chip button:hover {
+        opacity: 0.7;
+        box-shadow: none;
+        background: none;
+    }
+
     @media (max-width: 768px) {
         .header-controls {
             flex-direction: column;
@@ -195,6 +363,15 @@ export class ViewGoals extends LitElement {
 
     const storedCurrency = localStorage.getItem('priperfin_currency');
     if (storedCurrency) this.currency = storedCurrency;
+
+    const savedFilters = localStorage.getItem('priperfin_goals_filters');
+    if (savedFilters) {
+        try {
+            this.filters = JSON.parse(savedFilters);
+        } catch (e) {
+            console.error('Failed to parse filters', e);
+        }
+    }
 
     await this.loadData();
   }
@@ -395,6 +572,62 @@ export class ViewGoals extends LitElement {
         </button>
       </div>
 
+      <div class="filter-controls">
+          <div class="filter-row">
+              <span style="font-weight: 500">${i18n.t('goals.filter.filter_by')}:</span>
+              
+              <select .value="${this.filterField}" @change="${(e: any) => this.filterField = e.target.value}">
+                  <option value="name">${i18n.t('goals.goal_name')}</option>
+                  <option value="categoryId">${i18n.t('common.category')}</option>
+                  <option value="startDate">${i18n.t('goals.start_date')}</option>
+                  <option value="targetDate">${i18n.t('goals.target_date')}</option>
+                  <option value="targetAmount">${i18n.t('goals.target_amount')}</option>
+                  <option value="savedAmount">${i18n.t('goals.current_saved')}</option>
+                  <option value="status">${i18n.t('goals.status.on_track')}</option>
+              </select>
+
+              <select .value="${this.filterOperator}" @change="${(e: any) => this.filterOperator = e.target.value}">
+                  <option value="contains">${i18n.t('goals.filter.op.contains')}</option>
+                  <option value="equals">${i18n.t('goals.filter.op.equals')}</option>
+                  <option value="gt">${i18n.t('goals.filter.op.gt')}</option>
+                  <option value="lt">${i18n.t('goals.filter.op.lt')}</option>
+                  <option value="gte">${i18n.t('goals.filter.op.gte')}</option>
+                  <option value="lte">${i18n.t('goals.filter.op.lte')}</option>
+              </select>
+
+              <input type="text" 
+                  placeholder="${i18n.t('goals.filter.value')}" 
+                  .value="${this.filterValue}" 
+                  @input="${(e: any) => this.filterValue = e.target.value}"
+                  @keydown="${(e: KeyboardEvent) => e.key === 'Enter' && this.addFilter()}">
+              
+              <button class="btn-primary" style="height: 36px; padding: 0 16px;" @click="${this.addFilter}">
+                  ${i18n.t('goals.filter.add')}
+              </button>
+              
+              ${this.filters.length > 0 ? html`
+                  <button style="height: 36px; padding: 0 16px; background: transparent; color: var(--md-sys-color-error);" @click="${this.clearFilters}">
+                      ${i18n.t('goals.filter.clear_all')}
+                  </button>
+              ` : ''}
+          </div>
+
+          ${this.filters.length > 0 ? html`
+              <div class="chip-container">
+                  ${this.filters.map(f => html`
+                      <div class="chip">
+                          <span>
+                            ${this.getFieldLabel(f.field)} 
+                            <b>${this.getOperatorLabel(f.operator)}</b> 
+                            "${f.value}"
+                          </span>
+                          <button @click="${() => this.removeFilter(f.id)}">✕</button>
+                      </div>
+                  `)}
+              </div>
+          ` : ''}
+      </div>
+
       <div class="table-container">
         <table>
             <thead>
@@ -541,10 +774,10 @@ export class ViewGoals extends LitElement {
                     `;
     })}
 
-                ${this.goals.length > 0 ? (() => {
-        const totalTarget = this.goals.reduce((s, g) => s + Number(g.targetAmount || 0), 0);
-        const totalMonthly = this.goals.reduce((s, g) => s + this.getMonthlySaving(g), 0);
-        const totalSaved = this.goals.reduce((s, g) => s + Number(g.savedAmount || 0), 0);
+                ${sorted.length > 0 ? (() => {
+        const totalTarget = sorted.reduce((s, g) => s + Number(g.targetAmount || 0), 0);
+        const totalMonthly = sorted.reduce((s, g) => s + this.getMonthlySaving(g), 0);
+        const totalSaved = sorted.reduce((s, g) => s + Number(g.savedAmount || 0), 0);
 
         return html`
                           <tr class="totals-row">

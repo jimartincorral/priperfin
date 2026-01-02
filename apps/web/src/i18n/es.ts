@@ -86,6 +86,21 @@ export const es = {
         },
         should_have_saved: 'Debería haber ahorrado',
         unassigned_savings: 'Ahorro no asignado',
+        filter: {
+            filter_by: 'Filtrar por',
+            add: 'Agregar Filtro',
+            clear_all: 'Limpiar Todo',
+            operator: 'Operador',
+            value: 'Valor',
+            op: {
+                contains: 'contiene',
+                equals: 'es igual a',
+                gt: 'mayor que',
+                lt: 'menor que',
+                gte: 'mayor o igual',
+                lte: 'menor o igual',
+            }
+        }
     },
     reports: {
         title: 'Reportes Financieros',
