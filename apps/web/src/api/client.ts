@@ -26,7 +26,14 @@ export class ApiClient {
             throw new Error(error.message || JSON.stringify(error));
         }
         const text = await response.text();
-        return text ? JSON.parse(text) : {};
+        try {
+            return text ? JSON.parse(text) : {};
+        } catch (e) {
+            console.error('[ApiClient] JSON Parse Error:', e);
+            console.error('[ApiClient] Raw Response Text:', text);
+            console.error('[ApiClient] Status:', response.status, response.statusText);
+            throw e;
+        }
     }
 
     async get(endpoint: string, params: Record<string, any> = {}) {

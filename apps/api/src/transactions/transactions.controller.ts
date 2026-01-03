@@ -48,7 +48,7 @@ export class TransactionsController {
   }
 
   @Post('bulk')
-  createBulk(
+  async createBulk(
     @Body()
     body: {
       transactions: CreateTransactionDto[];
@@ -56,11 +56,14 @@ export class TransactionsController {
       mergeInstructions?: any[];
     },
   ) {
-    return this.transactionsService.createMany(
+    console.log('[TransactionsController] createBulk called');
+    const result = await this.transactionsService.createMany(
       body.transactions,
       body.force || false,
       body.mergeInstructions || [],
     );
+    console.log('[TransactionsController] createBulk result:', result);
+    return result;
   }
 
   @Patch(':id')

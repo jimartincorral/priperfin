@@ -423,13 +423,15 @@ export class TransactionsService {
       data: transactionsToImport,
     });
 
-    return {
+    const response = {
       newCount: result.count,
       duplicateCount: force ? 0 : duplicates.length,
       duplicates: [],
       manualMatchCount: 0,
       manualMatches: [],
     };
+    console.log('[TransactionsService] createMany returning:', response);
+    return response;
   }
 
   generateHash(dto: CreateTransactionDto): string {
