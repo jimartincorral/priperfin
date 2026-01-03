@@ -17,11 +17,10 @@ if not exist "node_modules" (
     call pnpm install
 )
 
-REM Build if dist doesn't exist
-if not exist "apps\api\dist" (
-    echo 🔨 Building API...
-    call pnpm -F api build
-)
+REM Build API (Always build to ensure latest code)
+echo 🔨 Building API...
+call pnpm -F api build
+
 if not exist "apps\web\dist" (
     echo 🔨 Building Web...
     call pnpm -F web build

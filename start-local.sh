@@ -16,10 +16,13 @@ if [ ! -d "node_modules" ]; then
     pnpm install
 fi
 
-# Build if dist doesn't exist
-if [ ! -d "apps/api/dist" ] || [ ! -d "apps/web/dist" ]; then
-    echo "🔨 Building application..."
-    pnpm -F api build
+# Build API (Always build to ensure latest code)
+echo "🔨 Building API..."
+pnpm -F api build
+
+# Build Web if missing
+if [ ! -d "apps/web/dist" ]; then
+    echo "🔨 Building Web..."
     pnpm -F web build
 fi
 
