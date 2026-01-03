@@ -8,7 +8,7 @@ import {
   createMockCostObject,
   createMockTransactionSplit,
 } from '../test/fixtures';
-import { Decimal } from '../generated/client';
+import { Decimal } from '@prisma/client/runtime/library';
 
 describe('ReportsService', () => {
   let service: ReportsService;

@@ -1,4 +1,4 @@
-import { Decimal } from '../../generated/client';
+import { Decimal } from '@prisma/client/runtime/library';
 
 /**
  * Test fixture factories for creating mock data.

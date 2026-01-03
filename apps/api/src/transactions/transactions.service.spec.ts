@@ -9,7 +9,7 @@ import {
   createMockAccount,
   createMockCategory,
 } from '../test/fixtures';
-import { Decimal } from '../generated/client';
+import { Decimal } from '@prisma/client/runtime/library';
 
 describe('TransactionsService', () => {
   let service: TransactionsService;

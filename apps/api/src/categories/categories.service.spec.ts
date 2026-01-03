@@ -3,7 +3,7 @@ import { CategoriesService } from './categories.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { createPrismaMock, PrismaMock } from '../test/prisma-mock.factory';
 import { createMockCategory } from '../test/fixtures';
-import { Decimal } from '../generated/client';
+import { Decimal } from '@prisma/client/runtime/library';
 
 describe('CategoriesService', () => {
   let service: CategoriesService;
