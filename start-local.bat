@@ -13,7 +13,11 @@ if %errorlevel% neq 0 (
 REM Install dependencies if needed
 if not exist "node_modules" (
     echo 📦 Installing dependencies...
-    call npm install -g pnpm
+    where pnpm >nul 2>nul
+    if %errorlevel% neq 0 (
+        echo    Installing pnpm...
+        call npm install -g pnpm
+    )
     call pnpm install
 )
 
