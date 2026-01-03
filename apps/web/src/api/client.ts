@@ -7,7 +7,8 @@ export function getApiBaseUrl(): string {
         return ingressMatch ? `${ingressMatch[1]}/api` : '/api';
     } else {
         // Direct access (development or direct port access)
-        return `http://${window.location.hostname}:3000/api`;
+        // Use relative path to allow Vite proxy or same-origin serving to handle it
+        return '/api';
     }
 }
 

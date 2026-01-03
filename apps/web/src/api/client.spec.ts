@@ -35,7 +35,7 @@ describe('API Client', () => {
 
       const result = getApiBaseUrl();
 
-      expect(result).toBe('http://localhost:3000/api');
+      expect(result).toBe('/api');
     });
 
     it('should handle various pathname patterns', () => {
@@ -63,7 +63,7 @@ describe('API Client', () => {
 
       const result = getApiBaseUrl();
 
-      expect(result).toBe('http://192.168.1.100:3000/api');
+      expect(result).toBe('/api');
     });
   });
 
