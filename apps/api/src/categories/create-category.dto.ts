@@ -1,5 +1,5 @@
 import { IsEnum, IsNotEmpty, IsOptional, IsString, IsUUID, IsNumber } from 'class-validator';
-import { CategoryType } from '../../generated/client';
+import { CategoryType } from '@generated/client';
 
 export class CreateCategoryDto {
   @IsString()

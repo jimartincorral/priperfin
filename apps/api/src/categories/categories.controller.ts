@@ -1,9 +1,20 @@
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  Query,
+  UsePipes,
+  ValidationPipe,
   ParseUUIDPipe,
 } from '@nestjs/common';
 import { CategoriesService } from './categories.service';
 import { CreateCategoryDto } from './create-category.dto';
 import { UpdateCategoryDto } from './update-category.dto';
-import { CategoryType } from '../../generated/client';
+import { CategoryType } from '@generated/client';
 
 @Controller('categories')
 export class CategoriesController {
