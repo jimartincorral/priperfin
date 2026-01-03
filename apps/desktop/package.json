@@ -1,6 +1,6 @@
 {
   "name": "priperfin-desktop",
-  "version": "1.1.12",
+  "version": "1.1.13",
   "description": "Personal Finance Tracker Desktop App",
   "main": "dist/main.js",
   "scripts": {

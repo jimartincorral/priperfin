@@ -55,9 +55,14 @@ backup_encryption_key: "YourSuperSecretKeyForBackup12398"
    pnpm install
    ```
 3. Initialize the database (SQLite):
-   ```bash
-   pnpm db:push
-   ```
+   - Ensure `apps/api/.env` exists (copy from `.env.example`):
+     ```bash
+     cp apps/api/.env.example apps/api/.env
+     ```
+   - Run push:
+     ```bash
+     pnpm db:push
+     ```
 4. Start the development server:
    ```bash
    pnpm dev
