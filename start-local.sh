@@ -44,4 +44,4 @@ export STATIC_PATH="$(pwd)/apps/web/dist"
 export DATABASE_URL="file:$(pwd)/apps/api/dev.db"
 
 # Run the built API
-node apps/api/dist/main.js
+node apps/api/dist/src/main.js
