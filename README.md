@@ -40,6 +40,31 @@ backup_dir: "/backup/priperfin"
 backup_encryption_key: "YourSuperSecretKeyForBackup12398"
 ```
 
+## Development
+
+### Prerequisites
+
+- Node.js 20+
+- pnpm
+
+### Running Locally
+
+1. Clone the repository
+2. Install dependencies:
+   ```bash
+   pnpm install
+   ```
+3. Initialize the database (SQLite):
+   ```bash
+   pnpm db:push
+   ```
+4. Start the development server:
+   ```bash
+   pnpm dev
+   ```
+   - Web App: http://localhost:5173
+   - API: http://localhost:3000
+
 ## Support
 
 For issues and feature requests, please visit the GitHub repository.

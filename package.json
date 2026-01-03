@@ -6,7 +6,8 @@
     "build": "pnpm -r build",
     "test": "pnpm -r test",
     "lint": "pnpm -r lint",
-    "dev": "pnpm -r --parallel run dev"
+    "dev": "pnpm -r --parallel run dev",
+    "db:push": "pnpm -C apps/api exec prisma db push"
   },
   "packageManager": "pnpm@9.0.0"
 }

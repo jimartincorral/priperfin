@@ -17,16 +17,16 @@ function getApiPaths() {
     // In dev, we assume we are running from apps/desktop
     // and apps/api is at ../api
     return {
-      script: path.join(__dirname, '../../api/dist/src/main.js'),
+      script: path.join(__dirname, '../../api/dist/main.js'),
       cwd: path.join(__dirname, '../../api'),
       static: path.join(__dirname, '../../web/dist'),
     };
   } else {
     // In prod, resources are unpacked
-    // resources/api/src/main.js
+    // resources/api/main.js (mapped from dist/main.js)
     // resources/web
     return {
-      script: path.join(process.resourcesPath, 'api/src/main.js'),
+      script: path.join(process.resourcesPath, 'api/main.js'),
       cwd: path.join(process.resourcesPath, 'api'),
       static: path.join(process.resourcesPath, 'web'),
     };
@@ -166,11 +166,17 @@ function createWindow() {
   // Wait for API to be ready before loading
   // Simple retry strategy
   const loadApp = () => {
-    fetch(`http://localhost:${API_PORT}/api/health`) // Assuming a health check or just root
-      .then(() => {
-        mainWindow?.loadURL(WIN_URL);
+    fetch(`http://localhost:${API_PORT}/api/health`) 
+      .then((res) => {
+        if (res.ok) {
+          mainWindow?.loadURL(WIN_URL);
+        } else {
+          console.log('[Main] API health check failed (status not ok), retrying...');
+          setTimeout(loadApp, 1000);
+        }
       })
-      .catch(() => {
+      .catch((err) => {
+        console.log('[Main] API health check failed (network error), retrying...', err.message);
         setTimeout(loadApp, 1000);
       });
   };
