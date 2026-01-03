@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.15] - 2026-01-03
+
+### Fixed
+- **Developer Experience** - Added a default fallback to `file:./dev.db` in `prisma.config.ts`. This ensures `pnpm db:push` works out-of-the-box even if the `.env` file is missing, simplifying local setup.
+
 ## [1.1.14] - 2026-01-03
 
 ### Fixed
