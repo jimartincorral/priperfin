@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { Prisma } from '@prisma/client';
-import { startOfMonth, endOfMonth, format, subMonths, parseISO } from 'date-fns';
+import { Prisma } from '../../generated/client';
+import { startOfMonth, endOfMonth, parseISO, format, subMonths } from 'date-fns';
 import { GetTransactionsDto } from '../transactions/get-transactions.dto';
 
 @Injectable()
