@@ -11,6 +11,10 @@ COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
 COPY apps/api/package.json apps/api/
 COPY apps/web/package.json apps/web/
 
+# Copy Prisma schema (needed for postinstall generate)
+COPY apps/api/prisma ./apps/api/prisma/
+COPY apps/api/prisma.config.ts ./apps/api/
+
 # Install all dependencies
 RUN pnpm install --frozen-lockfile
 
