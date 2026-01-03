@@ -1,13 +1,14 @@
 {
   "name": "priperfin-desktop",
-  "version": "1.1.17",
+  "version": "1.1.19",
   "description": "Personal Finance Tracker Desktop App",
   "main": "dist/main.js",
   "scripts": {
     "build": "tsc",
     "start": "electron .",
     "pack": "electron-builder --dir",
-    "dist": "electron-builder"
+    "dist": "electron-builder",
+    "postinstall": "electron-builder install-app-deps"
   },
   "keywords": [],
   "author": "Jimartincorral",

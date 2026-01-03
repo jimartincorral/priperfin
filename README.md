@@ -47,7 +47,23 @@ backup_encryption_key: "YourSuperSecretKeyForBackup12398"
 - Node.js 20+
 - pnpm
 
-### Running Locally
+### Running Locally (Simplified)
+
+We provide helper scripts to automatically install, build, and run the application locally without needing to manually run multiple commands.
+
+**Linux / macOS:**
+```bash
+./start-local.sh
+```
+
+**Windows:**
+```cmd
+start-local.bat
+```
+
+This will start the application at `http://localhost:3000`.
+
+### Running Locally (Manual)
 
 1. Clone the repository
 2. Install dependencies:

@@ -33,11 +33,26 @@ function getStaticPath(): string {
   }
 
   // Fallback: try to find web/dist relative to current location
-  const fallbackPath = join(__dirname, '../..', 'web/dist');
-  console.log('[getStaticPath] Using fallback path:', fallbackPath);
-  console.log('[getStaticPath] Fallback exists?', existsSync(fallbackPath));
+  // 1. From apps/api/src (Dev): ../../web/dist
+  // 2. From apps/api/dist (Prod): ../../../web/dist
+  
+  const possiblePaths = [
+    join(__dirname, '../..', 'web/dist'),       // Dev structure
+    join(__dirname, '../../..', 'web/dist'),    // Built structure (dist/src/...)
+    join(__dirname, '../../../../web/dist'),    // Deeper nesting?
+    join(process.cwd(), 'apps/web/dist'),       // CWD based (Robust for monorepo)
+    join(process.cwd(), '../web/dist')          // CWD if in apps/api
+  ];
 
-  return fallbackPath;
+  for (const p of possiblePaths) {
+    if (existsSync(p)) {
+      console.log('[getStaticPath] Found static files at:', p);
+      return p;
+    }
+  }
+
+  console.warn('[getStaticPath] Could not find static files!');
+  return join(__dirname, '../..', 'web/dist'); // Default
 }
 
 @Module({
