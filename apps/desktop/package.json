@@ -1,6 +1,6 @@
 {
   "name": "priperfin-desktop",
-  "version": "1.1.10",
+  "version": "1.1.11",
   "description": "Personal Finance Tracker Desktop App",
   "main": "dist/main.js",
   "scripts": {
@@ -76,6 +76,16 @@
     ],
     "win": {
       "target": "nsis"
+    },
+    "mac": {
+      "target": {
+        "target": "dmg",
+        "arch": [
+          "x64",
+          "arm64"
+        ]
+      },
+      "identity": null
     },
     "nsis": {
       "oneClick": false,
