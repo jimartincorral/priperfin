@@ -1,9 +1,6 @@
 # Dependencies
 node_modules/
 
-# Prisma generated client (regenerated during build)
-apps/api/src/generated/
-
 # Build outputs (rebuilt by Docker)
 dist/
 apps/*/dist/
