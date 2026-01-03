@@ -33,58 +33,32 @@ function getApiPaths() {
   }
 }
 
-async function initializeDatabase(dbPath: string, cwd: string) {
-  // Check if database exists and has tables
-  const dbExists = fs.existsSync(dbPath);
+async function initializeDatabase(dbPath: string) {
+  if (fs.existsSync(dbPath)) {
+    console.log('Database exists at:', dbPath);
+    return;
+  }
 
-  console.log('Database exists:', dbExists);
-  console.log('Initializing database schema...');
+  console.log('Database not found, initializing from template...');
+  
+  let templatePath: string;
+  if (isDev) {
+    templatePath = path.join(__dirname, '../../template.db');
+  } else {
+    // In prod, it is in resources/template.db
+    templatePath = path.join(process.resourcesPath, 'template.db');
+  }
 
-  // Run prisma db push to create/update schema
-  return new Promise<void>((resolve, reject) => {
-    const env = {
-      ...process.env,
-      DATABASE_URL: `file:${dbPath}`,
-    };
-
-    // Use npx prisma db push to create the schema
-    const prismaProcess = childProcess.spawn(
-      process.platform === 'win32' ? 'npx.cmd' : 'npx',
-      ['prisma', 'db', 'push', '--skip-generate', '--accept-data-loss'],
-      {
-        cwd: cwd,
-        env: env,
-        stdio: ['ignore', 'pipe', 'pipe'],
-      }
-    );
-
-    let output = '';
-    prismaProcess.stdout?.on('data', (data) => {
-      output += data.toString();
-      console.log(`[Prisma]: ${data}`);
-    });
-
-    prismaProcess.stderr?.on('data', (data) => {
-      output += data.toString();
-      console.error(`[Prisma Error]: ${data}`);
-    });
-
-    prismaProcess.on('close', (code) => {
-      if (code === 0) {
-        console.log('Database schema initialized successfully');
-        resolve();
-      } else {
-        console.error('Failed to initialize database schema');
-        console.error('Output:', output);
-        reject(new Error(`Prisma db push failed with code ${code}`));
-      }
-    });
-
-    prismaProcess.on('error', (err) => {
-      console.error('Failed to run prisma:', err);
-      reject(err);
-    });
-  });
+  if (fs.existsSync(templatePath)) {
+    console.log('Copying template database from:', templatePath);
+    fs.copyFileSync(templatePath, dbPath);
+    console.log('Database initialized successfully.');
+  } else {
+    console.error('Template database not found at:', templatePath);
+    // Fallback: Create empty file? No, that would cause schema error.
+    // Use an error that will be logged.
+    throw new Error('Template database not found. Cannot initialize application.');
+  }
 }
 
 async function startApi() {
@@ -96,8 +70,12 @@ async function startApi() {
   }
 
   const userDataPath = app.getPath('userData');
+  // Ensure userData directory exists
+  if (!fs.existsSync(userDataPath)) {
+    fs.mkdirSync(userDataPath, { recursive: true });
+  }
+
   const dbPath = path.join(userDataPath, 'priperfin.db');
-  // Ensure we use a file protocol for sqlite
   const dbUrl = `file:${dbPath}`;
 
   console.log('Starting API...');
@@ -108,12 +86,11 @@ async function startApi() {
   console.log('isDev:', isDev);
   console.log('resourcesPath:', process.resourcesPath);
 
-  // Initialize database schema if needed
+  // Initialize database schema
   try {
-    await initializeDatabase(dbPath, paths.cwd);
+    await initializeDatabase(dbPath);
   } catch (error) {
     console.error('Database initialization failed:', error);
-    // Continue anyway - the API will handle the error
   }
 
   const env = {
