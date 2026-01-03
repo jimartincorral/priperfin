@@ -54,7 +54,7 @@ RUN curl -J -L -o /tmp/bashio.tar.gz \
 COPY apps/api/package.json ./
 
 # Install production dependencies with npm (legacy-peer-deps for NestJS 11 compatibility)
-RUN npm install --omit=dev --legacy-peer-deps
+RUN npm install --omit=dev --legacy-peer-deps --ignore-scripts
 
 # Copy built API (note: output is in dist/src/ due to tsconfig)
 COPY --from=builder /app/apps/api/dist ./dist

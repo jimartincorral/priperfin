@@ -1,5 +1,5 @@
 import { IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString } from 'class-validator';
-import { AccountType } from '@generated/client';
+import { AccountType } from '../generated/client';
 
 export class CreateAccountDto {
   @IsString()
