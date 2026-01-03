@@ -45,6 +45,7 @@ export NODE_ENV=production
 # Force fallback logic to find web/dist relative to CWD
 export STATIC_PATH="$(pwd)/apps/web/dist"
 export DATABASE_URL="file:$(pwd)/apps/api/dev.db"
+export BACKUP_DIR="$(pwd)/apps/api/backups"
 
 # Run the built API
 node apps/api/dist/src/main.js

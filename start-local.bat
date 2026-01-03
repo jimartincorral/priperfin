@@ -42,6 +42,7 @@ REM Set environment variables
 set NODE_ENV=production
 set STATIC_PATH=%cd%\apps\web\dist
 set DATABASE_URL=file:%cd%\apps\api\dev.db
+set BACKUP_DIR=%cd%\apps\api\backups
 
 REM Run the built API
 node apps\api\dist\src\main.js
