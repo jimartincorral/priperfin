@@ -6,7 +6,7 @@ import path from 'path';
 async function main() {
   const rawUrl = process.env.DATABASE_URL || 'file:./dev.db';
   let dbPath = rawUrl.replace('file:', '');
-  if (!dbPath.includes(':') && !dbPath.startsWith('/') && !dbPath.startsWith('\')) {
+  if (!dbPath.includes(':') && !dbPath.startsWith('/') && !dbPath.startsWith('\\')) {
       dbPath = path.join(process.cwd(), dbPath);
   }
   console.log('Opening DB at:', dbPath);
