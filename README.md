@@ -44,6 +44,24 @@ backup_encryption_key: "YourSuperSecretKeyForBackup12398"
 
 For issues and feature requests, please visit the GitHub repository.
 
+## Troubleshooting
+
+### macOS: "App is damaged and can't be opened"
+
+If you encounter the error **"PriPerFin” is damaged and can’t be opened"** (or "está dañado y no se puede abrir"), this is a standard macOS security check for apps that are not signed with a paid Apple Developer certificate.
+
+To fix this:
+
+1. Move the **PriPerFin** app to your **Applications** folder.
+2. Open the **Terminal** app.
+3. Run the following command:
+
+```bash
+xattr -cr /Applications/PriPerFin.app
+```
+
+4. You can now open the app normally.
+
 ## License
 
 This project is licensed under the Apache License, Version 2.0. See the [LICENSE](LICENSE) file for details.
