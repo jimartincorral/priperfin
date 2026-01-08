@@ -184,6 +184,86 @@ describe('BackupService', () => {
         BadRequestException,
       );
     });
+
+    // ============================================
+    // Path Traversal Protection Tests
+    // ============================================
+    describe('path traversal protection', () => {
+      it('should reject filenames with path traversal sequences (..)', async () => {
+        await expect(service.getBackupFileStream('../../../etc/passwd')).rejects.toThrow(
+          BadRequestException,
+        );
+        await expect(service.getBackupFileStream('../../../etc/passwd')).rejects.toThrow(
+          'Invalid filename format',
+        );
+      });
+
+      it('should reject filenames with forward slashes', async () => {
+        await expect(service.getBackupFileStream('path/to/file.tar')).rejects.toThrow(
+          BadRequestException,
+        );
+        await expect(service.getBackupFileStream('path/to/file.tar')).rejects.toThrow(
+          'Invalid filename format',
+        );
+      });
+
+      it('should reject filenames with backslashes', async () => {
+        await expect(service.getBackupFileStream('path\\to\\file.tar')).rejects.toThrow(
+          BadRequestException,
+        );
+        await expect(service.getBackupFileStream('path\\to\\file.tar')).rejects.toThrow(
+          'Invalid filename format',
+        );
+      });
+
+      it('should reject filenames with invalid characters', async () => {
+        await expect(service.getBackupFileStream('file<script>.tar')).rejects.toThrow(
+          BadRequestException,
+        );
+        await expect(service.getBackupFileStream('file<script>.tar')).rejects.toThrow(
+          'Invalid filename format',
+        );
+      });
+
+      it('should reject filenames with invalid extensions', async () => {
+        await expect(service.getBackupFileStream('backup.sql')).rejects.toThrow(
+          BadRequestException,
+        );
+        await expect(service.getBackupFileStream('backup.sql')).rejects.toThrow(
+          'Invalid backup file extension',
+        );
+      });
+
+      it('should reject filenames trying to escape with encoded sequences', async () => {
+        await expect(service.getBackupFileStream('..%2F..%2Fetc%2Fpasswd.tar')).rejects.toThrow(
+          BadRequestException,
+        );
+      });
+
+      it('should accept valid .tar filenames', async () => {
+        (fs.stat as jest.Mock).mockResolvedValue({ isFile: () => true });
+        const mockStream = { pipe: jest.fn() };
+        const createReadStreamMock = jest.requireMock('fs').createReadStream;
+        createReadStreamMock.mockReturnValue(mockStream);
+
+        const [stream, mimeType] = await service.getBackupFileStream('backup_2025-01-01.tar');
+
+        expect(stream).toBe(mockStream);
+        expect(mimeType).toBe('application/octet-stream');
+      });
+
+      it('should accept valid .tar.enc filenames', async () => {
+        (fs.stat as jest.Mock).mockResolvedValue({ isFile: () => true });
+        const mockStream = { pipe: jest.fn() };
+        const createReadStreamMock = jest.requireMock('fs').createReadStream;
+        createReadStreamMock.mockReturnValue(mockStream);
+
+        const [stream, mimeType] = await service.getBackupFileStream('backup_2025-01-01.tar.enc');
+
+        expect(stream).toBe(mockStream);
+        expect(mimeType).toBe('application/octet-stream');
+      });
+    });
   });
 
   // ============================================

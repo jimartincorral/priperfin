@@ -10,6 +10,7 @@ import {
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
   private readonly logger = new Logger(AllExceptionsFilter.name);
+  private readonly isProduction = process.env.NODE_ENV === 'production';
 
   catch(exception: unknown, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
@@ -21,19 +22,25 @@ export class AllExceptionsFilter implements ExceptionFilter {
         ? exception.getStatus()
         : HttpStatus.INTERNAL_SERVER_ERROR;
 
-    this.logger.error(`Exception: ${exception}`);
+    // Log full details server-side for debugging
+    this.logger.error(`Exception on ${request.method} ${request.url}: ${exception}`);
     if (exception instanceof Error) {
       this.logger.error(exception.stack);
     }
 
+    // Prepare client-facing message - avoid exposing internal details in production
     let message: any = 'Internal server error';
 
     if (exception instanceof HttpException) {
       const res = exception.getResponse();
       message = res;
     } else if (exception instanceof Error) {
-      // Safe to expose in dev/test, maybe restrict in prod but fine here
-      message = exception.message;
+      // Only expose detailed error messages in non-production environments
+      if (!this.isProduction) {
+        message = exception.message;
+      }
+      // In production, keep the generic "Internal server error" message
+      // to avoid leaking sensitive information about the system
     }
 
     response.status(status).json({

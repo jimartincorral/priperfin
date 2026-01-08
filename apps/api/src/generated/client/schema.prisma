@@ -1,0 +1,127 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/client"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Category {
+  id                String             @id @default(uuid())
+  name              String
+  color             String?
+  icon              String
+  budget            Decimal? // Optional monthly soft budget
+  type              CategoryType       @default(EXPENSE)
+  parentId          String?
+  parent            Category?          @relation("CategoryToCategory", fields: [parentId], references: [id], onDelete: SetNull)
+  children          Category[]         @relation("CategoryToCategory")
+  transactions      Transaction[]
+  transactionSplits TransactionSplit[]
+  savingsGoals      SavingsGoal[]
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+}
+
+model Account {
+  id              String           @id @default(uuid())
+  name            String
+  initialBalance  Decimal          @default(0)
+  type            AccountType      @default(DEBIT)
+  transactions    Transaction[]
+  monthlyBalances MonthlyBalance[]
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+}
+
+enum AccountType {
+  DEBIT
+  CREDIT
+}
+
+model CostObject {
+  id                String             @id @default(uuid())
+  name              String
+  color             String?
+  icon              String
+  transactions      Transaction[]
+  transactionSplits TransactionSplit[]
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+}
+
+model Transaction {
+  id                  String             @id @default(uuid())
+  date                DateTime
+  amount              Decimal
+  description         String
+  categoryId          String?
+  category            Category?          @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  accountId           String?
+  account             Account?           @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  costObjectId        String?
+  costObject          CostObject?        @relation(fields: [costObjectId], references: [id], onDelete: SetNull)
+  notes               String?
+  suggestedCategoryId String? // New field for ML suggestions
+  externalId          String?            @unique
+  splits              TransactionSplit[] @relation("TransactionSplits")
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+}
+
+model TransactionSplit {
+  id           String      @id @default(uuid())
+  parentId     String
+  parent       Transaction @relation("TransactionSplits", fields: [parentId], references: [id], onDelete: Cascade)
+  amount       Decimal
+  categoryId   String?
+  category     Category?   @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  costObjectId String?
+  costObject   CostObject? @relation(fields: [costObjectId], references: [id], onDelete: SetNull)
+  description  String?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+}
+
+model SavingsGoal {
+  id           String    @id @default(uuid())
+  name         String
+  targetAmount Decimal
+  startDate    DateTime  @default(now())
+  targetDate   DateTime
+  savedAmount  Decimal   @default(0)
+  categoryId   String?
+  category     Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+model Setting {
+  key   String @id
+  value String
+}
+
+enum CategoryType {
+  INCOME
+  EXPENSE
+  GOAL
+}
+
+model MonthlyBalance {
+  id        String   @id @default(uuid())
+  month     String
+  balance   Decimal  @default(0)
+  accountId String?
+  account   Account? @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([month, accountId])
+}

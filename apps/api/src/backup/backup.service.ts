@@ -528,7 +528,30 @@ export class BackupService {
   }
 
   async getBackupFileStream(filename: string): Promise<[ReadStream, string]> {
+    // Validate filename to prevent path traversal attacks
+    // Only allow alphanumeric, underscore, hyphen, and dot characters
+    if (!/^[a-zA-Z0-9_\-\.]+$/.test(filename)) {
+      throw new BadRequestException('Invalid filename format.');
+    }
+
+    // Ensure the filename doesn't contain path traversal sequences
+    if (filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
+      throw new BadRequestException('Invalid filename.');
+    }
+
+    // Only allow .tar and .tar.enc extensions
+    if (!filename.endsWith('.tar') && !filename.endsWith('.tar.enc')) {
+      throw new BadRequestException('Invalid backup file extension.');
+    }
+
     const filePath = path.join(this.backupDir, filename);
+
+    // Verify the resolved path is within the backup directory
+    const normalizedFilePath = path.normalize(filePath);
+    const normalizedBackupDir = path.normalize(this.backupDir);
+    if (!normalizedFilePath.startsWith(normalizedBackupDir + path.sep) && normalizedFilePath !== normalizedBackupDir) {
+      throw new BadRequestException('Invalid file path.');
+    }
 
     if (!(await fs.stat(filePath).catch(() => null))) {
       throw new BadRequestException('Backup file not found.');

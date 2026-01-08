@@ -7,7 +7,6 @@ import path from 'path';
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
   constructor() {
     const rawUrl = process.env.DATABASE_URL || 'file:./dev.db';
-    console.log('[PrismaService] DATABASE_URL:', rawUrl);
 
     let dbPath = rawUrl.replace('file:', '');
 
@@ -21,7 +20,6 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
     }
 
     const resolvedUrl = `file:${dbPath}`;
-    console.log('[PrismaService] Resolved URL:', resolvedUrl);
 
     // Prisma 7.x adapter API - pass URL to factory
     const adapter = new PrismaBetterSqlite3({ url: resolvedUrl });

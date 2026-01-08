@@ -339,12 +339,28 @@ export class TransactionsService {
     });
 
     const existingIds = new Set(existingTransactions.map((t) => t.externalId));
-    const newTransactions = enhancedDtos.filter(
-      (d) => !d.externalId || !existingIds.has(d.externalId),
-    );
-    const duplicates = enhancedDtos.filter(
-      (d) => d.externalId && existingIds.has(d.externalId),
-    );
+
+    // Filter out DB duplicates; track within-batch occurrences for user review
+    const seenInBatch = new Map<string, number>(); // externalId -> occurrence count
+    const newTransactions: typeof enhancedDtos = [];
+    const duplicates: Array<(typeof enhancedDtos)[0] & { reason: string; batchIndex?: number }> = [];
+
+    for (const d of enhancedDtos) {
+      if (d.externalId && existingIds.has(d.externalId)) {
+        // Duplicate in database
+        duplicates.push({ ...d, reason: 'database' });
+      } else if (d.externalId && seenInBatch.has(d.externalId)) {
+        // Within-batch duplicate - let user decide whether to import
+        const count = seenInBatch.get(d.externalId)! + 1;
+        seenInBatch.set(d.externalId, count);
+        duplicates.push({ ...d, reason: 'batch', batchIndex: count });
+      } else {
+        if (d.externalId) {
+          seenInBatch.set(d.externalId, 1);
+        }
+        newTransactions.push(d);
+      }
+    }
 
     console.log(`[TransactionsService] createMany: ${newTransactions.length} new, ${duplicates.length} duplicates`);
 
@@ -358,6 +374,8 @@ export class TransactionsService {
           amount: d.amount,
           description: d.description,
           externalId: d.externalId,
+          reason: d.reason,
+          batchIndex: d.batchIndex,
         })),
         manualMatchCount: 0,
         manualMatches: [],

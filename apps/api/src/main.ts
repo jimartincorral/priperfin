@@ -8,7 +8,43 @@ import * as multer from 'multer'; // Import multer
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   app.setGlobalPrefix('api');
-  app.enableCors();
+
+  // Configure CORS with restricted origins
+  // In development, allow common local dev server ports
+  // In production, set CORS_ORIGINS environment variable
+  const allowedOrigins = process.env.CORS_ORIGINS
+    ? process.env.CORS_ORIGINS.split(',').map((origin) => origin.trim())
+    : [
+        'http://localhost:3000',
+        'http://localhost:5173',
+        'http://localhost:5174',
+        'http://127.0.0.1:3000',
+        'http://127.0.0.1:5173',
+        'http://127.0.0.1:5174',
+      ];
+
+  app.enableCors({
+    origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+      // Allow requests with no origin (like mobile apps, curl, or same-origin)
+      if (!origin) {
+        callback(null, true);
+        return;
+      }
+      // In development, allow localhost and private network IPs on any port
+      const isDev = process.env.NODE_ENV !== 'production';
+      const isLocalhost = origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:');
+      const isPrivateNetwork = /^https?:\/\/(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)/.test(origin);
+      if (allowedOrigins.includes(origin) || (isDev && (isLocalhost || isPrivateNetwork))) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true,
+  });
+
   app.useGlobalFilters(new AllExceptionsFilter());
 
   // Configure express to handle JSON and URL-encoded bodies
