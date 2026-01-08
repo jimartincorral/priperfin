@@ -1,10 +1,12 @@
 // Helper to get base URL for API calls (handles ingress)
 export function getApiBaseUrl(): string {
     const path = window.location.pathname;
-    if (path.includes('/api/hassio_ingress/')) {
-        // Extract the ingress base path and use relative API calls
-        const ingressMatch = path.match(/^(\/api\/hassio_ingress\/[^/]+)/);
-        return ingressMatch ? `${ingressMatch[1]}/api` : '/api';
+    // Check for Home Assistant Ingress paths (both formats)
+    // Format 1: /api/hassio_ingress/<token>
+    // Format 2: /hassio/ingress/<token>
+    const ingressMatch = path.match(/^(\/api\/hassio_ingress\/[^/]+|\/hassio\/ingress\/[^/]+)/);
+    if (ingressMatch) {
+        return `${ingressMatch[1]}/api`;
     } else {
         // Direct access (development or direct port access)
         // Use relative path to allow Vite proxy or same-origin serving to handle it

@@ -11,7 +11,7 @@ ports:
   3000/tcp: 3000
 ingress: true
 ingress_port: 3000
-ingress_stream: true
+ingress_stream: false
 panel_icon: "mdi:finance"
 panel_title: "Finance"
 map:
