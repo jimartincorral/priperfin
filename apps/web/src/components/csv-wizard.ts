@@ -4,6 +4,14 @@ import Papa from 'papaparse';
 import { i18n } from '../i18n/i18n';
 import { getApiBaseUrl } from '../api/client';
 
+// localStorage keys for persisting user preferences
+const STORAGE_KEYS = {
+    dateFormat: 'priperfin_csv_dateFormat',
+    numberFormat: 'priperfin_csv_numberFormat',
+    lastAccountId: 'priperfin_csv_lastAccountId',
+    lastMapping: 'priperfin_csv_lastMapping'
+};
+
 @customElement('csv-wizard')
 export class CsvWizard extends LitElement {
     @property({ type: Boolean }) open = false;
@@ -32,6 +40,66 @@ export class CsvWizard extends LitElement {
     @state() manualMatches: any[] = [];
     @state() selectedMerges: Set<string> = new Set();
     @state() showMergeDetails: Map<string, boolean> = new Map();
+
+    connectedCallback() {
+        super.connectedCallback();
+        this.loadSavedPreferences();
+    }
+
+    private loadSavedPreferences() {
+        try {
+            const savedDateFormat = localStorage.getItem(STORAGE_KEYS.dateFormat);
+            if (savedDateFormat) {
+                this.dateFormat = savedDateFormat as typeof this.dateFormat;
+            }
+
+            const savedNumberFormat = localStorage.getItem(STORAGE_KEYS.numberFormat);
+            if (savedNumberFormat) {
+                this.numberFormat = savedNumberFormat as typeof this.numberFormat;
+            }
+
+            const savedAccountId = localStorage.getItem(STORAGE_KEYS.lastAccountId);
+            if (savedAccountId) {
+                this.selectedAccountId = savedAccountId;
+            }
+        } catch (e) {
+            console.warn('[CSV Wizard] Failed to load saved preferences:', e);
+        }
+    }
+
+    private savePreferences() {
+        try {
+            localStorage.setItem(STORAGE_KEYS.dateFormat, this.dateFormat);
+            localStorage.setItem(STORAGE_KEYS.numberFormat, this.numberFormat);
+            if (this.selectedAccountId) {
+                localStorage.setItem(STORAGE_KEYS.lastAccountId, this.selectedAccountId);
+            }
+            if (this.mapping.date || this.mapping.amount || this.mapping.description) {
+                localStorage.setItem(STORAGE_KEYS.lastMapping, JSON.stringify(this.mapping));
+            }
+        } catch (e) {
+            console.warn('[CSV Wizard] Failed to save preferences:', e);
+        }
+    }
+
+    private applySavedMapping() {
+        try {
+            const savedMapping = localStorage.getItem(STORAGE_KEYS.lastMapping);
+            if (savedMapping) {
+                const parsed = JSON.parse(savedMapping);
+                // Only apply saved mapping if the headers match
+                const newMapping = { ...this.mapping };
+                for (const [key, value] of Object.entries(parsed)) {
+                    if (typeof value === 'string' && this.headers.includes(value)) {
+                        newMapping[key as keyof typeof newMapping] = value;
+                    }
+                }
+                this.mapping = newMapping;
+            }
+        } catch (e) {
+            console.warn('[CSV Wizard] Failed to apply saved mapping:', e);
+        }
+    }
 
     static styles = css`
     :host { display: block; }
@@ -98,12 +166,22 @@ export class CsvWizard extends LitElement {
             return idx >= 0 ? this.headers[idx] : '';
         };
 
-        this.mapping = {
-            date: findMatch(['date', 'time', 'when']),
-            amount: findMatch(['amount', 'value', 'cost', 'price']),
-            description: findMatch(['desc', 'memo', 'payee', 'narrative']),
-            notes: findMatch(['note', 'comment', 'detail', 'ref'])
-        };
+        // First try to apply saved mapping from previous import
+        this.applySavedMapping();
+
+        // Only auto-map fields that weren't restored from saved mapping
+        if (!this.mapping.date) {
+            this.mapping = { ...this.mapping, date: findMatch(['date', 'time', 'when']) };
+        }
+        if (!this.mapping.amount) {
+            this.mapping = { ...this.mapping, amount: findMatch(['amount', 'value', 'cost', 'price']) };
+        }
+        if (!this.mapping.description) {
+            this.mapping = { ...this.mapping, description: findMatch(['desc', 'memo', 'payee', 'narrative']) };
+        }
+        if (!this.mapping.notes) {
+            this.mapping = { ...this.mapping, notes: findMatch(['note', 'comment', 'detail', 'ref']) };
+        }
     }
 
     processData() {
@@ -229,6 +307,7 @@ export class CsvWizard extends LitElement {
             }
 
             // No duplicates or matches, import successful
+            this.savePreferences();
             this.dispatchEvent(new CustomEvent('import', { detail: { result } }));
             this.close();
         } catch (error: any) {
@@ -308,6 +387,7 @@ export class CsvWizard extends LitElement {
             });
 
             const result = await response.json();
+            this.savePreferences();
             this.dispatchEvent(new CustomEvent('import', { detail: { result } }));
             this.close();
         } catch (error: any) {
@@ -360,6 +440,7 @@ export class CsvWizard extends LitElement {
             });
 
             const result = await response.json();
+            this.savePreferences();
             this.dispatchEvent(new CustomEvent('import', { detail: { result } }));
             this.close();
         } catch (error: any) {

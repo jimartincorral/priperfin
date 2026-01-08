@@ -6,7 +6,9 @@ export function getApiBaseUrl(): string {
     // Format 2: /hassio/ingress/<token>
     const ingressMatch = path.match(/^(\/api\/hassio_ingress\/[^/]+|\/hassio\/ingress\/[^/]+)/);
     if (ingressMatch) {
-        return `${ingressMatch[1]}/api`;
+        // Use full URL to ensure requests go through ingress proxy
+        // Without origin, HA intercepts /api/* paths as its own API
+        return `${window.location.origin}${ingressMatch[1]}/api`;
     } else {
         // Direct access (development or direct port access)
         // Use relative path to allow Vite proxy or same-origin serving to handle it
