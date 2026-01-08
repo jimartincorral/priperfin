@@ -6,9 +6,12 @@ export function getApiBaseUrl(): string {
     // Format 2: /hassio/ingress/<token>
     const ingressMatch = path.match(/^(\/api\/hassio_ingress\/[^/]+|\/hassio\/ingress\/[^/]+)/);
     if (ingressMatch) {
-        // Use full URL to ensure requests go through ingress proxy
-        // Without origin, HA intercepts /api/* paths as its own API
-        return `${window.location.origin}${ingressMatch[1]}/api`;
+        // For ingress: use the ingress base path + /api
+        // HA ingress proxies requests to the add-on, which has NestJS with global prefix 'api'
+        // The ingress strips its own prefix before forwarding to the app
+        const baseUrl = `${window.location.origin}${ingressMatch[1]}/api`;
+        console.log('[getApiBaseUrl] Ingress detected, base URL:', baseUrl);
+        return baseUrl;
     } else {
         // Direct access (development or direct port access)
         // Use relative path to allow Vite proxy or same-origin serving to handle it

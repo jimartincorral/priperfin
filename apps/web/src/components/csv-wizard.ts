@@ -2,7 +2,7 @@ import { LitElement, html, css } from 'lit';
 import { customElement, state, property } from 'lit/decorators.js';
 import Papa from 'papaparse';
 import { i18n } from '../i18n/i18n';
-import { getApiBaseUrl } from '../api/client';
+import { api } from '../api/client';
 
 // localStorage keys for persisting user preferences
 const STORAGE_KEYS = {
@@ -276,13 +276,7 @@ export class CsvWizard extends LitElement {
             this.error = '';
 
             // First attempt: check for duplicates (force=false)
-            const response = await fetch(`${getApiBaseUrl()}/transactions/bulk`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ transactions: rowsWithAccount, force: false })
-            });
-
-            const result = await response.json();
+            const result = await api.post('/transactions/bulk', { transactions: rowsWithAccount, force: false });
 
             // If duplicates found, show Step 4
             if (result.duplicates && result.duplicates.length > 0) {
@@ -377,16 +371,10 @@ export class CsvWizard extends LitElement {
             const transactionsToImport = rowsToImport;
 
             // Final import with force=true (since we've manually filtered what we want to keep)
-            const response = await fetch(`${getApiBaseUrl()}/transactions/bulk`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    transactions: transactionsToImport,
-                    force: true
-                })
+            const result = await api.post('/transactions/bulk', {
+                transactions: transactionsToImport,
+                force: true
             });
-
-            const result = await response.json();
             this.savePreferences();
             this.dispatchEvent(new CustomEvent('import', { detail: { result } }));
             this.close();
@@ -429,17 +417,11 @@ export class CsvWizard extends LitElement {
             this.loading = true;
             this.error = '';
 
-            const response = await fetch(`${getApiBaseUrl()}/transactions/bulk`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    transactions: rowsWithAccount,
-                    force: true,
-                    mergeInstructions: mergeInstructions
-                })
+            const result = await api.post('/transactions/bulk', {
+                transactions: rowsWithAccount,
+                force: true,
+                mergeInstructions: mergeInstructions
             });
-
-            const result = await response.json();
             this.savePreferences();
             this.dispatchEvent(new CustomEvent('import', { detail: { result } }));
             this.close();

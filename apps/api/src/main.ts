@@ -30,11 +30,10 @@ async function bootstrap() {
         callback(null, true);
         return;
       }
-      // In development, allow localhost and private network IPs on any port
-      const isDev = process.env.NODE_ENV !== 'production';
+      // Allow localhost and private network IPs (this is a self-hosted app)
       const isLocalhost = origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:');
       const isPrivateNetwork = /^https?:\/\/(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)/.test(origin);
-      if (allowedOrigins.includes(origin) || (isDev && (isLocalhost || isPrivateNetwork))) {
+      if (allowedOrigins.includes(origin) || isLocalhost || isPrivateNetwork) {
         callback(null, true);
       } else {
         callback(new Error('Not allowed by CORS'));
