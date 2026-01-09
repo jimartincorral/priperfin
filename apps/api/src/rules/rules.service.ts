@@ -379,7 +379,7 @@ export class RulesService {
 
     // Return suggestion (not saved to DB, just returned for UI)
     return {
-      name: `Auto-categorize as ${transaction.category.name}`,
+      name: `Auto-categorize as ${transaction.category?.name || 'Unknown'}`,
       conditionsJson: JSON.stringify({
         operator: 'AND',
         conditions
@@ -387,7 +387,7 @@ export class RulesService {
       categoryId: transaction.categoryId,
       confidence: Math.round(weightedConfidence),
       matchCount: similarTransactions.length,
-      category: transaction.category
+      category: transaction.category || undefined
     };
   }
 }

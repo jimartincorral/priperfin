@@ -330,6 +330,25 @@ describe('RulesService', () => {
       );
       expect(hasMerchantCondition).toBe(true);
     });
+
+    it('should handle transaction with null category gracefully', async () => {
+      const mockTransaction: Partial<Transaction> = {
+        id: 'tx-1',
+        description: 'Test transaction',
+        categoryId: 'cat-1',
+        amount: 50 as any,
+        merchant: null,
+        notes: null,
+        category: null, // Category is null even though categoryId exists
+      };
+
+      mockPrismaService.transaction.findUnique.mockResolvedValue(mockTransaction);
+
+      const result = await service.suggestRuleForTransaction('tx-1');
+
+      // Should return null because category is null
+      expect(result).toBeNull();
+    });
   });
 
   describe('create', () => {
