@@ -1,7 +1,8 @@
 name: "Personal Finance Tracker"
 description: "A comprehensive personal finance tracker with expense tracking, savings goals, and reporting."
-version: "1.4.7"
+version: "1.5.0"
 slug: "priperfin"
+
 init: false
 arch:
   - aarch64

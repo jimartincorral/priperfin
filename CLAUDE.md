@@ -108,24 +108,29 @@ The app stores its SQLite database locally in the user data directory.
 
 ## Releasing New Versions
 
-**IMPORTANT**: Every new version must be released as a GitHub Release so Home Assistant can detect and offer updates to users.
+**IMPORTANT RULE**: Every time you push a new version to GitHub, you MUST ensure it is released as a GitHub Release. This is critical because Home Assistant only detects updates via GitHub Releases. Simply pushing to `main` is NOT sufficient for deployment.
 
 ### Release Process
 
-1. Update the version in `config.yaml` (the `version` field)
-2. Commit all changes and push to main
-3. Create a GitHub Release with:
-   - Tag: `vX.Y.Z` (matching the version in config.yaml)
-   - Title: `vX.Y.Z`
-   - Description: Summary of changes
-4. Home Assistant will automatically detect the new release and show an update available
+1. **Update Version**: Increment the `version` field in `config.yaml` (e.g., `1.4.7` -> `1.5.0`).
+2. **Commit & Push**: Commit the version bump and any other changes, then push to `main`.
+3. **Create Release**: Create a GitHub Release matching the version in `config.yaml`.
+   - **Tag**: `vX.Y.Z` (must match `config.yaml` version)
+   - **Title**: `vX.Y.Z`
+   - **Description**: Detailed summary of changes.
 
 ### Quick Release Command
 ```bash
-# After committing changes, create and push a tag:
+# 1. Update config.yaml first!
+# 2. Commit and push:
+git add config.yaml
+git commit -m "chore: bump version to vX.Y.Z"
+git push origin main
+
+# 3. Create tag and release:
 git tag vX.Y.Z
 git push origin vX.Y.Z
-# Then create the release on GitHub from the tag
+gh release create vX.Y.Z --title "vX.Y.Z" --notes "Release notes here"
 ```
 
 ## Development Notes
