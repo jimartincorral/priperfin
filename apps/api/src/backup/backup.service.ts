@@ -271,123 +271,80 @@ export class BackupService {
           tempRestoreDir,
           path.basename(backupFilePath).replace('.enc', ''),
         );
-        const input = createReadStream(backupFilePath);
-        const output = createWriteStream(decryptedArchiveFilePath);
 
-        // Read first byte to check version
-        const versionBuffer = await new Promise<Buffer>((resolve, reject) => {
-          const onReadable = () => {
-            const chunk = input.read(1) as Buffer;
-            if (chunk) {
-              input.removeListener('readable', onReadable);
-              input.removeListener('error', onError);
-              resolve(chunk);
-            }
-          };
-          const onError = (err: Error) => {
-            input.removeListener('readable', onReadable);
-            input.removeListener('error', onError);
-            reject(err);
-          };
-          input.on('readable', onReadable);
-          input.on('error', onError);
-        });
-
-        this.logger.log(
-          `Read first byte of encrypted file: 0x${versionBuffer[0].toString(16).padStart(2, '0')}`,
-        );
-
+        // Open file handle to read header synchronously-ish
+        const handle = await fs.open(backupFilePath, 'r');
+        let inputStream: ReadStream;
         let derivedKey: Buffer;
         let ivBuffer: Buffer;
 
-        // Check if this is version 2 (with salt) or old format (without version byte)
-        if (versionBuffer[0] === 0x02) {
-          // New format: version byte + salt + IV
-          this.logger.log('Detected new encryption format (v2 with PBKDF2)');
-
-          // Read salt (32 bytes)
-          const saltBuffer = await new Promise<Buffer>((resolve, reject) => {
-            const onReadable = () => {
-              const chunk = input.read(32) as Buffer;
-              if (chunk) {
-                input.removeListener('readable', onReadable);
-                input.removeListener('error', onError);
-                resolve(chunk);
-              }
-            };
-            const onError = (err: Error) => {
-              input.removeListener('readable', onReadable);
-              input.removeListener('error', onError);
-              reject(err);
-            };
-            input.on('readable', onReadable);
-            input.on('error', onError);
-          });
-
-          // Read IV (16 bytes)
-          ivBuffer = await new Promise<Buffer>((resolve, reject) => {
-            const onReadable = () => {
-              const chunk = input.read(this.ivLength) as Buffer;
-              if (chunk) {
-                input.removeListener('readable', onReadable);
-                input.removeListener('error', onError);
-                resolve(chunk);
-              }
-            };
-            const onError = (err: Error) => {
-              input.removeListener('readable', onReadable);
-              input.removeListener('error', onError);
-              reject(err);
-            };
-            input.on('readable', onReadable);
-            input.on('error', onError);
-          });
-
-          // Derive key from password using the salt
-          derivedKey = this.deriveKey(decryptionPassword, saltBuffer);
-        } else {
-          // Old format: first byte is part of IV, password must be exactly 32 chars
-          this.logger.log('Detected old encryption format (direct key)');
-
-          if (decryptionPassword.length !== 32) {
+        try {
+          const stats = await handle.stat();
+          
+          // Validation: valid encrypted backup must be at least header size (1 + 32 + 16 = 49 bytes) + some data
+          if (stats.size < 64) {
+            const preview = Buffer.alloc(Math.min(stats.size, 50));
+            await handle.read(preview, 0, preview.length, 0);
+            const previewStr = preview.toString('utf8').replace(/\n/g, ' ');
+            
+            this.logger.error(`Invalid backup file detected (Size: ${stats.size} bytes). Content preview: "${previewStr}"`);
             throw new BadRequestException(
-              'This backup uses the old encryption format and requires a 32-character key.',
+              `Invalid backup file. The file is too small and appears to be a server response (e.g. download failed): "${previewStr}"`
             );
           }
 
-          // The byte we read is actually the first byte of the IV
-          // Read the remaining 15 bytes of IV
-          const remainingIV = await new Promise<Buffer>((resolve, reject) => {
-            const onReadable = () => {
-              const chunk = input.read(15) as Buffer;
-              if (chunk) {
-                input.removeListener('readable', onReadable);
-                input.removeListener('error', onError);
-                resolve(chunk);
-              }
-            };
-            const onError = (err: Error) => {
-              input.removeListener('readable', onReadable);
-              input.removeListener('error', onError);
-              reject(err);
-            };
-            input.on('readable', onReadable);
-            input.on('error', onError);
-          });
+          const headerPreview = Buffer.alloc(1);
+          const { bytesRead } = await handle.read(headerPreview, 0, 1, 0);
 
-          // Combine the first byte with the remaining 15 bytes
-          ivBuffer = Buffer.concat([versionBuffer, remainingIV]);
-          derivedKey = Buffer.from(decryptionPassword, 'utf8');
+          if (headerPreview[0] === 0x02) {
+             // New format: version byte + salt + IV
+             this.logger.log('Detected new encryption format (v2 with PBKDF2)');
+ 
+             const saltBuf = Buffer.alloc(32);
+             await handle.read(saltBuf, 0, 32, 1); // offset 1
+ 
+             const ivBuf = Buffer.alloc(this.ivLength);
+             await handle.read(ivBuf, 0, this.ivLength, 1 + 32); // offset 33
+ 
+             derivedKey = this.deriveKey(decryptionPassword, saltBuf);
+             ivBuffer = ivBuf;
+             
+             // Stream the rest
+             inputStream = createReadStream(backupFilePath, { start: 1 + 32 + this.ivLength });
+          } else {
+             // Old format: first byte is part of IV, password must be exactly 32 chars
+             this.logger.log('Detected old encryption format (direct key)');
+ 
+             if (decryptionPassword.length !== 32) {
+               throw new BadRequestException(
+                 'This backup uses the old encryption format and requires a 32-character key.',
+               );
+             }
+ 
+             const ivBuf = Buffer.alloc(16);
+             await handle.read(ivBuf, 0, 16, 0); // Read IV from start
+ 
+             derivedKey = Buffer.from(decryptionPassword, 'utf8');
+             ivBuffer = ivBuf;
+ 
+             // Stream the rest
+             inputStream = createReadStream(backupFilePath, { start: 16 });
+          }
+        } finally {
+          await handle.close();
         }
+
+        const output = createWriteStream(decryptedArchiveFilePath);
 
         const decipher = crypto.createDecipheriv(
           'aes-256-cbc',
           derivedKey,
           ivBuffer,
         );
-        await pipeline(input, decipher, output);
+        await pipeline(inputStream, decipher, output);
         this.logger.log('Backup archive decrypted.');
         archiveToExtractPath = decryptedArchiveFilePath;
+
       }
 
       // 2. Extract archive
@@ -447,7 +404,25 @@ export class BackupService {
       const dbFilePath = dbUrl.replace('file:', '');
 
       // Replace the database file with the backup
-      await fs.copyFile(dumpFilePath, dbFilePath);
+      // Retry mechanism for Windows EBUSY/EPERM issues
+      let retries = 15;
+      while (retries > 0) {
+        try {
+          await fs.copyFile(dumpFilePath, dbFilePath);
+          break;
+        } catch (err) {
+          if ((err.code === 'EBUSY' || err.code === 'EPERM') && retries > 1) {
+            this.logger.warn(
+              `Database file locked (${err.code}), retrying in 1000ms... (${retries - 1} retries left)`,
+            );
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+            retries--;
+          } else {
+            this.logger.error(`Failed to copy database file: ${err.message} (Code: ${err.code})`);
+            throw err;
+          }
+        }
+      }
 
       // Reconnect to the new database
       await this.prisma.$connect();

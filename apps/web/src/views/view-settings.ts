@@ -303,8 +303,43 @@ export class ViewSettings extends LitElement {
             });
 
             if (!response.ok) {
-                const error = await response.json();
-                throw new Error(error.message || 'Restore failed');
+                let errorMessage;
+                try {
+                    const resJson = await response.json();
+                    
+                    // Helper to extract message from an object
+                    const extractMessage = (obj: any): string | null => {
+                        if (!obj) return null;
+                        if (typeof obj === 'string') return obj;
+                        if (obj.message) {
+                            if (typeof obj.message === 'string') return obj.message;
+                            if (Array.isArray(obj.message)) return obj.message.join(', ');
+                            return JSON.stringify(obj.message); // Fallback for complex message
+                        }
+                        if (obj.error && typeof obj.error === 'string') return obj.error;
+                        return null;
+                    };
+
+                    // 1. Try top-level message
+                    errorMessage = extractMessage(resJson);
+
+                    // 2. If not found, try nested 'error' property (common in NestJS ExceptionFilters)
+                    if (!errorMessage && resJson.error) {
+                        errorMessage = extractMessage(resJson.error);
+                    }
+
+                    // 3. Fallback to stringifying the whole error object if it's not too big, or generic message
+                    if (!errorMessage) {
+                        errorMessage = typeof resJson.error === 'string' ? resJson.error : 'Restore failed';
+                    }
+
+                } catch (e) {
+                    console.warn('Failed to parse error JSON:', e);
+                    // Fallback to text if JSON parsing fails
+                    const text = await response.text();
+                    errorMessage = text || `Restore failed with status ${response.status}`;
+                }
+                throw new Error(errorMessage);
             }
 
             alert(i18n.t('settings.backup_restored'));
