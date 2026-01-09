@@ -68,7 +68,7 @@ export class TransactionsService implements OnModuleInit {
     // Attempt categorization if missing
     let suggestedCategoryId = null;
     if (!dto.categoryId || dto.categoryId === 'uncategorized') {
-      const suggestion = await this.suggestCategory(dto.description);
+      const suggestion = await this.suggestCategory(dto.description, dto.notes);
       if (suggestion.categoryId) {
         // Do NOT auto-apply. Just suggest.
         suggestedCategoryId = suggestion.categoryId;
@@ -126,7 +126,7 @@ export class TransactionsService implements OnModuleInit {
     };
   }
 
-  async suggestCategory(description: string) {
+  async suggestCategory(description: string, notes?: string | null) {
     if (!description) return { categoryId: null, source: null };
 
     const merchant = extractMerchant(description);
@@ -179,7 +179,7 @@ export class TransactionsService implements OnModuleInit {
     }
 
     // 4. ML Prediction: Use Bayes Classifier (lowest priority)
-    const predictedCategoryId = this.categorizationService.predict(description);
+    const predictedCategoryId = this.categorizationService.predict(description, notes);
 
     if (predictedCategoryId) {
       return { categoryId: predictedCategoryId, source: 'prediction' };
@@ -425,7 +425,7 @@ export class TransactionsService implements OnModuleInit {
         const merchant = extractMerchant(dto.description);
 
         if (!categoryId || categoryId === 'uncategorized') {
-          const suggestion = await this.suggestCategory(dto.description);
+          const suggestion = await this.suggestCategory(dto.description, dto.notes);
           if (suggestion && suggestion.categoryId) {
             // Do NOT auto-apply. Just suggest.
             suggestedCategoryId = suggestion.categoryId;

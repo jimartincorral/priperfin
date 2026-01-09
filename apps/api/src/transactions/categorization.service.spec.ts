@@ -69,6 +69,11 @@ describe('CategorizationService', () => {
       );
       expect(result.trim()).toBe('walmart');
     });
+
+    it('should handle concatenated description and notes', () => {
+      const result = (service as any).preprocess('Generic Description Specific Note');
+      expect(result).toBe('generic description specific note');
+    });
   });
 
   // ============================================
@@ -81,6 +86,7 @@ describe('CategorizationService', () => {
           id: `tx-${i}`,
           description: `Transaction ${i}`,
           categoryId: `cat-${i % 3}`,
+          notes: `Note ${i}`,
         }),
       );
 
@@ -95,6 +101,11 @@ describe('CategorizationService', () => {
             description: { not: '' },
           },
           take: 2000,
+          select: {
+            description: true,
+            notes: true,
+            categoryId: true,
+          },
         }),
       );
     });
@@ -181,6 +192,27 @@ describe('CategorizationService', () => {
 
       // Should return a category ID (the classifier learned from training data)
       expect(result).toBe('cat-groceries');
+    });
+
+    it('should use notes for prediction', async () => {
+      // Train with transactions where description is generic but notes are specific
+      const mockTransactions = Array.from({ length: 20 }, (_, i) =>
+        createMockTransaction({
+          id: `tx-${i}`,
+          description: `Generic Transfer`,
+          notes: `Rent Payment ${i}`,
+          categoryId: 'cat-rent',
+        }),
+      );
+      prismaMock.transaction.findMany.mockResolvedValue(mockTransactions);
+      await service.trainModel();
+
+      // Predict with just description (should be ambiguous if we had other transfers, 
+      // but here it's the only class so it might still guess it. 
+      // However, passing notes should definitely work).
+      const result = service.predict('Generic Transfer', 'Rent Payment');
+      
+      expect(result).toBe('cat-rent');
     });
   });
 

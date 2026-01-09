@@ -34,6 +34,7 @@ export class CategorizationService implements OnModuleInit {
       take: 2000,
       select: {
         description: true,
+        notes: true,
         categoryId: true,
       },
     });
@@ -47,7 +48,8 @@ export class CategorizationService implements OnModuleInit {
 
     transactions.forEach(t => {
       if (t.categoryId) {
-        const cleanDesc = this.preprocess(t.description);
+        const textToProcess = t.notes ? `${t.description} ${t.notes}` : t.description;
+        const cleanDesc = this.preprocess(textToProcess);
         this.classifier.addDocument(cleanDesc, t.categoryId);
       }
     });
@@ -59,10 +61,11 @@ export class CategorizationService implements OnModuleInit {
     this.logger.log(`Model trained on ${transactions.length} transactions in ${duration}ms`);
   }
 
-  predict(description: string): string | null {
+  predict(description: string, notes?: string | null): string | null {
     if (!this.isTrained || !description) return null;
 
-    const cleanDesc = this.preprocess(description);
+    const textToProcess = notes ? `${description} ${notes}` : description;
+    const cleanDesc = this.preprocess(textToProcess);
     
     // Get classifications with scores
     const classifications = this.classifier.getClassifications(cleanDesc);
