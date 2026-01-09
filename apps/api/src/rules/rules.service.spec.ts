@@ -144,7 +144,7 @@ describe('RulesService', () => {
         icon: '🛒',
       };
 
-      const mockTransaction: Partial<Transaction> = {
+      const mockTransaction: any = {
         id: 'tx-1',
         description: 'Amazon purchase',
         categoryId: 'cat-1',
@@ -171,7 +171,7 @@ describe('RulesService', () => {
         icon: '🛒',
       };
 
-      const mockTransaction: Partial<Transaction> = {
+      const mockTransaction: any = {
         id: 'tx-1',
         description: 'Random store',
         categoryId: 'cat-1',
@@ -206,7 +206,7 @@ describe('RulesService', () => {
         icon: '☕',
       };
 
-      const mockTransaction: Partial<Transaction> = {
+      const mockTransaction: any = {
         id: 'tx-1',
         description: 'Starbucks Store #1234',
         categoryId: 'cat-1',
@@ -255,7 +255,7 @@ describe('RulesService', () => {
         icon: '📱',
       };
 
-      const mockTransaction: Partial<Transaction> = {
+      const mockTransaction: any = {
         id: 'tx-1',
         description: 'Netflix subscription monthly payment',
         categoryId: 'cat-1',
@@ -296,7 +296,7 @@ describe('RulesService', () => {
         icon: '🛒',
       };
 
-      const mockTransaction: Partial<Transaction> = {
+      const mockTransaction: any = {
         id: 'tx-1',
         description: 'Whole Foods Market groceries shopping',
         categoryId: 'cat-1',
@@ -332,7 +332,7 @@ describe('RulesService', () => {
     });
 
     it('should handle transaction with null category gracefully', async () => {
-      const mockTransaction: Partial<Transaction> = {
+      const mockTransaction: any = {
         id: 'tx-1',
         description: 'Test transaction',
         categoryId: 'cat-1',
