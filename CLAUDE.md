@@ -98,29 +98,35 @@ Lit web components with Material Design 3 theming:
 
 The add-on runs on port 3000 with Ingress support and is available on aarch64, amd64, and armv7 architectures.
 
-### Windows Desktop App
+### Desktop (Windows/macOS/Linux)
 
-**Installation:**
-1. Download the latest Windows installer from [GitHub Releases](https://github.com/jimartincorral/priperfin/releases)
-2. Run the NSIS installer (.exe file)
-3. Choose installation directory (or use default)
-4. Complete the installation wizard
-5. Launch PriPerFin from the Start Menu or desktop shortcut
+Run the app locally using the provided scripts:
+- **Windows**: Run `start.bat`
+- **macOS/Linux**: Run `./start.sh`
 
-**Data Storage:**
-The app stores its SQLite database locally in the user data directory. The database and backups persist across updates.
+The app stores its SQLite database locally in the user data directory.
 
-### MacOS Desktop App
+## Releasing New Versions
 
-**Installation:**
-1. Download the latest MacOS package from [GitHub Releases](https://github.com/jimartincorral/priperfin/releases)
-2. Open the downloaded .dmg file
-3. Drag PriPerFin to the Applications folder
-4. Launch PriPerFin from Applications
-5. If prompted, allow the app in System Preferences → Security & Privacy
+**IMPORTANT**: Every new version must be released as a GitHub Release so Home Assistant can detect and offer updates to users.
 
-**Data Storage:**
-The app stores its SQLite database locally in the user data directory. The database and backups persist across updates.
+### Release Process
+
+1. Update the version in `config.yaml` (the `version` field)
+2. Commit all changes and push to main
+3. Create a GitHub Release with:
+   - Tag: `vX.Y.Z` (matching the version in config.yaml)
+   - Title: `vX.Y.Z`
+   - Description: Summary of changes
+4. Home Assistant will automatically detect the new release and show an update available
+
+### Quick Release Command
+```bash
+# After committing changes, create and push a tag:
+git tag vX.Y.Z
+git push origin vX.Y.Z
+# Then create the release on GitHub from the tag
+```
 
 ## Development Notes
 
