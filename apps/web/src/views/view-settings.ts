@@ -615,9 +615,6 @@ export class ViewSettings extends LitElement {
     }
 
     render() {
-        const expenseCategories = this.categories.filter(c => c.type === 'EXPENSE' || !c.type);
-        const goalCategories = this.categories.filter(c => c.type === 'GOAL');
-
         return html`
       <div class="header">
         <h1>${i18n.t('settings.title')}</h1>
