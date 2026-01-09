@@ -1179,7 +1179,7 @@ Tables: ${result.tables?.join(', ')}`;
           
           if (confirm('Rule created! Would you like to apply this rule to existing matching transactions?')) {
               try {
-                  const result = await api.post(`/rules/${rule.id}/apply`);
+                  const result = await api.post(`/rules/${rule.id}/apply`, {});
                   alert(`Rule applied! Matched ${result.matched} transactions.`);
               } catch (err) {
                   console.error('Failed to apply rule', err);
