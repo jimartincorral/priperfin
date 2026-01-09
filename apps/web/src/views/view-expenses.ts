@@ -1170,7 +1170,7 @@ Tables: ${result.tables?.join(', ')}`;
   async handleRuleSave(e: CustomEvent) {
       try {
           // Create the rule
-          await api.post('/rules', e.detail);
+          const rule = await api.post('/rules', e.detail);
           
           // Ask if user wants to apply to historical transactions
           // We can do a quick check if there are matches?
