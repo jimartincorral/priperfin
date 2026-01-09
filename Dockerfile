@@ -15,8 +15,9 @@ COPY apps/web/package.json apps/web/
 COPY apps/api/prisma ./apps/api/prisma/
 COPY apps/api/prisma.config.ts ./apps/api/
 
-# Install all dependencies
-RUN pnpm install --frozen-lockfile
+# Install all dependencies (ignoring scripts to prevent prisma generate failure)
+RUN pnpm install --frozen-lockfile --ignore-scripts
+
 
 # Copy source code
 COPY . .
