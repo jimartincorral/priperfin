@@ -254,11 +254,15 @@ export class ViewSettings extends LitElement {
             const { filename, downloadUrl } = response;
 
             // Download the backup file
-            // getApiBaseUrl() ends with /api. We need to strip it carefully to avoid breaking ingress paths
-            // that might contain /api elsewhere (e.g. /api/hassio_ingress/...)
+            // Use the established API base URL (which works for POST) and append the endpoint
+            // downloadUrl comes as '/api/backup/download/...' so we strip the leading '/api' to avoid duplication
             const apiBase = getApiBaseUrl();
-            const urlBase = apiBase.endsWith('/api') ? apiBase.slice(0, -4) : apiBase;
-            const downloadResponse = await fetch(`${urlBase}${downloadUrl}`);
+            const endpoint = downloadUrl.startsWith('/api') ? downloadUrl.substring(4) : downloadUrl;
+            const fullUrl = `${apiBase}${endpoint}`;
+            
+            console.log('[ViewSettings] Downloading backup from:', fullUrl);
+
+            const downloadResponse = await fetch(fullUrl);
             
             if (!downloadResponse.ok) {
                  throw new Error(`Download failed: ${downloadResponse.statusText}`);
