@@ -30,6 +30,11 @@ export class RulesController {
     return this.rulesService.detectAndStoreSuggestions();
   }
 
+  @Get('suggestions/for-transaction/:transactionId')
+  suggestRuleForTransaction(@Param('transactionId') transactionId: string) {
+    return this.rulesService.suggestRuleForTransaction(transactionId);
+  }
+
   @Post('suggestions/:id/accept')
   acceptSuggestion(@Param('id') id: string) {
     return this.rulesService.acceptSuggestion(id);

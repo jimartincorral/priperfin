@@ -3,8 +3,10 @@ import { customElement, property } from 'lit/decorators.js';
 import { Router } from '@vaadin/router';
 import './views/view-expenses';
 import './views/view-goals';
-import './views/view-settings';
 import './views/view-reports';
+import './views/view-categories';
+import './views/view-rules';
+import './views/view-settings';
 
 import { i18n } from './i18n/i18n';
 
@@ -306,6 +308,8 @@ export class PriPerFinApp extends LitElement {
       { path: '/', component: 'view-expenses' },
       { path: '/goals', component: 'view-goals' },
       { path: '/reports', component: 'view-reports' },
+      { path: '/categories', component: 'view-categories' },
+      { path: '/rules', component: 'view-rules' },
       { path: '/settings', component: 'view-settings' },
     ]);
 
@@ -330,6 +334,14 @@ export class PriPerFinApp extends LitElement {
         <a href="/reports" class="nav-item ${this.currentPath === '/reports' ? 'active' : ''}">
              <div class="icon-container"><span class="material-symbols-outlined">bar_chart</span></div>
              <span class="nav-label">${i18n.t('nav.reports')}</span>
+        </a>
+        <a href="/categories" class="nav-item ${this.currentPath === '/categories' ? 'active' : ''}">
+             <div class="icon-container"><span class="material-symbols-outlined">category</span></div>
+             <span class="nav-label">${i18n.t('nav.categories')}</span>
+        </a>
+        <a href="/rules" class="nav-item ${this.currentPath === '/rules' ? 'active' : ''}">
+             <div class="icon-container"><span class="material-symbols-outlined">rule</span></div>
+             <span class="nav-label">${i18n.t('nav.rules')}</span>
         </a>
         <a href="/settings" class="nav-item ${this.currentPath === '/settings' ? 'active' : ''}">
              <div class="icon-container"><span class="material-symbols-outlined">settings</span></div>

@@ -2,7 +2,6 @@ import { LitElement, html, css } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import { api, getApiBaseUrl } from '../api/client';
 import { i18n } from '../i18n/i18n';
-import '../components/settings-rules';
 
 import 'emoji-picker-element';
 
@@ -897,109 +896,6 @@ export class ViewSettings extends LitElement {
             ${this.restoreLoading ? html`<p style="color: var(--md-sys-color-primary);">⏳ ${i18n.t('common.loading')}</p>` : ''}
           </div>
       </div>
-
-      <settings-rules></settings-rules>
-
-      <div class="header">
-        <div class="section-title" style="margin: 0">${i18n.t('settings.categories')}</div>
-
-        <button class="btn-primary" @click="${this.toggleAddForm}">
-            ${this.showAddForm ? i18n.t('common.cancel') : '+ ' + i18n.t('settings.add_category')}
-        </button>
-      </div>
-
-      ${this.showAddForm ? html`
-        <div class="form-card">
-            <h3>${this.editModeId ? i18n.t('settings.edit_category') : i18n.t('settings.new_category')}</h3>
-            <div style="display: grid; gap: 1rem; max-width: 400px;">
-                <div class="form-group">
-                    <label>${i18n.t('settings.type')}</label>
-                    <select .value="${this.categoryForm.type}" 
-                        @change="${(e: any) => this.categoryForm = { ...this.categoryForm, type: e.target.value }}">
-                        <option value="EXPENSE">${i18n.t('settings.expense_categories')}</option>
-                        <option value="GOAL">${i18n.t('settings.goal_categories')}</option>
-                    </select>
-                </div>
-
-                <div class="form-group">
-                    <label>${i18n.t('settings.category_name')}</label>
-                    <input type="text" placeholder="e.g. Groceries" .value="${this.categoryForm.name}" 
-                        @input="${(e: any) => this.categoryForm = { ...this.categoryForm, name: e.target.value }}" />
-                </div>
-
-                <div class="form-group">
-                    <label>${i18n.t('settings.parent_group')}</label>
-                    <select .value="${this.categoryForm.parentId}" 
-                        @change="${(e: any) => this.categoryForm = { ...this.categoryForm, parentId: e.target.value }}">
-                        <option value="">None (Top Level)</option>
-                        ${this.categories.filter(c => !c.parentId && c.id !== this.editModeId).map(c => html`
-                            <option value="${c.id}">${c.icon} ${c.name}</option>
-                        `)}
-                    </select>
-                </div>
-                
-                <div style="display: flex; gap: 1rem;">
-                    <div class="form-group">
-                        <label>${i18n.t('settings.icon')}</label>
-                        <div style="position: relative;">
-                            <div style="display: flex; gap: 0.5rem; align-items: center;">
-                                <input type="text" placeholder="Emoji" style="width: 60px; text-align: center;" .value="${this.categoryForm.icon}" 
-                                    @input="${(e: any) => this.categoryForm = { ...this.categoryForm, icon: e.target.value }}" />
-                                <button @click="${() => this.showEmojiPicker = !this.showEmojiPicker}" title="Pick Emoji">😀</button>
-                            </div>
-                            ${this.showEmojiPicker ? html`
-                                <div style="position: absolute; z-index: 2000; bottom: 100%; left: 0; margin-bottom: 8px;">
-                                    <div style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 1000;" @click="${() => this.showEmojiPicker = false}"></div>
-                                    <emoji-picker @emoji-click="${(e: any) => {
-                        console.log('Emoji clicked:', e.detail);
-                        this.categoryForm = { ...this.categoryForm, icon: e.detail.unicode };
-                        this.showEmojiPicker = false;
-                    }}"></emoji-picker>
-                                </div>
-                            ` : ''}
-                        </div>
-                    </div>
-                    
-                    
-                    <!-- Color input removed as per user request -->
-                </div>
-                </div>
-                
-                ${this.categoryForm.type === 'EXPENSE' ? html`
-                <div class="form-group">
-                    <label>${i18n.t('settings.monthly_budget')}</label>
-                    <input type="number" placeholder="0.00" .value="${this.categoryForm.budget ?? ''}" 
-                        @input="${(e: any) => {
-                        const val = e.target.value;
-                        this.categoryForm = { ...this.categoryForm, budget: val === '' ? null : parseFloat(val) };
-                    }}" />
-                </div>
-                ` : ''}
-                
-                <button class="btn-primary" @click="${this.saveCategory}">${i18n.t('common.save')}</button>
-            </div>
-        </div>
-      ` : ''}
-
-      <h3 style="margin-top: 0; color: #666; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.05em;">${i18n.t('settings.expense_categories')}</h3>
-       ${this.renderCategoryTable(expenseCategories, true, true)}
-
-      <div style="margin-top: 2rem;"></div>
-      <h3 style="margin-top: 0; color: #666; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.05em;">${i18n.t('settings.goal_categories')}</h3>
-       ${this.renderCategoryTable(goalCategories, false, false)}
-
-        ${this.categoryToDelete ? html`
-            <div class="modal-overlay" @click="${() => this.categoryToDelete = null}">
-                <div class="modal" @click="${(e: Event) => e.stopPropagation()}">
-                    <h3 style="margin-top: 0;">${i18n.t('common.delete')} Category</h3>
-                    <p>${i18n.t('common.confirm_delete')}</p>
-                    <div class="modal-actions">
-                        <button @click="${() => this.categoryToDelete = null}">${i18n.t('common.cancel')}</button>
-                        <button class="btn-danger" @click="${this.confirmDelete}">${i18n.t('common.delete')}</button>
-                    </div>
-                </div>
-            </div>
-        ` : ''}
     `;
     }
 }

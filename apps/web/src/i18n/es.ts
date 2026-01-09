@@ -24,8 +24,10 @@ export const es = {
     },
     nav: {
         expenses: 'Gastos',
-        reports: 'Reportes',
         goals: 'Objetivos',
+        reports: 'Reportes',
+        categories: 'Categorías',
+        rules: 'Reglas',
         settings: 'Configuración',
     },
     expenses: {
@@ -224,5 +226,85 @@ export const es = {
     table: {
         columns_title: 'Columnas de Tabla',
         rows_per_page: 'Filas por página',
-    }
+    },
+    rules: {
+        title: 'Reglas',
+        add_rule: 'Agregar Regla',
+        edit_rule: 'Editar Regla',
+        delete_rule: 'Eliminar Regla',
+        delete_confirm: '¿Eliminar esta regla? Esta acción no se puede deshacer.',
+        detect_patterns: 'Detectar Patrones',
+        apply_rule: 'Aplicar Regla',
+        apply_confirm: '¿Aplicar esta regla a todas las transacciones sin categoría?',
+        applied_success: 'Regla aplicada a {count} transacción(es)',
+        test_rule: 'Probar Regla',
+        no_rules: 'No hay reglas aún. Agrega una para categorizar transacciones automáticamente.',
+        
+        mode: 'Modo',
+        mode_suggest: 'Sugerir',
+        mode_auto_apply: 'Auto-Aplicar',
+        mode_suggest_desc: 'Sugerir categoría, usuario debe confirmar',
+        mode_auto_apply_desc: 'Aplicar categoría automáticamente',
+        
+        suggestions_title: 'Reglas Sugeridas',
+        suggestion_create_prompt: '¿Crear regla para transacciones similares?',
+        confidence: 'Confianza',
+        matches: 'coincidencias',
+        match_count: '{count} coincidencia(s)',
+        last_matched: 'Última coincidencia',
+        never_matched: 'Nunca coincidió',
+        accept: 'Aceptar',
+        reject: 'Rechazar',
+        configure_accept: 'Configurar y Aceptar',
+        no_suggestions: 'No se encontraron sugerencias. Intenta detectar patrones primero.',
+        detecting: 'Detectando patrones...',
+        suggestions_found: 'Se encontraron {count} regla(s) sugerida(s)',
+        hide_suggestions: 'Ocultar Sugerencias',
+        show_suggestions: 'Mostrar Sugerencias',
+        
+        conditions: 'Condiciones',
+        add_condition: 'Agregar Condición',
+        remove_condition: 'Eliminar Condición',
+        all_conditions: 'Todas las condiciones deben coincidir (Y)',
+        
+        field: 'Campo',
+        operator: 'Operador',
+        value: 'Valor',
+        
+        fields: {
+            description: 'Descripción',
+            merchant: 'Comerciante',
+            amount: 'Monto',
+            notes: 'Notas',
+            account: 'Cuenta',
+            date: 'Fecha',
+        },
+        
+        operators: {
+            contains: 'Contiene',
+            equals: 'Igual a',
+            startsWith: 'Comienza con',
+            endsWith: 'Termina con',
+            greaterThan: 'Mayor que',
+            lessThan: 'Menor que',
+            between: 'Entre',
+            regex: 'Coincide con patrón',
+        },
+        
+        enabled: 'Habilitada',
+        disabled: 'Deshabilitada',
+        priority: 'Prioridad',
+        priority_help: 'Las reglas de mayor prioridad se evalúan primero',
+        name: 'Nombre de la Regla',
+        
+        stats_title: 'Estadísticas',
+        
+        errors: {
+            load_failed: 'Error al cargar reglas',
+            save_failed: 'Error al guardar regla',
+            delete_failed: 'Error al eliminar regla',
+            detect_failed: 'Error al detectar patrones',
+            apply_failed: 'Error al aplicar regla',
+        },
+    },
 };

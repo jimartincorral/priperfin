@@ -24,8 +24,10 @@ export const en = {
     },
     nav: {
         expenses: 'Expenses',
-        reports: 'Reports',
         goals: 'Goals',
+        reports: 'Reports',
+        categories: 'Categories',
+        rules: 'Rules',
         settings: 'Settings',
     },
     expenses: {
@@ -224,5 +226,85 @@ export const en = {
     table: {
         columns_title: 'Table Columns',
         rows_per_page: 'Rows per page',
-    }
+    },
+    rules: {
+        title: 'Rules',
+        add_rule: 'Add Rule',
+        edit_rule: 'Edit Rule',
+        delete_rule: 'Delete Rule',
+        delete_confirm: 'Delete this rule? This cannot be undone.',
+        detect_patterns: 'Detect Patterns',
+        apply_rule: 'Apply Rule',
+        apply_confirm: 'Apply this rule to all uncategorized transactions?',
+        applied_success: 'Applied rule to {count} transaction(s)',
+        test_rule: 'Test Rule',
+        no_rules: 'No rules yet. Add one to automatically categorize transactions.',
+        
+        mode: 'Mode',
+        mode_suggest: 'Suggest',
+        mode_auto_apply: 'Auto-Apply',
+        mode_suggest_desc: 'Suggest category, user must confirm',
+        mode_auto_apply_desc: 'Automatically apply category',
+        
+        suggestions_title: 'Suggested Rules',
+        suggestion_create_prompt: 'Create rule for similar transactions?',
+        confidence: 'Confidence',
+        matches: 'matches',
+        match_count: '{count} match(es)',
+        last_matched: 'Last matched',
+        never_matched: 'Never matched',
+        accept: 'Accept',
+        reject: 'Reject',
+        configure_accept: 'Configure & Accept',
+        no_suggestions: 'No suggestions found. Try detecting patterns first.',
+        detecting: 'Detecting patterns...',
+        suggestions_found: 'Found {count} suggested rule(s)',
+        hide_suggestions: 'Hide Suggestions',
+        show_suggestions: 'Show Suggestions',
+        
+        conditions: 'Conditions',
+        add_condition: 'Add Condition',
+        remove_condition: 'Remove Condition',
+        all_conditions: 'All conditions must match (AND)',
+        
+        field: 'Field',
+        operator: 'Operator',
+        value: 'Value',
+        
+        fields: {
+            description: 'Description',
+            merchant: 'Merchant',
+            amount: 'Amount',
+            notes: 'Notes',
+            account: 'Account',
+            date: 'Date',
+        },
+        
+        operators: {
+            contains: 'Contains',
+            equals: 'Equals',
+            startsWith: 'Starts with',
+            endsWith: 'Ends with',
+            greaterThan: 'Greater than',
+            lessThan: 'Less than',
+            between: 'Between',
+            regex: 'Matches pattern',
+        },
+        
+        enabled: 'Enabled',
+        disabled: 'Disabled',
+        priority: 'Priority',
+        priority_help: 'Higher priority rules are evaluated first',
+        name: 'Rule Name',
+        
+        stats_title: 'Statistics',
+        
+        errors: {
+            load_failed: 'Failed to load rules',
+            save_failed: 'Failed to save rule',
+            delete_failed: 'Failed to delete rule',
+            detect_failed: 'Failed to detect patterns',
+            apply_failed: 'Failed to apply rule',
+        },
+    },
 };
