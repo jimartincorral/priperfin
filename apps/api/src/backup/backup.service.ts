@@ -141,11 +141,17 @@ export class BackupService {
         gzip: false, // User requested .tar, not .tar.gz
       });
 
-      output.on('close', () => {
-        this.logger.log(
-          `Archiver has been finalized. ${archive.pointer()} total bytes.`,
-        );
+      // Create a promise that resolves when the output stream is closed
+      const closePromise = new Promise<void>((resolve, reject) => {
+        output.on('close', () => {
+          this.logger.log(
+            `Archiver has been finalized. ${archive.pointer()} total bytes.`,
+          );
+          resolve();
+        });
+        output.on('error', (err) => reject(err));
       });
+
       archive.on('warning', (err: any) => {
         if (err.code === 'ENOENT') {
           this.logger.warn(`Archiver warning: ${err.message}`);
@@ -163,6 +169,9 @@ export class BackupService {
       archive.file(dbDumpFilePath, { name: dbDumpFileName });
       archive.file(metadataFilePath, { name: metadataFileName });
       await archive.finalize();
+      
+      // Wait for the stream to actually close and file to be written to disk
+      await closePromise;
       this.logger.log('Tar archive created.');
 
       // 5. Encrypt the archive if key is provided
