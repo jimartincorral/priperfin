@@ -254,7 +254,16 @@ export class ViewSettings extends LitElement {
             const { filename, downloadUrl } = response;
 
             // Download the backup file
-            const downloadResponse = await fetch(`${getApiBaseUrl().replace('/api', '')}${downloadUrl}`);
+            // getApiBaseUrl() ends with /api. We need to strip it carefully to avoid breaking ingress paths
+            // that might contain /api elsewhere (e.g. /api/hassio_ingress/...)
+            const apiBase = getApiBaseUrl();
+            const urlBase = apiBase.endsWith('/api') ? apiBase.slice(0, -4) : apiBase;
+            const downloadResponse = await fetch(`${urlBase}${downloadUrl}`);
+            
+            if (!downloadResponse.ok) {
+                 throw new Error(`Download failed: ${downloadResponse.statusText}`);
+            }
+
             const blob = await downloadResponse.blob();
 
             // Create download link
