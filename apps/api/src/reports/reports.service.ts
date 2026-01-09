@@ -9,14 +9,18 @@ export class ReportsService {
   constructor(private prisma: PrismaService) {}
 
   async getCategoryBreakdown(query: GetTransactionsDto) {
-    const { month, year, accountId } = query;
-    const { startDate, endDate } = this.getDateRange(month, year);
+    const { accountId } = query;
+    const { startDate, endDate } = this.getDateRange(query);
 
     // Build where clause
     const where: any = {
-      date: { gte: startDate, lt: endDate },
       amount: { lt: 0 }, // Expenses
     };
+
+    // Only add date filter if dates are provided (not all_time mode)
+    if (startDate && endDate) {
+      where.date = { gte: startDate, lt: endDate };
+    }
 
     if (accountId) {
       where.accountId = accountId;
@@ -228,13 +232,16 @@ export class ReportsService {
   }
 
   async getSankeyData(query: GetTransactionsDto) {
-    const { month, year, accountId } = query;
-    const { startDate, endDate } = this.getDateRange(month, year);
+    const { accountId } = query;
+    const { startDate, endDate } = this.getDateRange(query);
 
     // Build where clause
-    const where: any = {
-      date: { gte: startDate, lt: endDate },
-    };
+    const where: any = {};
+
+    // Only add date filter if dates are provided (not all_time mode)
+    if (startDate && endDate) {
+      where.date = { gte: startDate, lt: endDate };
+    }
 
     if (accountId) {
       where.accountId = accountId;
@@ -347,7 +354,7 @@ export class ReportsService {
   }
 
   async getCostObjectBreakdown(query: GetTransactionsDto) {
-    const { month, year, accountId } = query;
+    const { accountId } = query;
 
     if (!accountId) {
       return [];
@@ -356,8 +363,8 @@ export class ReportsService {
     // Build where clause for credit account transactions
     const where: any = { accountId };
 
-    if (month && year) {
-      const { startDate, endDate } = this.getDateRange(month, year);
+    const { startDate, endDate } = this.getDateRange(query);
+    if (startDate && endDate) {
       where.date = { gte: startDate, lt: endDate };
     }
 
@@ -465,13 +472,39 @@ export class ReportsService {
       .sort((a, b) => b.total - a.total);
   }
 
-  private getDateRange(month?: number, year?: number) {
+  private getDateRange(query: GetTransactionsDto): { startDate?: Date; endDate?: Date } {
+    const { filterMode, month, year, startDate: customStart, endDate: customEnd } = query;
     const now = new Date();
-    const y = year || now.getFullYear();
-    const m = month || now.getMonth() + 1;
 
-    const startDate = new Date(y, m - 1, 1);
-    const endDate = new Date(y, m, 1); // Auto handles year rollover if m=12 -> next year Jan
-    return { startDate, endDate };
+    switch (filterMode) {
+      case 'year':
+        // Full year filter
+        const y = year || now.getFullYear();
+        return {
+          startDate: new Date(y, 0, 1),
+          endDate: new Date(y + 1, 0, 1)
+        };
+
+      case 'custom':
+        // Custom date range
+        return {
+          startDate: customStart ? new Date(customStart) : undefined,
+          endDate: customEnd ? new Date(new Date(customEnd).getTime() + 24 * 60 * 60 * 1000) : undefined
+        };
+
+      case 'all_time':
+        // No date filter
+        return { startDate: undefined, endDate: undefined };
+
+      case 'month':
+      default:
+        // Default monthly filter
+        const targetYear = year || now.getFullYear();
+        const targetMonth = month || now.getMonth() + 1;
+        return {
+          startDate: new Date(targetYear, targetMonth - 1, 1),
+          endDate: new Date(targetYear, targetMonth, 1)
+        };
+    }
   }
 }

@@ -210,6 +210,10 @@ export const en = {
         to_date: 'To Date',
         clear: 'Clear',
         columns: 'Columns',
+        mode_month: 'Month',
+        mode_year: 'Year',
+        mode_custom: 'Custom Range',
+        mode_all_time: 'All Time',
     },
     bulk_actions: {
         selected: 'selected',

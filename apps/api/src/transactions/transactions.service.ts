@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTransactionDto } from './create-transaction.dto';
-import { GetTransactionsDto } from './get-transactions.dto';
+import { GetTransactionsDto, DateFilterMode } from './get-transactions.dto';
 import { CreateSplitsDto } from './create-split.dto';
 import { CategorizationService } from './categorization.service';
 import * as crypto from 'crypto';
@@ -110,23 +110,57 @@ export class TransactionsService {
   }
 
   async findAll(query: GetTransactionsDto) {
-    const { month, year, accountId } = query;
+    const { filterMode, month, year, startDate, endDate, accountId } = query;
     const where: any = {};
 
-    if (month && year) {
-      const startDate = new Date(year, month - 1, 1);
-      const endDate = new Date(year, month, 1);
-      where.date = {
-        gte: startDate,
-        lt: endDate,
-      };
-    } else if (year) {
-      const startDate = new Date(year, 0, 1);
-      const endDate = new Date(year + 1, 0, 1);
-      where.date = {
-        gte: startDate,
-        lt: endDate,
-      };
+    // Determine date filter based on mode
+    switch (filterMode) {
+      case DateFilterMode.MONTH:
+        if (month && year) {
+          const start = new Date(year, month - 1, 1);
+          const end = new Date(year, month, 1);
+          where.date = { gte: start, lt: end };
+        }
+        break;
+
+      case DateFilterMode.YEAR:
+        if (year) {
+          const start = new Date(year, 0, 1);
+          const end = new Date(year + 1, 0, 1);
+          where.date = { gte: start, lt: end };
+        }
+        break;
+
+      case DateFilterMode.CUSTOM:
+        if (startDate || endDate) {
+          where.date = {};
+          if (startDate) {
+            where.date.gte = new Date(startDate);
+          }
+          if (endDate) {
+            // Include the end date fully (up to end of day)
+            const endDateObj = new Date(endDate);
+            endDateObj.setHours(23, 59, 59, 999);
+            where.date.lte = endDateObj;
+          }
+        }
+        break;
+
+      case DateFilterMode.ALL_TIME:
+        // No date filter - return all transactions
+        break;
+
+      default:
+        // Backward compatibility: use legacy month/year logic if no filterMode specified
+        if (month && year) {
+          const start = new Date(year, month - 1, 1);
+          const end = new Date(year, month, 1);
+          where.date = { gte: start, lt: end };
+        } else if (year) {
+          const start = new Date(year, 0, 1);
+          const end = new Date(year + 1, 0, 1);
+          where.date = { gte: start, lt: end };
+        }
     }
 
     // Filter by account if specified

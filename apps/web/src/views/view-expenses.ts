@@ -7,18 +7,28 @@ import 'emoji-picker-element';
 
 import { i18n } from '../i18n/i18n';
 
+type DateFilterMode = 'month' | 'year' | 'custom' | 'all_time';
+
 @customElement('view-expenses')
 export class ViewExpenses extends LitElement {
   @state() transactions: any[] = [];
   @state() categories: any[] = [];
   @state() month = new Date().getMonth() + 1;
   @state() year = new Date().getFullYear();
+  @state() dateFilterMode: DateFilterMode = 'month';
+  @state() customStartDate = '';
+  @state() customEndDate = '';
   @state() loading = false;
 
   @state() totalBalance = 0;
   @state() verifiedBalance = 0;
   @state() startingBalance = 0;
   @state() balanceLoading = false;
+  @state() showSetBalanceDateModal = false;
+  @state() newBalanceDate = new Date().toISOString().split('T')[0];
+  @state() newBalanceAmount = 0;
+  @state() newBalanceNotes = '';
+  @state() accountBalances: any[] = [];
 
   @state() accounts: any[] = [];
   @state() selectedAccountId: string = ''; // Empty = All Accounts
@@ -33,6 +43,16 @@ export class ViewExpenses extends LitElement {
 
   get isCredit() {
     return this.selectedAccount?.type === 'CREDIT';
+  }
+
+  getYearOptions(): number[] {
+    const currentYear = new Date().getFullYear();
+    const years: number[] = [];
+    // Show years from 5 years ago to current year
+    for (let y = currentYear - 5; y <= currentYear; y++) {
+      years.push(y);
+    }
+    return years;
   }
 
   @state() currency = 'USD';
@@ -843,8 +863,26 @@ export class ViewExpenses extends LitElement {
     const scrollPos = window.scrollY;
     if (!isBackground) this.loading = true;
     try {
-      // Build query params, including accountId if one is selected
-      const txQuery: any = { month: this.month, year: this.year };
+      // Build query params based on filter mode
+      const txQuery: any = { filterMode: this.dateFilterMode };
+
+      switch (this.dateFilterMode) {
+        case 'month':
+          txQuery.month = this.month;
+          txQuery.year = this.year;
+          break;
+        case 'year':
+          txQuery.year = this.year;
+          break;
+        case 'custom':
+          if (this.customStartDate) txQuery.startDate = this.customStartDate;
+          if (this.customEndDate) txQuery.endDate = this.customEndDate;
+          break;
+        case 'all_time':
+          // No date params
+          break;
+      }
+
       if (this.selectedAccountId) {
         txQuery.accountId = this.selectedAccountId;
       }
@@ -1165,19 +1203,32 @@ Tables: ${result.tables?.join(', ')}`;
                     <option value="">🏦 All Accounts</option>
                     ${this.accounts.map(a => html`<option value="${a.id}">${a.type === 'CREDIT' ? '💳' : '🏦'} ${a.name}</option>`)}
                 </select>
-                <select @change="${(e: any) => { this.month = parseInt(e.target.value); this.loadData(true); }}" .value="${this.month}">
-                    ${Array.from({ length: 12 }, (_, i) => i + 1).map(m => {
-      const date = new Date(this.year, m - 1, 1);
-      const monthName = new Intl.DateTimeFormat(i18n.getLocale(), { month: 'long' }).format(date);
-      const capitalized = monthName.charAt(0).toUpperCase() + monthName.slice(1);
-      return html`<option value="${m}" ?selected=${this.month === m}>${capitalized}</option>`;
-    })}
+                <select @change="${(e: any) => { this.dateFilterMode = e.target.value as DateFilterMode; this.loadData(true); }}" .value="${this.dateFilterMode}">
+                    <option value="month">${i18n.t('filters.mode_month')}</option>
+                    <option value="year">${i18n.t('filters.mode_year')}</option>
+                    <option value="custom">${i18n.t('filters.mode_custom')}</option>
+                    <option value="all_time">${i18n.t('filters.mode_all_time')}</option>
                 </select>
-                <select @change="${(e: any) => { this.year = parseInt(e.target.value); this.loadData(true); }}" .value="${this.year}">
-                    <option value="2024">2024</option>
-                    <option value="2025">2025</option>
-                    <option value="2026">2026</option>
-                </select>
+                ${this.dateFilterMode === 'month' ? html`
+                    <select @change="${(e: any) => { this.month = parseInt(e.target.value); this.loadData(true); }}" .value="${this.month}">
+                        ${Array.from({ length: 12 }, (_, i) => i + 1).map(m => {
+                            const date = new Date(this.year, m - 1, 1);
+                            const monthName = new Intl.DateTimeFormat(i18n.getLocale(), { month: 'long' }).format(date);
+                            const capitalized = monthName.charAt(0).toUpperCase() + monthName.slice(1);
+                            return html`<option value="${m}" ?selected=${this.month === m}>${capitalized}</option>`;
+                        })}
+                    </select>
+                ` : ''}
+                ${this.dateFilterMode === 'month' || this.dateFilterMode === 'year' ? html`
+                    <select @change="${(e: any) => { this.year = parseInt(e.target.value); this.loadData(true); }}" .value="${this.year}">
+                        ${this.getYearOptions().map(y => html`<option value="${y}">${y}</option>`)}
+                    </select>
+                ` : ''}
+                ${this.dateFilterMode === 'custom' ? html`
+                    <input type="date" .value="${this.customStartDate}" @change="${(e: any) => { this.customStartDate = e.target.value; this.loadData(true); }}" style="padding: 0.5rem;" />
+                    <span style="color: var(--md-sys-color-on-surface-variant);">-</span>
+                    <input type="date" .value="${this.customEndDate}" @change="${(e: any) => { this.customEndDate = e.target.value; this.loadData(true); }}" style="padding: 0.5rem;" />
+                ` : ''}
                 <button class="btn-secondary" @click="${() => this.loadData(true)}">${i18n.t('reports.refresh')}</button>
             </div>
         </div>

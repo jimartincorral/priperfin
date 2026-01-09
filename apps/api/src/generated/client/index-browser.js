@@ -199,6 +199,16 @@ exports.Prisma.MonthlyBalanceScalarFieldEnum = {
   updatedAt: 'updatedAt'
 };
 
+exports.Prisma.AccountBalanceScalarFieldEnum = {
+  id: 'id',
+  asOfDate: 'asOfDate',
+  balance: 'balance',
+  accountId: 'accountId',
+  notes: 'notes',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
 exports.Prisma.SortOrder = {
   asc: 'asc',
   desc: 'desc'
@@ -227,7 +237,8 @@ exports.Prisma.ModelName = {
   TransactionSplit: 'TransactionSplit',
   SavingsGoal: 'SavingsGoal',
   Setting: 'Setting',
-  MonthlyBalance: 'MonthlyBalance'
+  MonthlyBalance: 'MonthlyBalance',
+  AccountBalance: 'AccountBalance'
 };
 
 /**

@@ -210,6 +210,10 @@ export const es = {
         to_date: 'Hasta',
         clear: 'Limpiar',
         columns: 'Columnas',
+        mode_month: 'Mes',
+        mode_year: 'Año',
+        mode_custom: 'Rango Personalizado',
+        mode_all_time: 'Todo el Tiempo',
     },
     bulk_actions: {
         selected: 'seleccionados',

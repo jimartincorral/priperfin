@@ -8,6 +8,8 @@ import { i18n } from '../i18n/i18n';
 
 Chart.register(...registerables, SankeyController, Flow);
 
+type DateFilterMode = 'month' | 'year' | 'custom' | 'all_time';
+
 const CHART_PALETTE = [
   '#006493', // Primary
   '#65587b', // Tertiary
@@ -26,6 +28,9 @@ export class ViewReports extends LitElement {
   @state() loading = false;
   @state() month = new Date().getMonth() + 1;
   @state() year = new Date().getFullYear();
+  @state() dateFilterMode: DateFilterMode = 'month';
+  @state() customStartDate = '';
+  @state() customEndDate = '';
   @state() accounts: any[] = [];
   @state() selectedAccountId = '';
   @state() groupByCategory = false; // Toggle for parent category grouping
@@ -129,10 +134,38 @@ export class ViewReports extends LitElement {
     i18n.removeEventListener('lang-change', () => this.requestUpdate());
   }
 
+  getYearOptions(): number[] {
+    const currentYear = new Date().getFullYear();
+    const years: number[] = [];
+    for (let y = currentYear - 5; y <= currentYear; y++) {
+      years.push(y);
+    }
+    return years;
+  }
+
   async loadData() {
     this.loading = true;
     try {
-      const params: any = { month: this.month, year: this.year };
+      // Build query params based on filter mode
+      const params: any = { filterMode: this.dateFilterMode };
+
+      switch (this.dateFilterMode) {
+        case 'month':
+          params.month = this.month;
+          params.year = this.year;
+          break;
+        case 'year':
+          params.year = this.year;
+          break;
+        case 'custom':
+          if (this.customStartDate) params.startDate = this.customStartDate;
+          if (this.customEndDate) params.endDate = this.customEndDate;
+          break;
+        case 'all_time':
+          // No date params
+          break;
+      }
+
       if (this.selectedAccountId) {
         params.accountId = this.selectedAccountId;
       }
@@ -295,18 +328,31 @@ export class ViewReports extends LitElement {
                 <option value="">🏦 ${i18n.t('reports.all_accounts')}</option>
                 ${this.accounts.map(a => html`<option value="${a.id}">${a.type === 'CREDIT' ? '💳' : '🏦'} ${a.name}</option>`)}
             </select>
-            <select @change="${(e: any) => { this.month = parseInt(e.target.value); this.loadData(); }}" .value="${this.month}">
-                ${Array.from({ length: 12 }, (_, i) => i + 1).map(m => {
-      const monthName = new Date(2025, m - 1, 1).toLocaleString(i18n.getLocale(), { month: 'long' });
-      // Capitalize first letter
-      const label = monthName.charAt(0).toUpperCase() + monthName.slice(1);
-      return html`<option value="${m}" ?selected=${this.month === m}>${label}</option>`;
-    })}
+            <select @change="${(e: any) => { this.dateFilterMode = e.target.value as DateFilterMode; this.loadData(); }}" .value="${this.dateFilterMode}">
+                <option value="month">${i18n.t('filters.mode_month')}</option>
+                <option value="year">${i18n.t('filters.mode_year')}</option>
+                <option value="custom">${i18n.t('filters.mode_custom')}</option>
+                <option value="all_time">${i18n.t('filters.mode_all_time')}</option>
             </select>
-            <select @change="${(e: any) => { this.year = parseInt(e.target.value); this.loadData(); }}" .value="${this.year}">
-                <option value="2025">2025</option>
-                <option value="2026">2026</option>
-            </select>
+            ${this.dateFilterMode === 'month' ? html`
+                <select @change="${(e: any) => { this.month = parseInt(e.target.value); this.loadData(); }}" .value="${this.month}">
+                    ${Array.from({ length: 12 }, (_, i) => i + 1).map(m => {
+                        const monthName = new Date(this.year, m - 1, 1).toLocaleString(i18n.getLocale(), { month: 'long' });
+                        const label = monthName.charAt(0).toUpperCase() + monthName.slice(1);
+                        return html`<option value="${m}" ?selected=${this.month === m}>${label}</option>`;
+                    })}
+                </select>
+            ` : ''}
+            ${this.dateFilterMode === 'month' || this.dateFilterMode === 'year' ? html`
+                <select @change="${(e: any) => { this.year = parseInt(e.target.value); this.loadData(); }}" .value="${this.year}">
+                    ${this.getYearOptions().map(y => html`<option value="${y}">${y}</option>`)}
+                </select>
+            ` : ''}
+            ${this.dateFilterMode === 'custom' ? html`
+                <input type="date" .value="${this.customStartDate}" @change="${(e: any) => { this.customStartDate = e.target.value; this.loadData(); }}" style="padding: 0.5rem;" />
+                <span style="color: var(--md-sys-color-on-surface-variant);">-</span>
+                <input type="date" .value="${this.customEndDate}" @change="${(e: any) => { this.customEndDate = e.target.value; this.loadData(); }}" style="padding: 0.5rem;" />
+            ` : ''}
             <label style="display: flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer; color: var(--md-sys-color-on-surface);">
                 <input type="checkbox" .checked="${this.groupByCategory}" @change="${(e: any) => { this.groupByCategory = e.target.checked; this.renderBreakdown(); }}" />
                 ${i18n.t('reports.group_by_parent') || 'Group by Parent'}

@@ -53,6 +53,11 @@ export type Setting = $Result.DefaultSelection<Prisma.$SettingPayload>
  * 
  */
 export type MonthlyBalance = $Result.DefaultSelection<Prisma.$MonthlyBalancePayload>
+/**
+ * Model AccountBalance
+ * 
+ */
+export type AccountBalance = $Result.DefaultSelection<Prisma.$AccountBalancePayload>
 
 /**
  * Enums
@@ -280,6 +285,16 @@ export class PrismaClient<
     * ```
     */
   get monthlyBalance(): Prisma.MonthlyBalanceDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.accountBalance`: Exposes CRUD operations for the **AccountBalance** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more AccountBalances
+    * const accountBalances = await prisma.accountBalance.findMany()
+    * ```
+    */
+  get accountBalance(): Prisma.AccountBalanceDelegate<ExtArgs, ClientOptions>;
 }
 
 export namespace Prisma {
@@ -721,7 +736,8 @@ export namespace Prisma {
     TransactionSplit: 'TransactionSplit',
     SavingsGoal: 'SavingsGoal',
     Setting: 'Setting',
-    MonthlyBalance: 'MonthlyBalance'
+    MonthlyBalance: 'MonthlyBalance',
+    AccountBalance: 'AccountBalance'
   };
 
   export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -737,7 +753,7 @@ export namespace Prisma {
       omit: GlobalOmitOptions
     }
     meta: {
-      modelProps: "category" | "account" | "costObject" | "transaction" | "transactionSplit" | "savingsGoal" | "setting" | "monthlyBalance"
+      modelProps: "category" | "account" | "costObject" | "transaction" | "transactionSplit" | "savingsGoal" | "setting" | "monthlyBalance" | "accountBalance"
       txIsolationLevel: Prisma.TransactionIsolationLevel
     }
     model: {
@@ -1333,6 +1349,80 @@ export namespace Prisma {
           }
         }
       }
+      AccountBalance: {
+        payload: Prisma.$AccountBalancePayload<ExtArgs>
+        fields: Prisma.AccountBalanceFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.AccountBalanceFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$AccountBalancePayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.AccountBalanceFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$AccountBalancePayload>
+          }
+          findFirst: {
+            args: Prisma.AccountBalanceFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$AccountBalancePayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.AccountBalanceFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$AccountBalancePayload>
+          }
+          findMany: {
+            args: Prisma.AccountBalanceFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$AccountBalancePayload>[]
+          }
+          create: {
+            args: Prisma.AccountBalanceCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$AccountBalancePayload>
+          }
+          createMany: {
+            args: Prisma.AccountBalanceCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.AccountBalanceCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$AccountBalancePayload>[]
+          }
+          delete: {
+            args: Prisma.AccountBalanceDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$AccountBalancePayload>
+          }
+          update: {
+            args: Prisma.AccountBalanceUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$AccountBalancePayload>
+          }
+          deleteMany: {
+            args: Prisma.AccountBalanceDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.AccountBalanceUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.AccountBalanceUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$AccountBalancePayload>[]
+          }
+          upsert: {
+            args: Prisma.AccountBalanceUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$AccountBalancePayload>
+          }
+          aggregate: {
+            args: Prisma.AccountBalanceAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateAccountBalance>
+          }
+          groupBy: {
+            args: Prisma.AccountBalanceGroupByArgs<ExtArgs>
+            result: $Utils.Optional<AccountBalanceGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.AccountBalanceCountArgs<ExtArgs>
+            result: $Utils.Optional<AccountBalanceCountAggregateOutputType> | number
+          }
+        }
+      }
     }
   } & {
     other: {
@@ -1449,6 +1539,7 @@ export namespace Prisma {
     savingsGoal?: SavingsGoalOmit
     setting?: SettingOmit
     monthlyBalance?: MonthlyBalanceOmit
+    accountBalance?: AccountBalanceOmit
   }
 
   /* Types for Logging */
@@ -1589,11 +1680,13 @@ export namespace Prisma {
   export type AccountCountOutputType = {
     transactions: number
     monthlyBalances: number
+    accountBalances: number
   }
 
   export type AccountCountOutputTypeSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     transactions?: boolean | AccountCountOutputTypeCountTransactionsArgs
     monthlyBalances?: boolean | AccountCountOutputTypeCountMonthlyBalancesArgs
+    accountBalances?: boolean | AccountCountOutputTypeCountAccountBalancesArgs
   }
 
   // Custom InputTypes
@@ -1619,6 +1712,13 @@ export namespace Prisma {
    */
   export type AccountCountOutputTypeCountMonthlyBalancesArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     where?: MonthlyBalanceWhereInput
+  }
+
+  /**
+   * AccountCountOutputType without action
+   */
+  export type AccountCountOutputTypeCountAccountBalancesArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: AccountBalanceWhereInput
   }
 
 
@@ -3180,6 +3280,7 @@ export namespace Prisma {
     updatedAt?: boolean
     transactions?: boolean | Account$transactionsArgs<ExtArgs>
     monthlyBalances?: boolean | Account$monthlyBalancesArgs<ExtArgs>
+    accountBalances?: boolean | Account$accountBalancesArgs<ExtArgs>
     _count?: boolean | AccountCountOutputTypeDefaultArgs<ExtArgs>
   }, ExtArgs["result"]["account"]>
 
@@ -3214,6 +3315,7 @@ export namespace Prisma {
   export type AccountInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     transactions?: boolean | Account$transactionsArgs<ExtArgs>
     monthlyBalances?: boolean | Account$monthlyBalancesArgs<ExtArgs>
+    accountBalances?: boolean | Account$accountBalancesArgs<ExtArgs>
     _count?: boolean | AccountCountOutputTypeDefaultArgs<ExtArgs>
   }
   export type AccountIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {}
@@ -3224,6 +3326,7 @@ export namespace Prisma {
     objects: {
       transactions: Prisma.$TransactionPayload<ExtArgs>[]
       monthlyBalances: Prisma.$MonthlyBalancePayload<ExtArgs>[]
+      accountBalances: Prisma.$AccountBalancePayload<ExtArgs>[]
     }
     scalars: $Extensions.GetPayloadResult<{
       id: string
@@ -3628,6 +3731,7 @@ export namespace Prisma {
     readonly [Symbol.toStringTag]: "PrismaPromise"
     transactions<T extends Account$transactionsArgs<ExtArgs> = {}>(args?: Subset<T, Account$transactionsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$TransactionPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     monthlyBalances<T extends Account$monthlyBalancesArgs<ExtArgs> = {}>(args?: Subset<T, Account$monthlyBalancesArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$MonthlyBalancePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+    accountBalances<T extends Account$accountBalancesArgs<ExtArgs> = {}>(args?: Subset<T, Account$accountBalancesArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$AccountBalancePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     /**
      * Attaches callbacks for the resolution and/or rejection of the Promise.
      * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -4094,6 +4198,30 @@ export namespace Prisma {
     take?: number
     skip?: number
     distinct?: MonthlyBalanceScalarFieldEnum | MonthlyBalanceScalarFieldEnum[]
+  }
+
+  /**
+   * Account.accountBalances
+   */
+  export type Account$accountBalancesArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the AccountBalance
+     */
+    select?: AccountBalanceSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the AccountBalance
+     */
+    omit?: AccountBalanceOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: AccountBalanceInclude<ExtArgs> | null
+    where?: AccountBalanceWhereInput
+    orderBy?: AccountBalanceOrderByWithRelationInput | AccountBalanceOrderByWithRelationInput[]
+    cursor?: AccountBalanceWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: AccountBalanceScalarFieldEnum | AccountBalanceScalarFieldEnum[]
   }
 
   /**
@@ -10933,6 +11061,1141 @@ export namespace Prisma {
 
 
   /**
+   * Model AccountBalance
+   */
+
+  export type AggregateAccountBalance = {
+    _count: AccountBalanceCountAggregateOutputType | null
+    _avg: AccountBalanceAvgAggregateOutputType | null
+    _sum: AccountBalanceSumAggregateOutputType | null
+    _min: AccountBalanceMinAggregateOutputType | null
+    _max: AccountBalanceMaxAggregateOutputType | null
+  }
+
+  export type AccountBalanceAvgAggregateOutputType = {
+    balance: Decimal | null
+  }
+
+  export type AccountBalanceSumAggregateOutputType = {
+    balance: Decimal | null
+  }
+
+  export type AccountBalanceMinAggregateOutputType = {
+    id: string | null
+    asOfDate: Date | null
+    balance: Decimal | null
+    accountId: string | null
+    notes: string | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type AccountBalanceMaxAggregateOutputType = {
+    id: string | null
+    asOfDate: Date | null
+    balance: Decimal | null
+    accountId: string | null
+    notes: string | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type AccountBalanceCountAggregateOutputType = {
+    id: number
+    asOfDate: number
+    balance: number
+    accountId: number
+    notes: number
+    createdAt: number
+    updatedAt: number
+    _all: number
+  }
+
+
+  export type AccountBalanceAvgAggregateInputType = {
+    balance?: true
+  }
+
+  export type AccountBalanceSumAggregateInputType = {
+    balance?: true
+  }
+
+  export type AccountBalanceMinAggregateInputType = {
+    id?: true
+    asOfDate?: true
+    balance?: true
+    accountId?: true
+    notes?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type AccountBalanceMaxAggregateInputType = {
+    id?: true
+    asOfDate?: true
+    balance?: true
+    accountId?: true
+    notes?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type AccountBalanceCountAggregateInputType = {
+    id?: true
+    asOfDate?: true
+    balance?: true
+    accountId?: true
+    notes?: true
+    createdAt?: true
+    updatedAt?: true
+    _all?: true
+  }
+
+  export type AccountBalanceAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which AccountBalance to aggregate.
+     */
+    where?: AccountBalanceWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of AccountBalances to fetch.
+     */
+    orderBy?: AccountBalanceOrderByWithRelationInput | AccountBalanceOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: AccountBalanceWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` AccountBalances from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` AccountBalances.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned AccountBalances
+    **/
+    _count?: true | AccountBalanceCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to average
+    **/
+    _avg?: AccountBalanceAvgAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to sum
+    **/
+    _sum?: AccountBalanceSumAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: AccountBalanceMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: AccountBalanceMaxAggregateInputType
+  }
+
+  export type GetAccountBalanceAggregateType<T extends AccountBalanceAggregateArgs> = {
+        [P in keyof T & keyof AggregateAccountBalance]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateAccountBalance[P]>
+      : GetScalarType<T[P], AggregateAccountBalance[P]>
+  }
+
+
+
+
+  export type AccountBalanceGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: AccountBalanceWhereInput
+    orderBy?: AccountBalanceOrderByWithAggregationInput | AccountBalanceOrderByWithAggregationInput[]
+    by: AccountBalanceScalarFieldEnum[] | AccountBalanceScalarFieldEnum
+    having?: AccountBalanceScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: AccountBalanceCountAggregateInputType | true
+    _avg?: AccountBalanceAvgAggregateInputType
+    _sum?: AccountBalanceSumAggregateInputType
+    _min?: AccountBalanceMinAggregateInputType
+    _max?: AccountBalanceMaxAggregateInputType
+  }
+
+  export type AccountBalanceGroupByOutputType = {
+    id: string
+    asOfDate: Date
+    balance: Decimal
+    accountId: string | null
+    notes: string | null
+    createdAt: Date
+    updatedAt: Date
+    _count: AccountBalanceCountAggregateOutputType | null
+    _avg: AccountBalanceAvgAggregateOutputType | null
+    _sum: AccountBalanceSumAggregateOutputType | null
+    _min: AccountBalanceMinAggregateOutputType | null
+    _max: AccountBalanceMaxAggregateOutputType | null
+  }
+
+  type GetAccountBalanceGroupByPayload<T extends AccountBalanceGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<AccountBalanceGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof AccountBalanceGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], AccountBalanceGroupByOutputType[P]>
+            : GetScalarType<T[P], AccountBalanceGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type AccountBalanceSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    asOfDate?: boolean
+    balance?: boolean
+    accountId?: boolean
+    notes?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+    account?: boolean | AccountBalance$accountArgs<ExtArgs>
+  }, ExtArgs["result"]["accountBalance"]>
+
+  export type AccountBalanceSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    asOfDate?: boolean
+    balance?: boolean
+    accountId?: boolean
+    notes?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+    account?: boolean | AccountBalance$accountArgs<ExtArgs>
+  }, ExtArgs["result"]["accountBalance"]>
+
+  export type AccountBalanceSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    asOfDate?: boolean
+    balance?: boolean
+    accountId?: boolean
+    notes?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+    account?: boolean | AccountBalance$accountArgs<ExtArgs>
+  }, ExtArgs["result"]["accountBalance"]>
+
+  export type AccountBalanceSelectScalar = {
+    id?: boolean
+    asOfDate?: boolean
+    balance?: boolean
+    accountId?: boolean
+    notes?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }
+
+  export type AccountBalanceOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "asOfDate" | "balance" | "accountId" | "notes" | "createdAt" | "updatedAt", ExtArgs["result"]["accountBalance"]>
+  export type AccountBalanceInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    account?: boolean | AccountBalance$accountArgs<ExtArgs>
+  }
+  export type AccountBalanceIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    account?: boolean | AccountBalance$accountArgs<ExtArgs>
+  }
+  export type AccountBalanceIncludeUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    account?: boolean | AccountBalance$accountArgs<ExtArgs>
+  }
+
+  export type $AccountBalancePayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "AccountBalance"
+    objects: {
+      account: Prisma.$AccountPayload<ExtArgs> | null
+    }
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      asOfDate: Date
+      balance: Prisma.Decimal
+      accountId: string | null
+      notes: string | null
+      createdAt: Date
+      updatedAt: Date
+    }, ExtArgs["result"]["accountBalance"]>
+    composites: {}
+  }
+
+  type AccountBalanceGetPayload<S extends boolean | null | undefined | AccountBalanceDefaultArgs> = $Result.GetResult<Prisma.$AccountBalancePayload, S>
+
+  type AccountBalanceCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<AccountBalanceFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: AccountBalanceCountAggregateInputType | true
+    }
+
+  export interface AccountBalanceDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['AccountBalance'], meta: { name: 'AccountBalance' } }
+    /**
+     * Find zero or one AccountBalance that matches the filter.
+     * @param {AccountBalanceFindUniqueArgs} args - Arguments to find a AccountBalance
+     * @example
+     * // Get one AccountBalance
+     * const accountBalance = await prisma.accountBalance.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends AccountBalanceFindUniqueArgs>(args: SelectSubset<T, AccountBalanceFindUniqueArgs<ExtArgs>>): Prisma__AccountBalanceClient<$Result.GetResult<Prisma.$AccountBalancePayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one AccountBalance that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {AccountBalanceFindUniqueOrThrowArgs} args - Arguments to find a AccountBalance
+     * @example
+     * // Get one AccountBalance
+     * const accountBalance = await prisma.accountBalance.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends AccountBalanceFindUniqueOrThrowArgs>(args: SelectSubset<T, AccountBalanceFindUniqueOrThrowArgs<ExtArgs>>): Prisma__AccountBalanceClient<$Result.GetResult<Prisma.$AccountBalancePayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first AccountBalance that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {AccountBalanceFindFirstArgs} args - Arguments to find a AccountBalance
+     * @example
+     * // Get one AccountBalance
+     * const accountBalance = await prisma.accountBalance.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends AccountBalanceFindFirstArgs>(args?: SelectSubset<T, AccountBalanceFindFirstArgs<ExtArgs>>): Prisma__AccountBalanceClient<$Result.GetResult<Prisma.$AccountBalancePayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first AccountBalance that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {AccountBalanceFindFirstOrThrowArgs} args - Arguments to find a AccountBalance
+     * @example
+     * // Get one AccountBalance
+     * const accountBalance = await prisma.accountBalance.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends AccountBalanceFindFirstOrThrowArgs>(args?: SelectSubset<T, AccountBalanceFindFirstOrThrowArgs<ExtArgs>>): Prisma__AccountBalanceClient<$Result.GetResult<Prisma.$AccountBalancePayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more AccountBalances that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {AccountBalanceFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all AccountBalances
+     * const accountBalances = await prisma.accountBalance.findMany()
+     * 
+     * // Get first 10 AccountBalances
+     * const accountBalances = await prisma.accountBalance.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const accountBalanceWithIdOnly = await prisma.accountBalance.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends AccountBalanceFindManyArgs>(args?: SelectSubset<T, AccountBalanceFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$AccountBalancePayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a AccountBalance.
+     * @param {AccountBalanceCreateArgs} args - Arguments to create a AccountBalance.
+     * @example
+     * // Create one AccountBalance
+     * const AccountBalance = await prisma.accountBalance.create({
+     *   data: {
+     *     // ... data to create a AccountBalance
+     *   }
+     * })
+     * 
+     */
+    create<T extends AccountBalanceCreateArgs>(args: SelectSubset<T, AccountBalanceCreateArgs<ExtArgs>>): Prisma__AccountBalanceClient<$Result.GetResult<Prisma.$AccountBalancePayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many AccountBalances.
+     * @param {AccountBalanceCreateManyArgs} args - Arguments to create many AccountBalances.
+     * @example
+     * // Create many AccountBalances
+     * const accountBalance = await prisma.accountBalance.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends AccountBalanceCreateManyArgs>(args?: SelectSubset<T, AccountBalanceCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many AccountBalances and returns the data saved in the database.
+     * @param {AccountBalanceCreateManyAndReturnArgs} args - Arguments to create many AccountBalances.
+     * @example
+     * // Create many AccountBalances
+     * const accountBalance = await prisma.accountBalance.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many AccountBalances and only return the `id`
+     * const accountBalanceWithIdOnly = await prisma.accountBalance.createManyAndReturn({
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends AccountBalanceCreateManyAndReturnArgs>(args?: SelectSubset<T, AccountBalanceCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$AccountBalancePayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Delete a AccountBalance.
+     * @param {AccountBalanceDeleteArgs} args - Arguments to delete one AccountBalance.
+     * @example
+     * // Delete one AccountBalance
+     * const AccountBalance = await prisma.accountBalance.delete({
+     *   where: {
+     *     // ... filter to delete one AccountBalance
+     *   }
+     * })
+     * 
+     */
+    delete<T extends AccountBalanceDeleteArgs>(args: SelectSubset<T, AccountBalanceDeleteArgs<ExtArgs>>): Prisma__AccountBalanceClient<$Result.GetResult<Prisma.$AccountBalancePayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one AccountBalance.
+     * @param {AccountBalanceUpdateArgs} args - Arguments to update one AccountBalance.
+     * @example
+     * // Update one AccountBalance
+     * const accountBalance = await prisma.accountBalance.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends AccountBalanceUpdateArgs>(args: SelectSubset<T, AccountBalanceUpdateArgs<ExtArgs>>): Prisma__AccountBalanceClient<$Result.GetResult<Prisma.$AccountBalancePayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more AccountBalances.
+     * @param {AccountBalanceDeleteManyArgs} args - Arguments to filter AccountBalances to delete.
+     * @example
+     * // Delete a few AccountBalances
+     * const { count } = await prisma.accountBalance.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends AccountBalanceDeleteManyArgs>(args?: SelectSubset<T, AccountBalanceDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more AccountBalances.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {AccountBalanceUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many AccountBalances
+     * const accountBalance = await prisma.accountBalance.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends AccountBalanceUpdateManyArgs>(args: SelectSubset<T, AccountBalanceUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more AccountBalances and returns the data updated in the database.
+     * @param {AccountBalanceUpdateManyAndReturnArgs} args - Arguments to update many AccountBalances.
+     * @example
+     * // Update many AccountBalances
+     * const accountBalance = await prisma.accountBalance.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more AccountBalances and only return the `id`
+     * const accountBalanceWithIdOnly = await prisma.accountBalance.updateManyAndReturn({
+     *   select: { id: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends AccountBalanceUpdateManyAndReturnArgs>(args: SelectSubset<T, AccountBalanceUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$AccountBalancePayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Create or update one AccountBalance.
+     * @param {AccountBalanceUpsertArgs} args - Arguments to update or create a AccountBalance.
+     * @example
+     * // Update or create a AccountBalance
+     * const accountBalance = await prisma.accountBalance.upsert({
+     *   create: {
+     *     // ... data to create a AccountBalance
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the AccountBalance we want to update
+     *   }
+     * })
+     */
+    upsert<T extends AccountBalanceUpsertArgs>(args: SelectSubset<T, AccountBalanceUpsertArgs<ExtArgs>>): Prisma__AccountBalanceClient<$Result.GetResult<Prisma.$AccountBalancePayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of AccountBalances.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {AccountBalanceCountArgs} args - Arguments to filter AccountBalances to count.
+     * @example
+     * // Count the number of AccountBalances
+     * const count = await prisma.accountBalance.count({
+     *   where: {
+     *     // ... the filter for the AccountBalances we want to count
+     *   }
+     * })
+    **/
+    count<T extends AccountBalanceCountArgs>(
+      args?: Subset<T, AccountBalanceCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], AccountBalanceCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a AccountBalance.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {AccountBalanceAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends AccountBalanceAggregateArgs>(args: Subset<T, AccountBalanceAggregateArgs>): Prisma.PrismaPromise<GetAccountBalanceAggregateType<T>>
+
+    /**
+     * Group by AccountBalance.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {AccountBalanceGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends AccountBalanceGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: AccountBalanceGroupByArgs['orderBy'] }
+        : { orderBy?: AccountBalanceGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, AccountBalanceGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetAccountBalanceGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the AccountBalance model
+   */
+  readonly fields: AccountBalanceFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for AccountBalance.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__AccountBalanceClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    account<T extends AccountBalance$accountArgs<ExtArgs> = {}>(args?: Subset<T, AccountBalance$accountArgs<ExtArgs>>): Prisma__AccountClient<$Result.GetResult<Prisma.$AccountPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the AccountBalance model
+   */
+  interface AccountBalanceFieldRefs {
+    readonly id: FieldRef<"AccountBalance", 'String'>
+    readonly asOfDate: FieldRef<"AccountBalance", 'DateTime'>
+    readonly balance: FieldRef<"AccountBalance", 'Decimal'>
+    readonly accountId: FieldRef<"AccountBalance", 'String'>
+    readonly notes: FieldRef<"AccountBalance", 'String'>
+    readonly createdAt: FieldRef<"AccountBalance", 'DateTime'>
+    readonly updatedAt: FieldRef<"AccountBalance", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * AccountBalance findUnique
+   */
+  export type AccountBalanceFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the AccountBalance
+     */
+    select?: AccountBalanceSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the AccountBalance
+     */
+    omit?: AccountBalanceOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: AccountBalanceInclude<ExtArgs> | null
+    /**
+     * Filter, which AccountBalance to fetch.
+     */
+    where: AccountBalanceWhereUniqueInput
+  }
+
+  /**
+   * AccountBalance findUniqueOrThrow
+   */
+  export type AccountBalanceFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the AccountBalance
+     */
+    select?: AccountBalanceSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the AccountBalance
+     */
+    omit?: AccountBalanceOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: AccountBalanceInclude<ExtArgs> | null
+    /**
+     * Filter, which AccountBalance to fetch.
+     */
+    where: AccountBalanceWhereUniqueInput
+  }
+
+  /**
+   * AccountBalance findFirst
+   */
+  export type AccountBalanceFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the AccountBalance
+     */
+    select?: AccountBalanceSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the AccountBalance
+     */
+    omit?: AccountBalanceOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: AccountBalanceInclude<ExtArgs> | null
+    /**
+     * Filter, which AccountBalance to fetch.
+     */
+    where?: AccountBalanceWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of AccountBalances to fetch.
+     */
+    orderBy?: AccountBalanceOrderByWithRelationInput | AccountBalanceOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for AccountBalances.
+     */
+    cursor?: AccountBalanceWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` AccountBalances from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` AccountBalances.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of AccountBalances.
+     */
+    distinct?: AccountBalanceScalarFieldEnum | AccountBalanceScalarFieldEnum[]
+  }
+
+  /**
+   * AccountBalance findFirstOrThrow
+   */
+  export type AccountBalanceFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the AccountBalance
+     */
+    select?: AccountBalanceSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the AccountBalance
+     */
+    omit?: AccountBalanceOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: AccountBalanceInclude<ExtArgs> | null
+    /**
+     * Filter, which AccountBalance to fetch.
+     */
+    where?: AccountBalanceWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of AccountBalances to fetch.
+     */
+    orderBy?: AccountBalanceOrderByWithRelationInput | AccountBalanceOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for AccountBalances.
+     */
+    cursor?: AccountBalanceWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` AccountBalances from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` AccountBalances.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of AccountBalances.
+     */
+    distinct?: AccountBalanceScalarFieldEnum | AccountBalanceScalarFieldEnum[]
+  }
+
+  /**
+   * AccountBalance findMany
+   */
+  export type AccountBalanceFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the AccountBalance
+     */
+    select?: AccountBalanceSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the AccountBalance
+     */
+    omit?: AccountBalanceOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: AccountBalanceInclude<ExtArgs> | null
+    /**
+     * Filter, which AccountBalances to fetch.
+     */
+    where?: AccountBalanceWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of AccountBalances to fetch.
+     */
+    orderBy?: AccountBalanceOrderByWithRelationInput | AccountBalanceOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing AccountBalances.
+     */
+    cursor?: AccountBalanceWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` AccountBalances from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` AccountBalances.
+     */
+    skip?: number
+    distinct?: AccountBalanceScalarFieldEnum | AccountBalanceScalarFieldEnum[]
+  }
+
+  /**
+   * AccountBalance create
+   */
+  export type AccountBalanceCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the AccountBalance
+     */
+    select?: AccountBalanceSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the AccountBalance
+     */
+    omit?: AccountBalanceOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: AccountBalanceInclude<ExtArgs> | null
+    /**
+     * The data needed to create a AccountBalance.
+     */
+    data: XOR<AccountBalanceCreateInput, AccountBalanceUncheckedCreateInput>
+  }
+
+  /**
+   * AccountBalance createMany
+   */
+  export type AccountBalanceCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many AccountBalances.
+     */
+    data: AccountBalanceCreateManyInput | AccountBalanceCreateManyInput[]
+  }
+
+  /**
+   * AccountBalance createManyAndReturn
+   */
+  export type AccountBalanceCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the AccountBalance
+     */
+    select?: AccountBalanceSelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the AccountBalance
+     */
+    omit?: AccountBalanceOmit<ExtArgs> | null
+    /**
+     * The data used to create many AccountBalances.
+     */
+    data: AccountBalanceCreateManyInput | AccountBalanceCreateManyInput[]
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: AccountBalanceIncludeCreateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * AccountBalance update
+   */
+  export type AccountBalanceUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the AccountBalance
+     */
+    select?: AccountBalanceSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the AccountBalance
+     */
+    omit?: AccountBalanceOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: AccountBalanceInclude<ExtArgs> | null
+    /**
+     * The data needed to update a AccountBalance.
+     */
+    data: XOR<AccountBalanceUpdateInput, AccountBalanceUncheckedUpdateInput>
+    /**
+     * Choose, which AccountBalance to update.
+     */
+    where: AccountBalanceWhereUniqueInput
+  }
+
+  /**
+   * AccountBalance updateMany
+   */
+  export type AccountBalanceUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update AccountBalances.
+     */
+    data: XOR<AccountBalanceUpdateManyMutationInput, AccountBalanceUncheckedUpdateManyInput>
+    /**
+     * Filter which AccountBalances to update
+     */
+    where?: AccountBalanceWhereInput
+    /**
+     * Limit how many AccountBalances to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * AccountBalance updateManyAndReturn
+   */
+  export type AccountBalanceUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the AccountBalance
+     */
+    select?: AccountBalanceSelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the AccountBalance
+     */
+    omit?: AccountBalanceOmit<ExtArgs> | null
+    /**
+     * The data used to update AccountBalances.
+     */
+    data: XOR<AccountBalanceUpdateManyMutationInput, AccountBalanceUncheckedUpdateManyInput>
+    /**
+     * Filter which AccountBalances to update
+     */
+    where?: AccountBalanceWhereInput
+    /**
+     * Limit how many AccountBalances to update.
+     */
+    limit?: number
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: AccountBalanceIncludeUpdateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * AccountBalance upsert
+   */
+  export type AccountBalanceUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the AccountBalance
+     */
+    select?: AccountBalanceSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the AccountBalance
+     */
+    omit?: AccountBalanceOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: AccountBalanceInclude<ExtArgs> | null
+    /**
+     * The filter to search for the AccountBalance to update in case it exists.
+     */
+    where: AccountBalanceWhereUniqueInput
+    /**
+     * In case the AccountBalance found by the `where` argument doesn't exist, create a new AccountBalance with this data.
+     */
+    create: XOR<AccountBalanceCreateInput, AccountBalanceUncheckedCreateInput>
+    /**
+     * In case the AccountBalance was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<AccountBalanceUpdateInput, AccountBalanceUncheckedUpdateInput>
+  }
+
+  /**
+   * AccountBalance delete
+   */
+  export type AccountBalanceDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the AccountBalance
+     */
+    select?: AccountBalanceSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the AccountBalance
+     */
+    omit?: AccountBalanceOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: AccountBalanceInclude<ExtArgs> | null
+    /**
+     * Filter which AccountBalance to delete.
+     */
+    where: AccountBalanceWhereUniqueInput
+  }
+
+  /**
+   * AccountBalance deleteMany
+   */
+  export type AccountBalanceDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which AccountBalances to delete
+     */
+    where?: AccountBalanceWhereInput
+    /**
+     * Limit how many AccountBalances to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * AccountBalance.account
+   */
+  export type AccountBalance$accountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Account
+     */
+    select?: AccountSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the Account
+     */
+    omit?: AccountOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: AccountInclude<ExtArgs> | null
+    where?: AccountWhereInput
+  }
+
+  /**
+   * AccountBalance without action
+   */
+  export type AccountBalanceDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the AccountBalance
+     */
+    select?: AccountBalanceSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the AccountBalance
+     */
+    omit?: AccountBalanceOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: AccountBalanceInclude<ExtArgs> | null
+  }
+
+
+  /**
    * Enums
    */
 
@@ -11047,6 +12310,19 @@ export namespace Prisma {
   };
 
   export type MonthlyBalanceScalarFieldEnum = (typeof MonthlyBalanceScalarFieldEnum)[keyof typeof MonthlyBalanceScalarFieldEnum]
+
+
+  export const AccountBalanceScalarFieldEnum: {
+    id: 'id',
+    asOfDate: 'asOfDate',
+    balance: 'balance',
+    accountId: 'accountId',
+    notes: 'notes',
+    createdAt: 'createdAt',
+    updatedAt: 'updatedAt'
+  };
+
+  export type AccountBalanceScalarFieldEnum = (typeof AccountBalanceScalarFieldEnum)[keyof typeof AccountBalanceScalarFieldEnum]
 
 
   export const SortOrder: {
@@ -11216,6 +12492,7 @@ export namespace Prisma {
     updatedAt?: DateTimeFilter<"Account"> | Date | string
     transactions?: TransactionListRelationFilter
     monthlyBalances?: MonthlyBalanceListRelationFilter
+    accountBalances?: AccountBalanceListRelationFilter
   }
 
   export type AccountOrderByWithRelationInput = {
@@ -11227,6 +12504,7 @@ export namespace Prisma {
     updatedAt?: SortOrder
     transactions?: TransactionOrderByRelationAggregateInput
     monthlyBalances?: MonthlyBalanceOrderByRelationAggregateInput
+    accountBalances?: AccountBalanceOrderByRelationAggregateInput
   }
 
   export type AccountWhereUniqueInput = Prisma.AtLeast<{
@@ -11241,6 +12519,7 @@ export namespace Prisma {
     updatedAt?: DateTimeFilter<"Account"> | Date | string
     transactions?: TransactionListRelationFilter
     monthlyBalances?: MonthlyBalanceListRelationFilter
+    accountBalances?: AccountBalanceListRelationFilter
   }, "id">
 
   export type AccountOrderByWithAggregationInput = {
@@ -11688,6 +12967,74 @@ export namespace Prisma {
     updatedAt?: DateTimeWithAggregatesFilter<"MonthlyBalance"> | Date | string
   }
 
+  export type AccountBalanceWhereInput = {
+    AND?: AccountBalanceWhereInput | AccountBalanceWhereInput[]
+    OR?: AccountBalanceWhereInput[]
+    NOT?: AccountBalanceWhereInput | AccountBalanceWhereInput[]
+    id?: StringFilter<"AccountBalance"> | string
+    asOfDate?: DateTimeFilter<"AccountBalance"> | Date | string
+    balance?: DecimalFilter<"AccountBalance"> | Decimal | DecimalJsLike | number | string
+    accountId?: StringNullableFilter<"AccountBalance"> | string | null
+    notes?: StringNullableFilter<"AccountBalance"> | string | null
+    createdAt?: DateTimeFilter<"AccountBalance"> | Date | string
+    updatedAt?: DateTimeFilter<"AccountBalance"> | Date | string
+    account?: XOR<AccountNullableScalarRelationFilter, AccountWhereInput> | null
+  }
+
+  export type AccountBalanceOrderByWithRelationInput = {
+    id?: SortOrder
+    asOfDate?: SortOrder
+    balance?: SortOrder
+    accountId?: SortOrderInput | SortOrder
+    notes?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    account?: AccountOrderByWithRelationInput
+  }
+
+  export type AccountBalanceWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    asOfDate_accountId?: AccountBalanceAsOfDateAccountIdCompoundUniqueInput
+    AND?: AccountBalanceWhereInput | AccountBalanceWhereInput[]
+    OR?: AccountBalanceWhereInput[]
+    NOT?: AccountBalanceWhereInput | AccountBalanceWhereInput[]
+    asOfDate?: DateTimeFilter<"AccountBalance"> | Date | string
+    balance?: DecimalFilter<"AccountBalance"> | Decimal | DecimalJsLike | number | string
+    accountId?: StringNullableFilter<"AccountBalance"> | string | null
+    notes?: StringNullableFilter<"AccountBalance"> | string | null
+    createdAt?: DateTimeFilter<"AccountBalance"> | Date | string
+    updatedAt?: DateTimeFilter<"AccountBalance"> | Date | string
+    account?: XOR<AccountNullableScalarRelationFilter, AccountWhereInput> | null
+  }, "id" | "asOfDate_accountId">
+
+  export type AccountBalanceOrderByWithAggregationInput = {
+    id?: SortOrder
+    asOfDate?: SortOrder
+    balance?: SortOrder
+    accountId?: SortOrderInput | SortOrder
+    notes?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    _count?: AccountBalanceCountOrderByAggregateInput
+    _avg?: AccountBalanceAvgOrderByAggregateInput
+    _max?: AccountBalanceMaxOrderByAggregateInput
+    _min?: AccountBalanceMinOrderByAggregateInput
+    _sum?: AccountBalanceSumOrderByAggregateInput
+  }
+
+  export type AccountBalanceScalarWhereWithAggregatesInput = {
+    AND?: AccountBalanceScalarWhereWithAggregatesInput | AccountBalanceScalarWhereWithAggregatesInput[]
+    OR?: AccountBalanceScalarWhereWithAggregatesInput[]
+    NOT?: AccountBalanceScalarWhereWithAggregatesInput | AccountBalanceScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"AccountBalance"> | string
+    asOfDate?: DateTimeWithAggregatesFilter<"AccountBalance"> | Date | string
+    balance?: DecimalWithAggregatesFilter<"AccountBalance"> | Decimal | DecimalJsLike | number | string
+    accountId?: StringNullableWithAggregatesFilter<"AccountBalance"> | string | null
+    notes?: StringNullableWithAggregatesFilter<"AccountBalance"> | string | null
+    createdAt?: DateTimeWithAggregatesFilter<"AccountBalance"> | Date | string
+    updatedAt?: DateTimeWithAggregatesFilter<"AccountBalance"> | Date | string
+  }
+
   export type CategoryCreateInput = {
     id?: string
     name: string
@@ -11796,6 +13143,7 @@ export namespace Prisma {
     updatedAt?: Date | string
     transactions?: TransactionCreateNestedManyWithoutAccountInput
     monthlyBalances?: MonthlyBalanceCreateNestedManyWithoutAccountInput
+    accountBalances?: AccountBalanceCreateNestedManyWithoutAccountInput
   }
 
   export type AccountUncheckedCreateInput = {
@@ -11807,6 +13155,7 @@ export namespace Prisma {
     updatedAt?: Date | string
     transactions?: TransactionUncheckedCreateNestedManyWithoutAccountInput
     monthlyBalances?: MonthlyBalanceUncheckedCreateNestedManyWithoutAccountInput
+    accountBalances?: AccountBalanceUncheckedCreateNestedManyWithoutAccountInput
   }
 
   export type AccountUpdateInput = {
@@ -11818,6 +13167,7 @@ export namespace Prisma {
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     transactions?: TransactionUpdateManyWithoutAccountNestedInput
     monthlyBalances?: MonthlyBalanceUpdateManyWithoutAccountNestedInput
+    accountBalances?: AccountBalanceUpdateManyWithoutAccountNestedInput
   }
 
   export type AccountUncheckedUpdateInput = {
@@ -11829,6 +13179,7 @@ export namespace Prisma {
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     transactions?: TransactionUncheckedUpdateManyWithoutAccountNestedInput
     monthlyBalances?: MonthlyBalanceUncheckedUpdateManyWithoutAccountNestedInput
+    accountBalances?: AccountBalanceUncheckedUpdateManyWithoutAccountNestedInput
   }
 
   export type AccountCreateManyInput = {
@@ -12289,6 +13640,75 @@ export namespace Prisma {
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
+  export type AccountBalanceCreateInput = {
+    id?: string
+    asOfDate: Date | string
+    balance?: Decimal | DecimalJsLike | number | string
+    notes?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    account?: AccountCreateNestedOneWithoutAccountBalancesInput
+  }
+
+  export type AccountBalanceUncheckedCreateInput = {
+    id?: string
+    asOfDate: Date | string
+    balance?: Decimal | DecimalJsLike | number | string
+    accountId?: string | null
+    notes?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type AccountBalanceUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    asOfDate?: DateTimeFieldUpdateOperationsInput | Date | string
+    balance?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    account?: AccountUpdateOneWithoutAccountBalancesNestedInput
+  }
+
+  export type AccountBalanceUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    asOfDate?: DateTimeFieldUpdateOperationsInput | Date | string
+    balance?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    accountId?: NullableStringFieldUpdateOperationsInput | string | null
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type AccountBalanceCreateManyInput = {
+    id?: string
+    asOfDate: Date | string
+    balance?: Decimal | DecimalJsLike | number | string
+    accountId?: string | null
+    notes?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type AccountBalanceUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    asOfDate?: DateTimeFieldUpdateOperationsInput | Date | string
+    balance?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type AccountBalanceUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    asOfDate?: DateTimeFieldUpdateOperationsInput | Date | string
+    balance?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    accountId?: NullableStringFieldUpdateOperationsInput | string | null
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
   export type StringFilter<$PrismaModel = never> = {
     equals?: string | StringFieldRefInput<$PrismaModel>
     in?: string[]
@@ -12538,7 +13958,17 @@ export namespace Prisma {
     none?: MonthlyBalanceWhereInput
   }
 
+  export type AccountBalanceListRelationFilter = {
+    every?: AccountBalanceWhereInput
+    some?: AccountBalanceWhereInput
+    none?: AccountBalanceWhereInput
+  }
+
   export type MonthlyBalanceOrderByRelationAggregateInput = {
+    _count?: SortOrder
+  }
+
+  export type AccountBalanceOrderByRelationAggregateInput = {
     _count?: SortOrder
   }
 
@@ -12840,6 +14270,49 @@ export namespace Prisma {
     balance?: SortOrder
   }
 
+  export type AccountBalanceAsOfDateAccountIdCompoundUniqueInput = {
+    asOfDate: Date | string
+    accountId: string
+  }
+
+  export type AccountBalanceCountOrderByAggregateInput = {
+    id?: SortOrder
+    asOfDate?: SortOrder
+    balance?: SortOrder
+    accountId?: SortOrder
+    notes?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type AccountBalanceAvgOrderByAggregateInput = {
+    balance?: SortOrder
+  }
+
+  export type AccountBalanceMaxOrderByAggregateInput = {
+    id?: SortOrder
+    asOfDate?: SortOrder
+    balance?: SortOrder
+    accountId?: SortOrder
+    notes?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type AccountBalanceMinOrderByAggregateInput = {
+    id?: SortOrder
+    asOfDate?: SortOrder
+    balance?: SortOrder
+    accountId?: SortOrder
+    notes?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type AccountBalanceSumOrderByAggregateInput = {
+    balance?: SortOrder
+  }
+
   export type CategoryCreateNestedOneWithoutChildrenInput = {
     create?: XOR<CategoryCreateWithoutChildrenInput, CategoryUncheckedCreateWithoutChildrenInput>
     connectOrCreate?: CategoryCreateOrConnectWithoutChildrenInput
@@ -13062,6 +14535,13 @@ export namespace Prisma {
     connect?: MonthlyBalanceWhereUniqueInput | MonthlyBalanceWhereUniqueInput[]
   }
 
+  export type AccountBalanceCreateNestedManyWithoutAccountInput = {
+    create?: XOR<AccountBalanceCreateWithoutAccountInput, AccountBalanceUncheckedCreateWithoutAccountInput> | AccountBalanceCreateWithoutAccountInput[] | AccountBalanceUncheckedCreateWithoutAccountInput[]
+    connectOrCreate?: AccountBalanceCreateOrConnectWithoutAccountInput | AccountBalanceCreateOrConnectWithoutAccountInput[]
+    createMany?: AccountBalanceCreateManyAccountInputEnvelope
+    connect?: AccountBalanceWhereUniqueInput | AccountBalanceWhereUniqueInput[]
+  }
+
   export type TransactionUncheckedCreateNestedManyWithoutAccountInput = {
     create?: XOR<TransactionCreateWithoutAccountInput, TransactionUncheckedCreateWithoutAccountInput> | TransactionCreateWithoutAccountInput[] | TransactionUncheckedCreateWithoutAccountInput[]
     connectOrCreate?: TransactionCreateOrConnectWithoutAccountInput | TransactionCreateOrConnectWithoutAccountInput[]
@@ -13074,6 +14554,13 @@ export namespace Prisma {
     connectOrCreate?: MonthlyBalanceCreateOrConnectWithoutAccountInput | MonthlyBalanceCreateOrConnectWithoutAccountInput[]
     createMany?: MonthlyBalanceCreateManyAccountInputEnvelope
     connect?: MonthlyBalanceWhereUniqueInput | MonthlyBalanceWhereUniqueInput[]
+  }
+
+  export type AccountBalanceUncheckedCreateNestedManyWithoutAccountInput = {
+    create?: XOR<AccountBalanceCreateWithoutAccountInput, AccountBalanceUncheckedCreateWithoutAccountInput> | AccountBalanceCreateWithoutAccountInput[] | AccountBalanceUncheckedCreateWithoutAccountInput[]
+    connectOrCreate?: AccountBalanceCreateOrConnectWithoutAccountInput | AccountBalanceCreateOrConnectWithoutAccountInput[]
+    createMany?: AccountBalanceCreateManyAccountInputEnvelope
+    connect?: AccountBalanceWhereUniqueInput | AccountBalanceWhereUniqueInput[]
   }
 
   export type DecimalFieldUpdateOperationsInput = {
@@ -13116,6 +14603,20 @@ export namespace Prisma {
     deleteMany?: MonthlyBalanceScalarWhereInput | MonthlyBalanceScalarWhereInput[]
   }
 
+  export type AccountBalanceUpdateManyWithoutAccountNestedInput = {
+    create?: XOR<AccountBalanceCreateWithoutAccountInput, AccountBalanceUncheckedCreateWithoutAccountInput> | AccountBalanceCreateWithoutAccountInput[] | AccountBalanceUncheckedCreateWithoutAccountInput[]
+    connectOrCreate?: AccountBalanceCreateOrConnectWithoutAccountInput | AccountBalanceCreateOrConnectWithoutAccountInput[]
+    upsert?: AccountBalanceUpsertWithWhereUniqueWithoutAccountInput | AccountBalanceUpsertWithWhereUniqueWithoutAccountInput[]
+    createMany?: AccountBalanceCreateManyAccountInputEnvelope
+    set?: AccountBalanceWhereUniqueInput | AccountBalanceWhereUniqueInput[]
+    disconnect?: AccountBalanceWhereUniqueInput | AccountBalanceWhereUniqueInput[]
+    delete?: AccountBalanceWhereUniqueInput | AccountBalanceWhereUniqueInput[]
+    connect?: AccountBalanceWhereUniqueInput | AccountBalanceWhereUniqueInput[]
+    update?: AccountBalanceUpdateWithWhereUniqueWithoutAccountInput | AccountBalanceUpdateWithWhereUniqueWithoutAccountInput[]
+    updateMany?: AccountBalanceUpdateManyWithWhereWithoutAccountInput | AccountBalanceUpdateManyWithWhereWithoutAccountInput[]
+    deleteMany?: AccountBalanceScalarWhereInput | AccountBalanceScalarWhereInput[]
+  }
+
   export type TransactionUncheckedUpdateManyWithoutAccountNestedInput = {
     create?: XOR<TransactionCreateWithoutAccountInput, TransactionUncheckedCreateWithoutAccountInput> | TransactionCreateWithoutAccountInput[] | TransactionUncheckedCreateWithoutAccountInput[]
     connectOrCreate?: TransactionCreateOrConnectWithoutAccountInput | TransactionCreateOrConnectWithoutAccountInput[]
@@ -13142,6 +14643,20 @@ export namespace Prisma {
     update?: MonthlyBalanceUpdateWithWhereUniqueWithoutAccountInput | MonthlyBalanceUpdateWithWhereUniqueWithoutAccountInput[]
     updateMany?: MonthlyBalanceUpdateManyWithWhereWithoutAccountInput | MonthlyBalanceUpdateManyWithWhereWithoutAccountInput[]
     deleteMany?: MonthlyBalanceScalarWhereInput | MonthlyBalanceScalarWhereInput[]
+  }
+
+  export type AccountBalanceUncheckedUpdateManyWithoutAccountNestedInput = {
+    create?: XOR<AccountBalanceCreateWithoutAccountInput, AccountBalanceUncheckedCreateWithoutAccountInput> | AccountBalanceCreateWithoutAccountInput[] | AccountBalanceUncheckedCreateWithoutAccountInput[]
+    connectOrCreate?: AccountBalanceCreateOrConnectWithoutAccountInput | AccountBalanceCreateOrConnectWithoutAccountInput[]
+    upsert?: AccountBalanceUpsertWithWhereUniqueWithoutAccountInput | AccountBalanceUpsertWithWhereUniqueWithoutAccountInput[]
+    createMany?: AccountBalanceCreateManyAccountInputEnvelope
+    set?: AccountBalanceWhereUniqueInput | AccountBalanceWhereUniqueInput[]
+    disconnect?: AccountBalanceWhereUniqueInput | AccountBalanceWhereUniqueInput[]
+    delete?: AccountBalanceWhereUniqueInput | AccountBalanceWhereUniqueInput[]
+    connect?: AccountBalanceWhereUniqueInput | AccountBalanceWhereUniqueInput[]
+    update?: AccountBalanceUpdateWithWhereUniqueWithoutAccountInput | AccountBalanceUpdateWithWhereUniqueWithoutAccountInput[]
+    updateMany?: AccountBalanceUpdateManyWithWhereWithoutAccountInput | AccountBalanceUpdateManyWithWhereWithoutAccountInput[]
+    deleteMany?: AccountBalanceScalarWhereInput | AccountBalanceScalarWhereInput[]
   }
 
   export type TransactionCreateNestedManyWithoutCostObjectInput = {
@@ -13394,6 +14909,22 @@ export namespace Prisma {
     delete?: AccountWhereInput | boolean
     connect?: AccountWhereUniqueInput
     update?: XOR<XOR<AccountUpdateToOneWithWhereWithoutMonthlyBalancesInput, AccountUpdateWithoutMonthlyBalancesInput>, AccountUncheckedUpdateWithoutMonthlyBalancesInput>
+  }
+
+  export type AccountCreateNestedOneWithoutAccountBalancesInput = {
+    create?: XOR<AccountCreateWithoutAccountBalancesInput, AccountUncheckedCreateWithoutAccountBalancesInput>
+    connectOrCreate?: AccountCreateOrConnectWithoutAccountBalancesInput
+    connect?: AccountWhereUniqueInput
+  }
+
+  export type AccountUpdateOneWithoutAccountBalancesNestedInput = {
+    create?: XOR<AccountCreateWithoutAccountBalancesInput, AccountUncheckedCreateWithoutAccountBalancesInput>
+    connectOrCreate?: AccountCreateOrConnectWithoutAccountBalancesInput
+    upsert?: AccountUpsertWithoutAccountBalancesInput
+    disconnect?: AccountWhereInput | boolean
+    delete?: AccountWhereInput | boolean
+    connect?: AccountWhereUniqueInput
+    update?: XOR<XOR<AccountUpdateToOneWithWhereWithoutAccountBalancesInput, AccountUpdateWithoutAccountBalancesInput>, AccountUncheckedUpdateWithoutAccountBalancesInput>
   }
 
   export type NestedStringFilter<$PrismaModel = never> = {
@@ -13997,6 +15528,33 @@ export namespace Prisma {
     data: MonthlyBalanceCreateManyAccountInput | MonthlyBalanceCreateManyAccountInput[]
   }
 
+  export type AccountBalanceCreateWithoutAccountInput = {
+    id?: string
+    asOfDate: Date | string
+    balance?: Decimal | DecimalJsLike | number | string
+    notes?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type AccountBalanceUncheckedCreateWithoutAccountInput = {
+    id?: string
+    asOfDate: Date | string
+    balance?: Decimal | DecimalJsLike | number | string
+    notes?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type AccountBalanceCreateOrConnectWithoutAccountInput = {
+    where: AccountBalanceWhereUniqueInput
+    create: XOR<AccountBalanceCreateWithoutAccountInput, AccountBalanceUncheckedCreateWithoutAccountInput>
+  }
+
+  export type AccountBalanceCreateManyAccountInputEnvelope = {
+    data: AccountBalanceCreateManyAccountInput | AccountBalanceCreateManyAccountInput[]
+  }
+
   export type TransactionUpsertWithWhereUniqueWithoutAccountInput = {
     where: TransactionWhereUniqueInput
     update: XOR<TransactionUpdateWithoutAccountInput, TransactionUncheckedUpdateWithoutAccountInput>
@@ -14039,6 +15597,35 @@ export namespace Prisma {
     accountId?: StringNullableFilter<"MonthlyBalance"> | string | null
     createdAt?: DateTimeFilter<"MonthlyBalance"> | Date | string
     updatedAt?: DateTimeFilter<"MonthlyBalance"> | Date | string
+  }
+
+  export type AccountBalanceUpsertWithWhereUniqueWithoutAccountInput = {
+    where: AccountBalanceWhereUniqueInput
+    update: XOR<AccountBalanceUpdateWithoutAccountInput, AccountBalanceUncheckedUpdateWithoutAccountInput>
+    create: XOR<AccountBalanceCreateWithoutAccountInput, AccountBalanceUncheckedCreateWithoutAccountInput>
+  }
+
+  export type AccountBalanceUpdateWithWhereUniqueWithoutAccountInput = {
+    where: AccountBalanceWhereUniqueInput
+    data: XOR<AccountBalanceUpdateWithoutAccountInput, AccountBalanceUncheckedUpdateWithoutAccountInput>
+  }
+
+  export type AccountBalanceUpdateManyWithWhereWithoutAccountInput = {
+    where: AccountBalanceScalarWhereInput
+    data: XOR<AccountBalanceUpdateManyMutationInput, AccountBalanceUncheckedUpdateManyWithoutAccountInput>
+  }
+
+  export type AccountBalanceScalarWhereInput = {
+    AND?: AccountBalanceScalarWhereInput | AccountBalanceScalarWhereInput[]
+    OR?: AccountBalanceScalarWhereInput[]
+    NOT?: AccountBalanceScalarWhereInput | AccountBalanceScalarWhereInput[]
+    id?: StringFilter<"AccountBalance"> | string
+    asOfDate?: DateTimeFilter<"AccountBalance"> | Date | string
+    balance?: DecimalFilter<"AccountBalance"> | Decimal | DecimalJsLike | number | string
+    accountId?: StringNullableFilter<"AccountBalance"> | string | null
+    notes?: StringNullableFilter<"AccountBalance"> | string | null
+    createdAt?: DateTimeFilter<"AccountBalance"> | Date | string
+    updatedAt?: DateTimeFilter<"AccountBalance"> | Date | string
   }
 
   export type TransactionCreateWithoutCostObjectInput = {
@@ -14184,6 +15771,7 @@ export namespace Prisma {
     createdAt?: Date | string
     updatedAt?: Date | string
     monthlyBalances?: MonthlyBalanceCreateNestedManyWithoutAccountInput
+    accountBalances?: AccountBalanceCreateNestedManyWithoutAccountInput
   }
 
   export type AccountUncheckedCreateWithoutTransactionsInput = {
@@ -14194,6 +15782,7 @@ export namespace Prisma {
     createdAt?: Date | string
     updatedAt?: Date | string
     monthlyBalances?: MonthlyBalanceUncheckedCreateNestedManyWithoutAccountInput
+    accountBalances?: AccountBalanceUncheckedCreateNestedManyWithoutAccountInput
   }
 
   export type AccountCreateOrConnectWithoutTransactionsInput = {
@@ -14315,6 +15904,7 @@ export namespace Prisma {
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     monthlyBalances?: MonthlyBalanceUpdateManyWithoutAccountNestedInput
+    accountBalances?: AccountBalanceUpdateManyWithoutAccountNestedInput
   }
 
   export type AccountUncheckedUpdateWithoutTransactionsInput = {
@@ -14325,6 +15915,7 @@ export namespace Prisma {
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     monthlyBalances?: MonthlyBalanceUncheckedUpdateManyWithoutAccountNestedInput
+    accountBalances?: AccountBalanceUncheckedUpdateManyWithoutAccountNestedInput
   }
 
   export type CostObjectUpsertWithoutTransactionsInput = {
@@ -14666,6 +16257,7 @@ export namespace Prisma {
     createdAt?: Date | string
     updatedAt?: Date | string
     transactions?: TransactionCreateNestedManyWithoutAccountInput
+    accountBalances?: AccountBalanceCreateNestedManyWithoutAccountInput
   }
 
   export type AccountUncheckedCreateWithoutMonthlyBalancesInput = {
@@ -14676,6 +16268,7 @@ export namespace Prisma {
     createdAt?: Date | string
     updatedAt?: Date | string
     transactions?: TransactionUncheckedCreateNestedManyWithoutAccountInput
+    accountBalances?: AccountBalanceUncheckedCreateNestedManyWithoutAccountInput
   }
 
   export type AccountCreateOrConnectWithoutMonthlyBalancesInput = {
@@ -14702,6 +16295,7 @@ export namespace Prisma {
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     transactions?: TransactionUpdateManyWithoutAccountNestedInput
+    accountBalances?: AccountBalanceUpdateManyWithoutAccountNestedInput
   }
 
   export type AccountUncheckedUpdateWithoutMonthlyBalancesInput = {
@@ -14712,6 +16306,67 @@ export namespace Prisma {
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     transactions?: TransactionUncheckedUpdateManyWithoutAccountNestedInput
+    accountBalances?: AccountBalanceUncheckedUpdateManyWithoutAccountNestedInput
+  }
+
+  export type AccountCreateWithoutAccountBalancesInput = {
+    id?: string
+    name: string
+    initialBalance?: Decimal | DecimalJsLike | number | string
+    type?: $Enums.AccountType
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    transactions?: TransactionCreateNestedManyWithoutAccountInput
+    monthlyBalances?: MonthlyBalanceCreateNestedManyWithoutAccountInput
+  }
+
+  export type AccountUncheckedCreateWithoutAccountBalancesInput = {
+    id?: string
+    name: string
+    initialBalance?: Decimal | DecimalJsLike | number | string
+    type?: $Enums.AccountType
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    transactions?: TransactionUncheckedCreateNestedManyWithoutAccountInput
+    monthlyBalances?: MonthlyBalanceUncheckedCreateNestedManyWithoutAccountInput
+  }
+
+  export type AccountCreateOrConnectWithoutAccountBalancesInput = {
+    where: AccountWhereUniqueInput
+    create: XOR<AccountCreateWithoutAccountBalancesInput, AccountUncheckedCreateWithoutAccountBalancesInput>
+  }
+
+  export type AccountUpsertWithoutAccountBalancesInput = {
+    update: XOR<AccountUpdateWithoutAccountBalancesInput, AccountUncheckedUpdateWithoutAccountBalancesInput>
+    create: XOR<AccountCreateWithoutAccountBalancesInput, AccountUncheckedCreateWithoutAccountBalancesInput>
+    where?: AccountWhereInput
+  }
+
+  export type AccountUpdateToOneWithWhereWithoutAccountBalancesInput = {
+    where?: AccountWhereInput
+    data: XOR<AccountUpdateWithoutAccountBalancesInput, AccountUncheckedUpdateWithoutAccountBalancesInput>
+  }
+
+  export type AccountUpdateWithoutAccountBalancesInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    initialBalance?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    type?: EnumAccountTypeFieldUpdateOperationsInput | $Enums.AccountType
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    transactions?: TransactionUpdateManyWithoutAccountNestedInput
+    monthlyBalances?: MonthlyBalanceUpdateManyWithoutAccountNestedInput
+  }
+
+  export type AccountUncheckedUpdateWithoutAccountBalancesInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    initialBalance?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    type?: EnumAccountTypeFieldUpdateOperationsInput | $Enums.AccountType
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    transactions?: TransactionUncheckedUpdateManyWithoutAccountNestedInput
+    monthlyBalances?: MonthlyBalanceUncheckedUpdateManyWithoutAccountNestedInput
   }
 
   export type CategoryCreateManyParentInput = {
@@ -14930,6 +16585,15 @@ export namespace Prisma {
     updatedAt?: Date | string
   }
 
+  export type AccountBalanceCreateManyAccountInput = {
+    id?: string
+    asOfDate: Date | string
+    balance?: Decimal | DecimalJsLike | number | string
+    notes?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
   export type TransactionUpdateWithoutAccountInput = {
     id?: StringFieldUpdateOperationsInput | string
     date?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -14994,6 +16658,33 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     month?: StringFieldUpdateOperationsInput | string
     balance?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type AccountBalanceUpdateWithoutAccountInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    asOfDate?: DateTimeFieldUpdateOperationsInput | Date | string
+    balance?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type AccountBalanceUncheckedUpdateWithoutAccountInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    asOfDate?: DateTimeFieldUpdateOperationsInput | Date | string
+    balance?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type AccountBalanceUncheckedUpdateManyWithoutAccountInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    asOfDate?: DateTimeFieldUpdateOperationsInput | Date | string
+    balance?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
