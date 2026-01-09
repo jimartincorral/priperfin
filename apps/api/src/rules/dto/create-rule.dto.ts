@@ -19,7 +19,7 @@ export class CreateRuleDto {
 
   @IsOptional()
   @IsString()
-  categoryId?: string;
+  categoryId?: string | null;
 
   @IsEnum(RuleMode)
   mode: RuleMode;

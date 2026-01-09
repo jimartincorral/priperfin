@@ -51,58 +51,91 @@ export class RuleEvaluatorService {
     
     // Handle null/undefined values in transaction
     if (txValue === null || txValue === undefined) {
-      // If checking for inequality or exclusion, null might satisfy the condition? 
-      // For now, let's assume null never matches unless checking specifically for empty (which isn't really supported yet except by regex maybe)
+      this.logger.debug(`Condition failed: field ${condition.field} is null in transaction`);
       return false; 
     }
 
-    return this.compare(txValue, condition.operator, condition.value, condition.caseSensitive);
+    const isMatch = this.compare(txValue, condition.operator, condition.value, condition.caseSensitive);
+    
+    if (!isMatch) {
+        this.logger.debug(`Condition NO MATCH: ${condition.field} ("${txValue}") ${condition.operator} "${JSON.stringify(condition.value)}"`);
+    } else {
+        this.logger.debug(`Condition MATCH: ${condition.field} ("${txValue}") ${condition.operator} "${JSON.stringify(condition.value)}"`);
+    }
+    
+    return isMatch;
   }
 
   private getValueFromTransaction(transaction: TransactionWithAccount, field: string): any {
     switch (field) {
       case 'description': return transaction.description;
-      case 'merchant': return transaction.merchant;
+      case 'merchant': return transaction.merchant || transaction.description; // Fallback to description if merchant is null
       case 'amount': return Number(transaction.amount); // Decimal to number
       case 'notes': return transaction.notes;
-      case 'account': return transaction.account?.name; // Assuming we check account name? Or ID? Let's assume name for now as it's more user friendly in UI
+      case 'account': return transaction.account?.name; 
       case 'date': return transaction.date;
       default: return null;
     }
   }
 
   private compare(actual: any, operator: string, expected: any, caseSensitive = false): boolean {
-    if (typeof actual === 'string' && typeof expected === 'string' && !caseSensitive) {
-      actual = actual.toLowerCase();
-      expected = expected.toLowerCase();
-    }
+    // String normalization
+    const toString = (val: any) => (val === null || val === undefined) ? '' : String(val);
+    const normalizeString = (val: any) => caseSensitive ? toString(val) : toString(val).toLowerCase();
+
+    // Number normalization
+    const toNumber = (val: any) => {
+        if (typeof val === 'number') return val;
+        const n = parseFloat(toString(val));
+        return isNaN(n) ? 0 : n;
+    };
 
     switch (operator) {
       case 'equals':
-        return actual == expected; // loose equality for number/string mix
+        if (typeof actual === 'number' || !isNaN(parseFloat(actual)) && typeof expected !== 'string') {
+            return toNumber(actual) === toNumber(expected);
+        }
+        return normalizeString(actual) === normalizeString(expected);
+        
       case 'contains':
-        return String(actual).includes(String(expected));
+        return normalizeString(actual).includes(normalizeString(expected));
+        
       case 'startsWith':
-        return String(actual).startsWith(String(expected));
+        return normalizeString(actual).startsWith(normalizeString(expected));
+        
       case 'endsWith':
-        return String(actual).endsWith(String(expected));
+        return normalizeString(actual).endsWith(normalizeString(expected));
+        
       case 'regex':
         try {
-          const regex = new RegExp(String(expected), caseSensitive ? '' : 'i');
-          return regex.test(String(actual));
+          const regex = new RegExp(toString(expected), caseSensitive ? '' : 'i');
+          return regex.test(toString(actual));
         } catch (e) {
           return false;
         }
+        
       case 'greaterThan':
-        return Number(actual) > Number(expected);
+        return toNumber(actual) > toNumber(expected);
+        
       case 'lessThan':
-        return Number(actual) < Number(expected);
+        return toNumber(actual) < toNumber(expected);
+        
       case 'between':
-        return Number(actual) >= Number(expected.min) && Number(actual) <= Number(expected.max);
+        const val = toNumber(actual);
+        const min = toNumber((expected as any).min);
+        const max = toNumber((expected as any).max);
+        return val >= min && val <= max;
+        
       case 'in':
-        return Array.isArray(expected) && expected.includes(actual);
+        if (!Array.isArray(expected)) return false;
+        const normalizedActualIn = normalizeString(actual);
+        return expected.some(e => normalizeString(e) === normalizedActualIn);
+        
       case 'notIn':
-        return Array.isArray(expected) && !expected.includes(actual);
+        if (!Array.isArray(expected)) return true;
+        const normalizedActualNotIn = normalizeString(actual);
+        return !expected.some(e => normalizeString(e) === normalizedActualNotIn);
+        
       default:
         return false;
     }

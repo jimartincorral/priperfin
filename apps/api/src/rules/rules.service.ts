@@ -68,32 +68,55 @@ export class RulesService {
   }
 
   async evaluateTransaction(transaction: Transaction) {
+    this.logger.log(`Evaluating rules for transaction: ${transaction.description} (${transaction.amount})`);
+    
+    // Ensure we have account info if needed
+    let txWithAccount = transaction as any;
+    if (txWithAccount.accountId && !txWithAccount.account) {
+        txWithAccount = await this.prisma.transaction.findUnique({
+            where: { id: transaction.id },
+            include: { account: true }
+        }) || transaction;
+    }
+
     // Get all enabled rules ordered by priority
     const rules = await this.prisma.categorizationRule.findMany({
       where: { enabled: true },
       orderBy: { priority: 'desc' },
     });
     
+    this.logger.log(`Found ${rules.length} enabled rules to check`);
+    
     // First match wins
     for (const rule of rules) {
-      if (this.ruleEvaluator.matches(transaction, rule)) {
-        // Update match statistics
-        await this.prisma.categorizationRule.update({
-          where: { id: rule.id },
-          data: {
-            matchCount: { increment: 1 },
-            lastMatched: new Date(),
-          },
-        });
+      try {
+        const isMatch = this.ruleEvaluator.matches(txWithAccount, rule);
+        this.logger.debug(`Checking rule "${rule.name}" (ID: ${rule.id}): ${isMatch ? 'MATCH' : 'NO MATCH'}`);
         
-        return { 
-          rule, 
-          categoryId: rule.categoryId, 
-          mode: rule.mode 
-        };
+        if (isMatch) {
+          // Update match statistics
+          await this.prisma.categorizationRule.update({
+            where: { id: rule.id },
+            data: {
+              matchCount: { increment: 1 },
+              lastMatched: new Date(),
+            },
+          });
+          
+          this.logger.log(`Transaction "${transaction.description}" matched rule "${rule.name}" -> Category: ${rule.categoryId}`);
+          
+          return { 
+            rule, 
+            categoryId: rule.categoryId, 
+            mode: rule.mode 
+          };
+        }
+      } catch (err) {
+        this.logger.error(`Error evaluating rule "${rule.name}": ${err.message}`);
       }
     }
     
+    this.logger.log('No rules matched this transaction');
     return null;
   }
 
@@ -181,5 +204,43 @@ export class RulesService {
       where: { id },
       data: { status: SuggestionStatus.REJECTED }
     });
+  }
+
+  async applyToExisting(id: string) {
+    const rule = await this.prisma.categorizationRule.findUnique({ where: { id } });
+    if (!rule) throw new NotFoundException('Rule not found');
+
+    // Get all uncategorized transactions
+    const transactions = await this.prisma.transaction.findMany({
+        where: { categoryId: null },
+        include: { account: true }
+    });
+
+    let count = 0;
+    for (const tx of transactions) {
+        if (this.ruleEvaluator.matches(tx, rule)) {
+            const updateData: any = { suggestedByRuleId: rule.id };
+            if (rule.mode === RuleMode.AUTO_APPLY && rule.categoryId) {
+                updateData.categoryId = rule.categoryId;
+            }
+            
+            await this.prisma.transaction.update({
+                where: { id: tx.id },
+                data: updateData
+            });
+            count++;
+        }
+    }
+
+    // Update rule stats
+    await this.prisma.categorizationRule.update({
+        where: { id },
+        data: {
+            matchCount: { increment: count },
+            lastMatched: new Date()
+        }
+    });
+
+    return { matched: count };
   }
 }

@@ -781,9 +781,11 @@ export class ViewExpenses extends LitElement {
   }
 
   computeSuggestions() {
+    console.log('[ViewExpenses] Computing suggestions for', this.transactions.length, 'transactions');
     // Apply suggestions to uncategorized items based on Backend Rules
     this.transactions = this.transactions.map(t => {
       if (t.suggestedRule && (!t.categoryId || t.categoryId === 'uncategorized')) {
+         console.log(`[ViewExpenses] Suggestion found for "${t.description}": ${t.suggestedRule.name} -> ${t.suggestedRule.categoryId}`);
          return { 
              ...t, 
              _suggestion: t.suggestedRule.categoryId,
@@ -1176,22 +1178,13 @@ Tables: ${result.tables?.join(', ')}`;
           // Requirement: "Offer to apply it to existing uncategorized transactions"
           
           if (confirm('Rule created! Would you like to apply this rule to existing matching transactions?')) {
-              // We can use a new endpoint or reuse existing logic.
-              // Since we don't have a specific endpoint for "apply rule to all matches" yet (only evaluate one by one),
-              // we can trigger a re-evaluation or bulk update.
-              // Or simplest: Just reload data and let the suggestions appear? 
-              // But user asked to apply.
-              
-              // Backend endpoint `POST /rules/:id/apply` was in the plan but I didn't implement it yet?
-              // Let's check `RulesController`.
-              // I skipped `applyToExisting` in implementation step.
-              
-              // Fallback: We can just let the user know suggestions will appear.
-              // Or better, implemented `propagateCategory` style logic but based on rule conditions?
-              // That's hard to do from frontend efficiently.
-              
-              // I'll alert the user for now that suggestions are generated.
-              alert('Suggestions will be generated for matching transactions.');
+              try {
+                  const result = await api.post(`/rules/${rule.id}/apply`);
+                  alert(`Rule applied! Matched ${result.matched} transactions.`);
+              } catch (err) {
+                  console.error('Failed to apply rule', err);
+                  alert('Failed to apply rule to existing transactions.');
+              }
           }
           
           this.showRuleModal = false;

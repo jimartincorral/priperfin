@@ -50,6 +50,11 @@ export class RulesController {
     return this.rulesService.reorder(body.ruleIds);
   }
 
+  @Post(':id/apply')
+  applyToExisting(@Param('id') id: string) {
+    return this.rulesService.applyToExisting(id);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.rulesService.findOne(id);

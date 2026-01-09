@@ -23,6 +23,7 @@ export class TransactionsService {
   ) {}
 
   async create(dto: CreateTransactionDto) {
+    this.logger.log(`Creating transaction: ${dto.description} (${dto.amount})`);
     const transaction = await this.prisma.transaction.create({
       data: {
         ...dto,
@@ -34,11 +35,13 @@ export class TransactionsService {
     const match = await this.rulesService.evaluateTransaction(transaction);
 
     if (match) {
+      this.logger.log(`Rule match found: ${match.rule.name}, mode: ${match.mode}`);
       const updateData: any = {
         suggestedByRuleId: match.rule.id,
       };
 
       if (match.mode === RuleMode.AUTO_APPLY && match.categoryId) {
+        this.logger.log(`Auto-applying category: ${match.categoryId}`);
         updateData.categoryId = match.categoryId;
       }
 
