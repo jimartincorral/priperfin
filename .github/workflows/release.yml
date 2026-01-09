@@ -1,4 +1,4 @@
-name: Build and Release
+name: Create Release
 
 on:
   push:
@@ -7,59 +7,18 @@ on:
 
 jobs:
   release:
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
 
     permissions:
       contents: write
-
-    strategy:
-      matrix:
-        os: [windows-latest, macos-latest]
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Install Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v3
-        with:
-          version: 9
-
-      - name: Install Dependencies
-        run: pnpm install
-
-      - name: Generate Prisma Client
-        run: |
-          cd apps/api
-          npx prisma generate
-
-      - name: Build API
-        run: |
-          cd apps/api
-          pnpm run build
-
-      - name: Build Web
-        run: |
-          cd apps/web
-          pnpm run build
-
-      - name: Build and Package Desktop
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          cd apps/desktop
-          npm install --legacy-peer-deps
-          npm run build
-          npm run dist -- --publish always
-
-      - name: Publish Release Notes
+      - name: Create Release
         uses: softprops/action-gh-release@v1
-        if: startsWith(github.ref, 'refs/tags/')
         with:
-          files: CHANGELOG.md
-          body_path: CHANGELOG.md
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
