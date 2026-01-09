@@ -476,7 +476,63 @@ export class BackupService {
           );
         }
 
+        // 4. Create CategorizationRule table
+        await this.prisma.$executeRawUnsafe(`
+          CREATE TABLE IF NOT EXISTS "CategorizationRule" (
+            "id" TEXT NOT NULL PRIMARY KEY,
+            "name" TEXT NOT NULL,
+            "description" TEXT,
+            "enabled" BOOLEAN NOT NULL DEFAULT true,
+            "priority" INTEGER NOT NULL DEFAULT 0,
+            "categoryId" TEXT,
+            "mode" TEXT NOT NULL DEFAULT 'SUGGEST',
+            "conditionsJson" TEXT NOT NULL,
+            "matchCount" INTEGER NOT NULL DEFAULT 0,
+            "lastMatched" DATETIME,
+            "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            "updatedAt" DATETIME NOT NULL,
+            CONSTRAINT "CategorizationRule_categoryId_fkey" FOREIGN KEY ("categoryId") REFERENCES "Category" ("id") ON DELETE SET NULL ON UPDATE CASCADE
+          );
+        `);
+
+        // 5. Create RuleSuggestion table
+        await this.prisma.$executeRawUnsafe(`
+          CREATE TABLE IF NOT EXISTS "RuleSuggestion" (
+            "id" TEXT NOT NULL PRIMARY KEY,
+            "name" TEXT NOT NULL,
+            "description" TEXT,
+            "conditionsJson" TEXT NOT NULL,
+            "categoryId" TEXT,
+            "confidence" DECIMAL NOT NULL,
+            "matchCount" INTEGER NOT NULL,
+            "similarityType" TEXT NOT NULL,
+            "sampleTxIds" TEXT NOT NULL,
+            "status" TEXT NOT NULL DEFAULT 'PENDING',
+            "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            "updatedAt" DATETIME NOT NULL,
+            CONSTRAINT "RuleSuggestion_categoryId_fkey" FOREIGN KEY ("categoryId") REFERENCES "Category" ("id") ON DELETE SET NULL ON UPDATE CASCADE
+          );
+        `);
+
+        // 6. Add suggestedByRuleId to Transaction if missing
+        const txInfo: any[] = await this.prisma.$queryRawUnsafe(
+          'PRAGMA table_info("Transaction")',
+        );
+        const hasRuleCol = txInfo.some(
+          (col) => col.name === 'suggestedByRuleId',
+        );
+
+        if (!hasRuleCol) {
+          this.logger.log(
+            'Adding suggestedByRuleId column to Transaction table...',
+          );
+          await this.prisma.$executeRawUnsafe(
+            'ALTER TABLE "Transaction" ADD COLUMN "suggestedByRuleId" TEXT',
+          );
+        }
+
         this.logger.log('Manual schema patching completed.');
+
       } catch (error) {
         this.logger.error('Failed to patch schema manually:', error.message);
         // Continue, as the DB might be mostly functional

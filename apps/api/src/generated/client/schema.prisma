@@ -14,20 +14,22 @@ datasource db {
 }
 
 model Category {
-  id                String             @id @default(uuid())
-  name              String
-  color             String?
-  icon              String
-  budget            Decimal? // Optional monthly soft budget
-  type              CategoryType       @default(EXPENSE)
-  parentId          String?
-  parent            Category?          @relation("CategoryToCategory", fields: [parentId], references: [id], onDelete: SetNull)
-  children          Category[]         @relation("CategoryToCategory")
-  transactions      Transaction[]
-  transactionSplits TransactionSplit[]
-  savingsGoals      SavingsGoal[]
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
+  id                  String               @id @default(uuid())
+  name                String
+  color               String?
+  icon                String
+  budget              Decimal? // Optional monthly soft budget
+  type                CategoryType         @default(EXPENSE)
+  parentId            String?
+  parent              Category?            @relation("CategoryToCategory", fields: [parentId], references: [id], onDelete: SetNull)
+  children            Category[]           @relation("CategoryToCategory")
+  transactions        Transaction[]
+  transactionSplits   TransactionSplit[]
+  savingsGoals        SavingsGoal[]
+  categorizationRules CategorizationRule[]
+  ruleSuggestions     RuleSuggestion[]
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
 }
 
 model Account {
@@ -59,25 +61,97 @@ model CostObject {
 }
 
 model Transaction {
-  id                  String             @id @default(uuid())
+  id                  String      @id @default(uuid())
   date                DateTime
   amount              Decimal
   description         String
   categoryId          String?
-  category            Category?          @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  category            Category?   @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   accountId           String?
-  account             Account?           @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  account             Account?    @relation(fields: [accountId], references: [id], onDelete: SetNull)
   costObjectId        String?
-  costObject          CostObject?        @relation(fields: [costObjectId], references: [id], onDelete: SetNull)
+  costObject          CostObject? @relation(fields: [costObjectId], references: [id], onDelete: SetNull)
   notes               String?
-  suggestedCategoryId String? // ML suggestions
+  suggestedCategoryId String? // ML suggestions - TO BE DEPRECATED
   merchant            String? // Normalized merchant name for matching
-  externalId          String?            @unique
-  splits              TransactionSplit[] @relation("TransactionSplits")
-  createdAt           DateTime           @default(now())
-  updatedAt           DateTime           @updatedAt
+
+  // Rule-based suggestion tracking
+  suggestedByRuleId String?
+  suggestedRule     CategorizationRule? @relation(fields: [suggestedByRuleId], references: [id], onDelete: SetNull)
+
+  externalId String?            @unique
+  splits     TransactionSplit[] @relation("TransactionSplits")
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
 
   @@index([merchant])
+  @@index([categoryId, date]) // For pattern detection
+}
+
+model CategorizationRule {
+  id          String  @id @default(uuid())
+  name        String // User-friendly name
+  description String? // Optional notes
+  enabled     Boolean @default(true)
+  priority    Int     @default(0) // Higher = evaluated first
+
+  // Action configuration
+  categoryId String?
+  category   Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  mode       RuleMode  @default(SUGGEST)
+
+  // Conditions (JSON string for flexibility)
+  conditionsJson String
+
+  // Statistics
+  matchCount  Int       @default(0)
+  lastMatched DateTime?
+
+  // Relations
+  suggestedTransactions Transaction[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([enabled, priority])
+}
+
+enum RuleMode {
+  AUTO_APPLY
+  SUGGEST
+}
+
+model RuleSuggestion {
+  id String @id @default(uuid())
+
+  // Suggested rule definition
+  name           String
+  description    String?
+  conditionsJson String
+  categoryId     String?
+  category       Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  // Confidence metrics
+  confidence     Decimal // 0-100 score
+  matchCount     Int // Number of matching transactions
+  similarityType String // 'merchant', 'description', 'amount', 'notes', 'combined'
+
+  // Sample transactions that match (JSON array of IDs)
+  sampleTxIds String
+
+  // User action
+  status SuggestionStatus @default(PENDING)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, confidence])
+}
+
+enum SuggestionStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
 }
 
 model TransactionSplit {

@@ -2,8 +2,10 @@ import { LitElement, html, css } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import { api, getApiBaseUrl } from '../api/client';
 import { i18n } from '../i18n/i18n';
+import '../components/settings-rules';
 
 import 'emoji-picker-element';
+
 
 @customElement('view-settings')
 export class ViewSettings extends LitElement {
@@ -896,8 +898,11 @@ export class ViewSettings extends LitElement {
           </div>
       </div>
 
+      <settings-rules></settings-rules>
+
       <div class="header">
         <div class="section-title" style="margin: 0">${i18n.t('settings.categories')}</div>
+
         <button class="btn-primary" @click="${this.toggleAddForm}">
             ${this.showAddForm ? i18n.t('common.cancel') : '+ ' + i18n.t('settings.add_category')}
         </button>

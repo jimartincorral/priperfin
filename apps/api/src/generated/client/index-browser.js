@@ -158,7 +158,38 @@ exports.Prisma.TransactionScalarFieldEnum = {
   notes: 'notes',
   suggestedCategoryId: 'suggestedCategoryId',
   merchant: 'merchant',
+  suggestedByRuleId: 'suggestedByRuleId',
   externalId: 'externalId',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.CategorizationRuleScalarFieldEnum = {
+  id: 'id',
+  name: 'name',
+  description: 'description',
+  enabled: 'enabled',
+  priority: 'priority',
+  categoryId: 'categoryId',
+  mode: 'mode',
+  conditionsJson: 'conditionsJson',
+  matchCount: 'matchCount',
+  lastMatched: 'lastMatched',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.RuleSuggestionScalarFieldEnum = {
+  id: 'id',
+  name: 'name',
+  description: 'description',
+  conditionsJson: 'conditionsJson',
+  categoryId: 'categoryId',
+  confidence: 'confidence',
+  matchCount: 'matchCount',
+  similarityType: 'similarityType',
+  sampleTxIds: 'sampleTxIds',
+  status: 'status',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 };
@@ -230,11 +261,24 @@ exports.AccountType = exports.$Enums.AccountType = {
   CREDIT: 'CREDIT'
 };
 
+exports.RuleMode = exports.$Enums.RuleMode = {
+  AUTO_APPLY: 'AUTO_APPLY',
+  SUGGEST: 'SUGGEST'
+};
+
+exports.SuggestionStatus = exports.$Enums.SuggestionStatus = {
+  PENDING: 'PENDING',
+  ACCEPTED: 'ACCEPTED',
+  REJECTED: 'REJECTED'
+};
+
 exports.Prisma.ModelName = {
   Category: 'Category',
   Account: 'Account',
   CostObject: 'CostObject',
   Transaction: 'Transaction',
+  CategorizationRule: 'CategorizationRule',
+  RuleSuggestion: 'RuleSuggestion',
   TransactionSplit: 'TransactionSplit',
   SavingsGoal: 'SavingsGoal',
   Setting: 'Setting',

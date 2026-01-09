@@ -1,42 +1,24 @@
 // Helper to get base URL for API calls (handles ingress)
 export function getApiBaseUrl(): string {
-    // 1. Try to detect from base URI (most robust for Ingress where HA injects <base>)
+    // Robustly determine API URL relative to the application base using document.baseURI
+    // Home Assistant Ingress injects a <base href="..."> tag which points to the ingress root.
+    // By using the URL constructor relative to baseURI, we automatically handle the ingress path.
     try {
-        const baseUri = document.baseURI;
-        if (baseUri) {
-            const url = new URL(baseUri);
-            const path = url.pathname;
-            // Check for ingress patterns in base URI path
-            const ingressMatch = path.match(/^(\/api\/hassio_ingress\/[^/]+|\/hassio\/ingress\/[^/]+)/);
-            if (ingressMatch) {
-                // If the base URI is exactly the ingress root, append /api
-                // If base URI includes subpaths, we want the root + /api.
-                // ingressMatch[0] gives the root prefix e.g. /api/hassio_ingress/TOKEN
-                const baseUrl = `${url.origin}${ingressMatch[0]}/api`;
-                console.log('[getApiBaseUrl] Ingress detected from baseURI, base URL:', baseUrl);
-                return baseUrl;
-            }
-        }
+        const base = document.baseURI || window.location.href;
+        // Resolve 'api' relative to the base. 
+        // If base is .../ingress_token/ (standard HA), result is .../ingress_token/api
+        // We ensure we don't accidentally replace the last segment if base doesn't have trailing slash
+        // by checking the behavior, but HA Ingress bases always have trailing slash.
+        
+        // Force trailing slash on base if missing to treat it as a directory
+        const safeBase = base.endsWith('/') ? base : base + '/';
+        const url = new URL('api', safeBase);
+        
+        console.log('[getApiBaseUrl] Resolved base URL:', url.href);
+        return url.href;
     } catch (e) {
-        console.warn('[getApiBaseUrl] Failed to parse baseURI:', e);
-    }
-
-    // 2. Fallback to current location logic (old way)
-    const path = window.location.pathname;
-    // Check for Home Assistant Ingress paths (both formats)
-    // Format 1: /api/hassio_ingress/<token>
-    // Format 2: /hassio/ingress/<token>
-    const ingressMatch = path.match(/^(\/api\/hassio_ingress\/[^/]+|\/hassio\/ingress\/[^/]+)/);
-    if (ingressMatch) {
-        // For ingress: use the ingress base path + /api
-        // HA ingress proxies requests to the add-on, which has NestJS with global prefix 'api'
-        // The ingress strips its own prefix before forwarding to the app
-        const baseUrl = `${window.location.origin}${ingressMatch[1]}/api`;
-        console.log('[getApiBaseUrl] Ingress detected from location, base URL:', baseUrl);
-        return baseUrl;
-    } else {
-        // Direct access (development or direct port access)
-        // Use relative path to allow Vite proxy or same-origin serving to handle it
+        console.warn('[getApiBaseUrl] Error resolving URL:', e);
+        // Fallback for dev/direct access
         return '/api';
     }
 }

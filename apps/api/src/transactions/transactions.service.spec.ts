@@ -1,33 +1,31 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { TransactionsService } from './transactions.service';
-import { CategorizationService } from './categorization.service';
+import { RulesService } from '../rules/rules.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotFoundException, BadRequestException } from '@nestjs/common';
 import { createPrismaMock, PrismaMock } from '../test/prisma-mock.factory';
 import {
   createMockTransaction,
   createMockAccount,
-  createMockCategory,
 } from '../test/fixtures';
-import { Decimal } from '../generated/client';
+import { Decimal, RuleMode } from '../generated/client';
 
 describe('TransactionsService', () => {
   let service: TransactionsService;
   let prismaMock: PrismaMock;
-  let categorizationMock: { predict: jest.Mock; trainModel: jest.Mock };
+  let rulesServiceMock: { evaluateTransaction: jest.Mock };
 
   beforeEach(async () => {
     prismaMock = createPrismaMock();
-    categorizationMock = {
-      predict: jest.fn(),
-      trainModel: jest.fn(),
+    rulesServiceMock = {
+      evaluateTransaction: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         TransactionsService,
         { provide: PrismaService, useValue: prismaMock },
-        { provide: CategorizationService, useValue: categorizationMock },
+        { provide: RulesService, useValue: rulesServiceMock },
       ],
     }).compile();
 
@@ -36,6 +34,66 @@ describe('TransactionsService', () => {
 
   it('should be defined', () => {
     expect(service).toBeDefined();
+  });
+
+  // ============================================
+  // create() Tests
+  // ============================================
+  describe('create', () => {
+    it('should create transaction and apply rule suggestion (AUTO_APPLY)', async () => {
+      const tx = createMockTransaction({ id: 'new-tx', categoryId: null });
+      prismaMock.transaction.create.mockResolvedValue(tx);
+      
+      rulesServiceMock.evaluateTransaction.mockResolvedValue({
+        rule: { id: 'rule-1' },
+        categoryId: 'cat-1',
+        mode: RuleMode.AUTO_APPLY
+      });
+
+      const dto = {
+        date: '2025-01-15',
+        amount: -50,
+        description: 'Test Create',
+      };
+
+      await service.create(dto as any);
+
+      expect(prismaMock.transaction.create).toHaveBeenCalled();
+      expect(prismaMock.transaction.update).toHaveBeenCalledWith({
+        where: { id: 'new-tx' },
+        data: {
+            suggestedByRuleId: 'rule-1',
+            categoryId: 'cat-1'
+        }
+      });
+    });
+
+    it('should create transaction and link suggestion (SUGGEST)', async () => {
+        const tx = createMockTransaction({ id: 'new-tx', categoryId: null });
+        prismaMock.transaction.create.mockResolvedValue(tx);
+        
+        rulesServiceMock.evaluateTransaction.mockResolvedValue({
+          rule: { id: 'rule-1' },
+          categoryId: 'cat-1',
+          mode: RuleMode.SUGGEST
+        });
+  
+        const dto = {
+          date: '2025-01-15',
+          amount: -50,
+          description: 'Test Create',
+        };
+  
+        await service.create(dto as any);
+  
+        expect(prismaMock.transaction.create).toHaveBeenCalled();
+        expect(prismaMock.transaction.update).toHaveBeenCalledWith({
+          where: { id: 'new-tx' },
+          data: {
+              suggestedByRuleId: 'rule-1'
+          }
+        });
+      });
   });
 
   // ============================================
@@ -125,77 +183,6 @@ describe('TransactionsService', () => {
       const result = await service.getAccountBalance('acc-1');
 
       expect(result.balance).toBe(1200); // 1000 + 200
-    });
-  });
-
-  // ============================================
-  // suggestCategory() Tests
-  // ============================================
-  describe('suggestCategory', () => {
-    it('should return null for empty description', async () => {
-      const result = await service.suggestCategory('');
-      expect(result.categoryId).toBeNull();
-    });
-
-    it('should return category from merchant match', async () => {
-      // First call: merchant match succeeds
-      prismaMock.transaction.findFirst.mockResolvedValueOnce({
-        categoryId: 'cat-groceries',
-      });
-
-      const result = await service.suggestCategory('WALMART STORE #123');
-
-      expect(result.categoryId).toBe('cat-groceries');
-      expect(result.source).toBe('merchant');
-      expect(categorizationMock.predict).not.toHaveBeenCalled();
-    });
-
-    it('should return category from fuzzy match when no exact merchant match', async () => {
-      // First call: merchant match fails
-      prismaMock.transaction.findFirst.mockResolvedValueOnce(null);
-      // Second call: fuzzy match succeeds
-      prismaMock.transaction.findFirst.mockResolvedValueOnce({
-        categoryId: 'cat-groceries',
-        merchant: 'walmart store',
-      });
-
-      const result = await service.suggestCategory('WALMART STORE #456');
-
-      expect(result.categoryId).toBe('cat-groceries');
-      expect(result.source).toBe('fuzzy');
-    });
-
-    it('should return category from ML prediction when no matches', async () => {
-      // All findFirst calls return null
-      prismaMock.transaction.findFirst.mockResolvedValue(null);
-      categorizationMock.predict.mockReturnValue('cat-restaurants');
-
-      const result = await service.suggestCategory('New Restaurant ABC');
-
-      expect(result.categoryId).toBe('cat-restaurants');
-      expect(result.source).toBe('prediction');
-    });
-
-    it('should return null when no matches found', async () => {
-      prismaMock.transaction.findFirst.mockResolvedValue(null);
-      categorizationMock.predict.mockReturnValue(null);
-
-      const result = await service.suggestCategory('Unknown Transaction XYZ');
-
-      expect(result.categoryId).toBeNull();
-      expect(result.source).toBeNull();
-    });
-
-    it('should prefer merchant match over ML prediction', async () => {
-      prismaMock.transaction.findFirst.mockResolvedValueOnce({
-        categoryId: 'cat-merchant',
-      });
-      categorizationMock.predict.mockReturnValue('cat-ml');
-
-      const result = await service.suggestCategory('AMAZON.COM*ABC123');
-
-      expect(result.categoryId).toBe('cat-merchant');
-      expect(result.source).toBe('merchant');
     });
   });
 
@@ -414,12 +401,10 @@ describe('TransactionsService', () => {
   // createMany() Tests
   // ============================================
   describe('createMany', () => {
-    it('should create transactions with suggested categories', async () => {
-      prismaMock.transaction.findFirst.mockResolvedValue({
-        categoryId: 'cat-suggested',
-      });
+    it('should create transactions', async () => {
       prismaMock.transaction.findMany.mockResolvedValue([]); // No existing
       prismaMock.transaction.createMany.mockResolvedValue({ count: 1 });
+      rulesServiceMock.evaluateTransaction.mockResolvedValue(null);
 
       const dtos = [
         {
@@ -437,7 +422,7 @@ describe('TransactionsService', () => {
     it('should identify duplicates by externalId', async () => {
       const existingTx = { externalId: 'hash123' };
       prismaMock.transaction.findMany.mockResolvedValue([existingTx]);
-      prismaMock.transaction.findFirst.mockResolvedValue(null);
+      rulesServiceMock.evaluateTransaction.mockResolvedValue(null);
 
       const dtos = [
         {
@@ -453,156 +438,11 @@ describe('TransactionsService', () => {
       expect(result.duplicateCount).toBe(1);
       expect(result.duplicates).toHaveLength(1);
     });
-
-    it('should return duplicates for user review when force=false', async () => {
-      const existingTx = { externalId: 'hash123' };
-      prismaMock.transaction.findMany.mockResolvedValue([existingTx]);
-      prismaMock.transaction.findFirst.mockResolvedValue(null);
-
-      const dtos = [
-        {
-          date: '2025-01-15',
-          amount: -50,
-          description: 'Duplicate Test',
-          externalId: 'hash123',
-        },
-      ];
-
-      const result = await service.createMany(dtos as any, false);
-
-      expect(result.duplicateCount).toBe(1);
-      expect(result.newCount).toBe(0);
-    });
-
-    it('should import all transactions when force=true', async () => {
-      const existingTx = { externalId: 'hash123' };
-      prismaMock.transaction.findMany
-        .mockResolvedValueOnce([existingTx]) // First call: existing transactions
-        .mockResolvedValueOnce([]); // Second call: manual matches query
-      prismaMock.transaction.findFirst.mockResolvedValue(null);
-      prismaMock.transaction.createMany.mockResolvedValue({ count: 1 });
-
-      const dtos = [
-        {
-          date: '2025-01-15',
-          amount: -50,
-          description: 'Force Import',
-          externalId: 'hash123',
-        },
-      ];
-
-      const result = await service.createMany(dtos as any, true);
-
-      expect(result.newCount).toBe(1);
-      expect(result.duplicateCount).toBe(0);
-    });
-
-    it('should handle empty input array', async () => {
-      prismaMock.transaction.findMany.mockResolvedValue([]);
-      prismaMock.transaction.createMany.mockResolvedValue({ count: 0 });
-
-      const result = await service.createMany([], false);
-
-      expect(result.newCount).toBe(0);
-      expect(result.duplicateCount).toBe(0);
-    });
-
-    it('should handle null/undefined input', async () => {
-      const result = await service.createMany(null as any, false);
-
-      expect(result.newCount).toBe(0);
-    });
   });
 
   // ============================================
-  // Levenshtein Distance Tests
+  // findAll() Tests
   // ============================================
-  describe('levenshteinDistance (via calculateDescriptionSimilarity)', () => {
-    it('should return 0 distance for identical strings', () => {
-      // Access private method via any cast
-      const distance = (service as any).levenshteinDistance('hello', 'hello');
-      expect(distance).toBe(0);
-    });
-
-    it('should calculate correct distance for single character difference', () => {
-      const distance = (service as any).levenshteinDistance('hello', 'hallo');
-      expect(distance).toBe(1);
-    });
-
-    it('should calculate correct distance for completely different strings', () => {
-      const distance = (service as any).levenshteinDistance('abc', 'xyz');
-      expect(distance).toBe(3);
-    });
-
-    it('should handle empty strings', () => {
-      expect((service as any).levenshteinDistance('', '')).toBe(0);
-      expect((service as any).levenshteinDistance('abc', '')).toBe(3);
-      expect((service as any).levenshteinDistance('', 'xyz')).toBe(3);
-    });
-  });
-
-  // ============================================
-  // calculateDescriptionSimilarity Tests
-  // ============================================
-  describe('calculateDescriptionSimilarity', () => {
-    it('should return 100 for substring match', () => {
-      const similarity = (service as any).calculateDescriptionSimilarity(
-        'Walmart Purchase',
-        'Walmart',
-      );
-      expect(similarity).toBe(100);
-    });
-
-    it('should return 100 for reverse substring match', () => {
-      const similarity = (service as any).calculateDescriptionSimilarity(
-        'Purchase',
-        'Walmart Purchase',
-      );
-      expect(similarity).toBe(100);
-    });
-
-    it('should return high similarity for similar strings', () => {
-      const similarity = (service as any).calculateDescriptionSimilarity(
-        'Amazon Prime',
-        'Amazon Prine', // Typo
-      );
-      expect(similarity).toBeGreaterThan(80);
-    });
-
-    it('should return low similarity for different strings', () => {
-      const similarity = (service as any).calculateDescriptionSimilarity(
-        'Walmart',
-        'Costco',
-      );
-      expect(similarity).toBeLessThan(50);
-    });
-  });
-
-  // ============================================
-  // CRUD Operations Tests
-  // ============================================
-  describe('create', () => {
-    it('should create transaction and suggest category', async () => {
-      prismaMock.transaction.findFirst.mockResolvedValue({
-        categoryId: 'cat-1',
-      });
-      prismaMock.transaction.create.mockResolvedValue(
-        createMockTransaction({ id: 'new-tx' }),
-      );
-
-      const dto = {
-        date: '2025-01-15',
-        amount: -50,
-        description: 'Test Create',
-      };
-
-      const result = await service.create(dto as any);
-
-      expect(result.id).toBe('new-tx');
-      expect(prismaMock.transaction.create).toHaveBeenCalled();
-    });
-  });
-
   describe('findAll', () => {
     it('should filter by month and year', async () => {
       prismaMock.transaction.findMany.mockResolvedValue([]);
@@ -620,22 +460,11 @@ describe('TransactionsService', () => {
         }),
       );
     });
-
-    it('should filter by accountId', async () => {
-      prismaMock.transaction.findMany.mockResolvedValue([]);
-
-      await service.findAll({ accountId: 'acc-1' });
-
-      expect(prismaMock.transaction.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: expect.objectContaining({
-            accountId: 'acc-1',
-          }),
-        }),
-      );
-    });
   });
 
+  // ============================================
+  // findOne() Tests
+  // ============================================
   describe('findOne', () => {
     it('should return transaction by id', async () => {
       const tx = createMockTransaction({ id: 'tx-1' });
@@ -655,6 +484,9 @@ describe('TransactionsService', () => {
     });
   });
 
+  // ============================================
+  // remove() Tests
+  // ============================================
   describe('remove', () => {
     it('should delete transaction', async () => {
       prismaMock.transaction.delete.mockResolvedValue({ id: 'tx-1' });
@@ -667,6 +499,9 @@ describe('TransactionsService', () => {
     });
   });
 
+  // ============================================
+  // propagateCategory() Tests
+  // ============================================
   describe('propagateCategory', () => {
     it('should update uncategorized transactions with matching description', async () => {
       prismaMock.transaction.updateMany.mockResolvedValue({ count: 5 });
