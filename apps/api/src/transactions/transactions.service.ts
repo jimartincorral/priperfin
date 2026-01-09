@@ -3,85 +3,52 @@ import {
   NotFoundException,
   BadRequestException,
   Logger,
-  OnModuleInit,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTransactionDto } from './create-transaction.dto';
 import { GetTransactionsDto, DateFilterMode } from './get-transactions.dto';
 import { CreateSplitsDto } from './create-split.dto';
-import { CategorizationService } from './categorization.service';
-import { extractMerchant, extractMerchantCore } from './merchant-extractor';
+import { RulesService } from '../rules/rules.service';
+import { RuleMode } from '../generated/client';
 import * as crypto from 'crypto';
+import { Prisma } from '../generated/client';
 
 @Injectable()
-export class TransactionsService implements OnModuleInit {
+export class TransactionsService {
   private logger = new Logger(TransactionsService.name);
 
   constructor(
     private prisma: PrismaService,
-    private categorizationService: CategorizationService,
+    private rulesService: RulesService,
   ) {}
 
-  async onModuleInit() {
-    // Backfill merchant field for existing transactions
-    this.backfillMerchants().catch((err) => {
-      this.logger.error('Failed to backfill merchants', err);
-    });
-  }
-
-  /**
-   * Backfill merchant field for transactions that don't have it set.
-   * Runs on startup to migrate existing data.
-   */
-  private async backfillMerchants() {
-    const transactions = await this.prisma.transaction.findMany({
-      where: { merchant: null },
-      select: { id: true, description: true },
-    });
-
-    if (transactions.length === 0) {
-      this.logger.log('No transactions need merchant backfill');
-      return;
-    }
-
-    this.logger.log(`Backfilling merchant for ${transactions.length} transactions...`);
-    const start = Date.now();
-
-    for (const tx of transactions) {
-      const merchant = extractMerchant(tx.description);
-      if (merchant) {
-        await this.prisma.transaction.update({
-          where: { id: tx.id },
-          data: { merchant },
-        });
-      }
-    }
-
-    const duration = Date.now() - start;
-    this.logger.log(`Merchant backfill complete in ${duration}ms`);
-  }
-
   async create(dto: CreateTransactionDto) {
-    // Extract normalized merchant name
-    const merchant = extractMerchant(dto.description);
-
-    // Attempt categorization if missing
-    let suggestedCategoryId = null;
-    if (!dto.categoryId || dto.categoryId === 'uncategorized') {
-      const suggestion = await this.suggestCategory(dto.description, dto.notes);
-      if (suggestion.categoryId) {
-        // Do NOT auto-apply. Just suggest.
-        suggestedCategoryId = suggestion.categoryId;
-      }
-    }
-
-    return this.prisma.transaction.create({
+    const transaction = await this.prisma.transaction.create({
       data: {
         ...dto,
-        merchant,
-        suggestedCategoryId,
+        merchant: null, // Deprecated
       },
     });
+
+    // Evaluate rules
+    const match = await this.rulesService.evaluateTransaction(transaction);
+
+    if (match) {
+      const updateData: any = {
+        suggestedByRuleId: match.rule.id,
+      };
+
+      if (match.mode === RuleMode.AUTO_APPLY && match.categoryId) {
+        updateData.categoryId = match.categoryId;
+      }
+
+      return this.prisma.transaction.update({
+        where: { id: transaction.id },
+        data: updateData,
+      });
+    }
+
+    return transaction;
   }
 
   async getBalance() {
@@ -89,6 +56,36 @@ export class TransactionsService implements OnModuleInit {
       _sum: { amount: true },
     });
     return { total: result._sum.amount ? result._sum.amount.toNumber() : 0 };
+  }
+
+  async suggestCategory(description: string, notes?: string) {
+    if (!description) return null;
+
+    // Create a minimal mock transaction for rule evaluation
+    const mockTx = {
+        description,
+        notes: notes || null,
+        amount: new Prisma.Decimal(0),
+        date: new Date(),
+        merchant: null,
+        id: 'temp',
+        categoryId: null,
+        accountId: null,
+        costObjectId: null,
+        suggestedCategoryId: null,
+        suggestedByRuleId: null,
+        externalId: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        splits: []
+    } as any;
+
+    const match = await this.rulesService.evaluateTransaction(mockTx);
+    if (match && match.categoryId) {
+        return { categoryId: match.categoryId, source: 'rule', ruleId: match.rule.id };
+    }
+    
+    return { categoryId: null, source: null };
   }
 
   async getAccountBalance(accountId: string) {
@@ -109,8 +106,6 @@ export class TransactionsService implements OnModuleInit {
     const initialBalance = account.initialBalance.toNumber();
 
     if (account.type === 'CREDIT') {
-      // For credit accounts: owed = initial - sum
-      // (purchases are negative, so -(-50) = +50 to debt; payments are positive, so -(+100) = -100 to debt)
       return {
         balance: initialBalance - txSum,
         type: 'CREDIT',
@@ -118,7 +113,6 @@ export class TransactionsService implements OnModuleInit {
       };
     }
 
-    // For debit accounts: balance = initial + sum
     return {
       balance: initialBalance + txSum,
       type: 'DEBIT',
@@ -126,73 +120,10 @@ export class TransactionsService implements OnModuleInit {
     };
   }
 
-  async suggestCategory(description: string, notes?: string | null) {
-    if (!description) return { categoryId: null, source: null };
-
-    const merchant = extractMerchant(description);
-
-    // 1. Exact merchant match (FAST - indexed query, learns from ONE example)
-    if (merchant) {
-      const merchantMatch = await this.prisma.transaction.findFirst({
-        where: {
-          merchant: merchant,
-          categoryId: { not: null },
-        },
-        orderBy: { date: 'desc' },
-        select: { categoryId: true },
-      });
-
-      if (merchantMatch?.categoryId) {
-        return { categoryId: merchantMatch.categoryId, source: 'merchant' };
-      }
-    }
-
-    // 2. Fuzzy merchant match (prefix-based for close variations)
-    const merchantCore = extractMerchantCore(description);
-    if (merchantCore && merchantCore.length >= 4) {
-      const fuzzyMatch = await this.prisma.transaction.findFirst({
-        where: {
-          merchant: { startsWith: merchantCore },
-          categoryId: { not: null },
-        },
-        orderBy: { date: 'desc' },
-        select: { categoryId: true, merchant: true },
-      });
-
-      if (fuzzyMatch?.categoryId) {
-        return { categoryId: fuzzyMatch.categoryId, source: 'fuzzy' };
-      }
-    }
-
-    // 3. Legacy exact description match (fallback)
-    const exactMatch = await this.prisma.transaction.findFirst({
-      where: {
-        description: { contains: description },
-        categoryId: { not: null },
-      },
-      orderBy: { date: 'desc' },
-      select: { categoryId: true },
-    });
-
-    if (exactMatch?.categoryId) {
-      return { categoryId: exactMatch.categoryId, source: 'history' };
-    }
-
-    // 4. ML Prediction: Use Bayes Classifier (lowest priority)
-    const predictedCategoryId = this.categorizationService.predict(description, notes);
-
-    if (predictedCategoryId) {
-      return { categoryId: predictedCategoryId, source: 'prediction' };
-    }
-
-    return { categoryId: null, source: null };
-  }
-
   async findAll(query: GetTransactionsDto) {
     const { filterMode, month, year, startDate, endDate, accountId } = query;
     const where: any = {};
 
-    // Determine date filter based on mode
     switch (filterMode) {
       case DateFilterMode.MONTH:
         if (month && year) {
@@ -217,7 +148,6 @@ export class TransactionsService implements OnModuleInit {
             where.date.gte = new Date(startDate);
           }
           if (endDate) {
-            // Include the end date fully (up to end of day)
             const endDateObj = new Date(endDate);
             endDateObj.setHours(23, 59, 59, 999);
             where.date.lte = endDateObj;
@@ -226,11 +156,9 @@ export class TransactionsService implements OnModuleInit {
         break;
 
       case DateFilterMode.ALL_TIME:
-        // No date filter - return all transactions
         break;
 
       default:
-        // Backward compatibility: use legacy month/year logic if no filterMode specified
         if (month && year) {
           const start = new Date(year, month - 1, 1);
           const end = new Date(year, month, 1);
@@ -242,7 +170,6 @@ export class TransactionsService implements OnModuleInit {
         }
     }
 
-    // Filter by account if specified
     if (accountId) {
       where.accountId = accountId;
     }
@@ -253,6 +180,7 @@ export class TransactionsService implements OnModuleInit {
       include: {
         category: true,
         costObject: true,
+        suggestedRule: { include: { category: true } }, // Include suggested rule and its category
         splits: {
           include: {
             category: true,
@@ -278,13 +206,12 @@ export class TransactionsService implements OnModuleInit {
     }
   }
 
-  // Public method for manual bulk update
   async propagateCategory(description: string, categoryId: string) {
     try {
       const result = await this.prisma.transaction.updateMany({
         where: {
-          description: { equals: description }, // Strict match on description
-          categoryId: null, // Only update uncategorized ones
+          description: { equals: description },
+          categoryId: null,
         },
         data: { categoryId },
       });
@@ -303,17 +230,16 @@ export class TransactionsService implements OnModuleInit {
       const { parse } = await import('csv-parse/sync');
       const records = parse(fileBuffer, {
         columns: (headers: string[]) =>
-          headers.map((h) => h.trim().toLowerCase()), // Case-insensitive headers
+          headers.map((h) => h.trim().toLowerCase()),
         skip_empty_lines: true,
         trim: true,
-        bom: true, // Handle Excel BOM
+        bom: true,
       });
 
       console.log(`[CSV Import] Parsed ${records.length} records`);
 
       const transactionsToCreate = records
         .map((record: any, index: number) => {
-          // Map common column variations
           const amountRaw =
             record.amount || record['amount (eur)'] || record['amount (usd)'];
           const dateRaw = record.date || record['transaction date'];
@@ -333,7 +259,6 @@ export class TransactionsService implements OnModuleInit {
           const description = descRaw || 'Imported Transaction';
           const date = new Date(dateRaw);
 
-          // Basic validation/sanitization
           if (isNaN(amount) || isNaN(date.getTime())) {
             console.warn(
               `[CSV Import] Skipping row ${index + 1}: Invalid data`,
@@ -347,7 +272,7 @@ export class TransactionsService implements OnModuleInit {
             amount,
             description,
             notes: notesRaw || null,
-            externalId: '', // Temporary
+            externalId: '',
           };
           dto.externalId = this.generateHash(dto);
           return dto;
@@ -359,7 +284,6 @@ export class TransactionsService implements OnModuleInit {
         return { count: 0, message: 'No valid records found' };
       }
 
-      // Manual filter for duplicates (SQLite skipDuplicates compatibility)
       const externalIds = transactionsToCreate
         .map((t) => t.externalId)
         .filter((id) => !!id) as string[];
@@ -419,31 +343,46 @@ export class TransactionsService implements OnModuleInit {
     const enhancedDtos = await Promise.all(
       dtos.map(async (dto) => {
         let categoryId = dto.categoryId;
-        let suggestedCategoryId = null;
+        let suggestedByRuleId = null;
 
-        // Extract normalized merchant name
-        const merchant = extractMerchant(dto.description);
+        // Mock transaction for rule evaluation
+        const mockTx = {
+            ...dto,
+            amount: new Prisma.Decimal(dto.amount),
+            date: new Date(dto.date),
+            merchant: null,
+            id: 'temp',
+            accountId: null,
+            costObjectId: null,
+            suggestedCategoryId: null,
+            suggestedByRuleId: null,
+            externalId: null,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            splits: []
+        } as any;
 
-        if (!categoryId || categoryId === 'uncategorized') {
-          const suggestion = await this.suggestCategory(dto.description, dto.notes);
-          if (suggestion && suggestion.categoryId) {
-            // Do NOT auto-apply. Just suggest.
-            suggestedCategoryId = suggestion.categoryId;
-          }
+        // Evaluate rules
+        const match = await this.rulesService.evaluateTransaction(mockTx);
+        if (match) {
+            if (match.mode === RuleMode.AUTO_APPLY && match.categoryId) {
+                categoryId = match.categoryId;
+                suggestedByRuleId = match.rule.id;
+            } else {
+                suggestedByRuleId = match.rule.id;
+            }
         }
 
         return {
           ...dto,
           categoryId,
-          merchant,
-          suggestedCategoryId,
+          merchant: null,
+          suggestedByRuleId,
           externalId: dto.externalId || this.generateHash(dto),
         };
       }),
     );
 
-    // SQLite doesn't always support skipDuplicates in createMany reliably in all Prisma setups
-    // Manual filter: Find existing externalIds
     const externalIds = enhancedDtos
       .map((d) => d.externalId)
       .filter((id) => !!id);
@@ -457,17 +396,14 @@ export class TransactionsService implements OnModuleInit {
 
     const existingIds = new Set(existingTransactions.map((t) => t.externalId));
 
-    // Filter out DB duplicates; track within-batch occurrences for user review
-    const seenInBatch = new Map<string, number>(); // externalId -> occurrence count
+    const seenInBatch = new Map<string, number>();
     const newTransactions: typeof enhancedDtos = [];
     const duplicates: Array<(typeof enhancedDtos)[0] & { reason: string; batchIndex?: number }> = [];
 
     for (const d of enhancedDtos) {
       if (d.externalId && existingIds.has(d.externalId)) {
-        // Duplicate in database
         duplicates.push({ ...d, reason: 'database' });
       } else if (d.externalId && seenInBatch.has(d.externalId)) {
-        // Within-batch duplicate - let user decide whether to import
         const count = seenInBatch.get(d.externalId)! + 1;
         seenInBatch.set(d.externalId, count);
         duplicates.push({ ...d, reason: 'batch', batchIndex: count });
@@ -481,7 +417,6 @@ export class TransactionsService implements OnModuleInit {
 
     console.log(`[TransactionsService] createMany: ${newTransactions.length} new, ${duplicates.length} duplicates`);
 
-    // If force=false and duplicates exist, return them for user review
     if (!force && duplicates.length > 0) {
       return {
         newCount: newTransactions.length,
@@ -499,13 +434,11 @@ export class TransactionsService implements OnModuleInit {
       };
     }
 
-    // Find manual matches (only for new transactions, not duplicates)
     const manualMatches = await this.findManualMatches(
       enhancedDtos,
       newTransactions,
     );
 
-    // If force=false and manual matches exist, return them for user review
     if (!force && manualMatches.length > 0) {
       return {
         newCount: newTransactions.length,
@@ -516,12 +449,9 @@ export class TransactionsService implements OnModuleInit {
       };
     }
 
-    // If force=true, import everything (including duplicates by regenerating their IDs)
     let transactionsToImport = force
       ? enhancedDtos.map((d) => {
-          // Check if it's already in DB
           if (d.externalId && existingIds.has(d.externalId)) {
-            // Return a copy with a unique externalId to allow re-import
             return {
               ...d,
               externalId:
@@ -536,7 +466,6 @@ export class TransactionsService implements OnModuleInit {
         })
       : newTransactions;
 
-    // Execute merges if merge instructions provided
     if (force && mergeInstructions && mergeInstructions.length > 0) {
       transactionsToImport = await this.executeMerges(
         mergeInstructions,
@@ -604,7 +533,6 @@ export class TransactionsService implements OnModuleInit {
   }
 
   async createSplits(transactionId: string, dto: CreateSplitsDto) {
-    // Validate transaction exists
     const transaction = await this.prisma.transaction.findUnique({
       where: { id: transactionId },
       include: { splits: true },
@@ -616,14 +544,12 @@ export class TransactionsService implements OnModuleInit {
       );
     }
 
-    // Validate no existing splits
     if (transaction.splits && transaction.splits.length > 0) {
       throw new BadRequestException(
         'Transaction already has splits. Use update instead.',
       );
     }
 
-    // Validate splits sum to parent amount (±0.01 tolerance)
     const totalSplitAmount = dto.splits.reduce(
       (sum, split) => sum + split.amount,
       0,
@@ -637,9 +563,7 @@ export class TransactionsService implements OnModuleInit {
       );
     }
 
-    // Create splits in a transaction
     return this.prisma.$transaction(async (tx) => {
-      // Create all splits
       await tx.transactionSplit.createMany({
         data: dto.splits.map((split) => ({
           parentId: transactionId,
@@ -650,7 +574,6 @@ export class TransactionsService implements OnModuleInit {
         })),
       });
 
-      // Return updated transaction with splits
       return tx.transaction.findUnique({
         where: { id: transactionId },
         include: {
@@ -666,7 +589,6 @@ export class TransactionsService implements OnModuleInit {
   }
 
   async updateSplits(transactionId: string, dto: CreateSplitsDto) {
-    // Validate transaction exists
     const transaction = await this.prisma.transaction.findUnique({
       where: { id: transactionId },
     });
@@ -677,7 +599,6 @@ export class TransactionsService implements OnModuleInit {
       );
     }
 
-    // Validate splits sum to parent amount (±0.01 tolerance)
     const totalSplitAmount = dto.splits.reduce(
       (sum, split) => sum + split.amount,
       0,
@@ -691,14 +612,11 @@ export class TransactionsService implements OnModuleInit {
       );
     }
 
-    // Update splits in a transaction (delete all, create new)
     return this.prisma.$transaction(async (tx) => {
-      // Delete existing splits
       await tx.transactionSplit.deleteMany({
         where: { parentId: transactionId },
       });
 
-      // Create new splits
       await tx.transactionSplit.createMany({
         data: dto.splits.map((split) => ({
           parentId: transactionId,
@@ -709,7 +627,6 @@ export class TransactionsService implements OnModuleInit {
         })),
       });
 
-      // Return updated transaction with splits
       return tx.transaction.findUnique({
         where: { id: transactionId },
         include: {
@@ -725,7 +642,6 @@ export class TransactionsService implements OnModuleInit {
   }
 
   async deleteSplits(transactionId: string) {
-    // Validate transaction exists
     const transaction = await this.prisma.transaction.findUnique({
       where: { id: transactionId },
       include: { splits: true },
@@ -737,7 +653,6 @@ export class TransactionsService implements OnModuleInit {
       );
     }
 
-    // Delete all splits
     await this.prisma.transactionSplit.deleteMany({
       where: { parentId: transactionId },
     });
@@ -749,12 +664,10 @@ export class TransactionsService implements OnModuleInit {
     const lower1 = desc1.toLowerCase();
     const lower2 = desc2.toLowerCase();
 
-    // Check substring match
     if (lower1.includes(lower2) || lower2.includes(lower1)) {
       return 100;
     }
 
-    // Levenshtein distance
     const distance = this.levenshteinDistance(lower1, lower2);
     const maxLen = Math.max(desc1.length, desc2.length);
     const similarity = ((maxLen - distance) / maxLen) * 100;
@@ -796,8 +709,7 @@ export class TransactionsService implements OnModuleInit {
     amountPercent: number,
     descScore: number,
   ): number {
-    // Weighted scoring: description (50%), date (30%), amount (20%)
-    const dateScore = Math.max(0, 100 - daysDiff * 33.33); // 3 days = 0 score
+    const dateScore = Math.max(0, 100 - daysDiff * 33.33);
     const amountScore = Math.max(
       0,
       100 - Math.max(amountDiff * 100, amountPercent * 50),
@@ -812,7 +724,6 @@ export class TransactionsService implements OnModuleInit {
   ): Promise<any[]> {
     if (newDtos.length === 0) return [];
 
-    // Calculate date range from newDtos
     const dates = newDtos.map((d) => new Date(d.date));
     const minDate = new Date(
       Math.min(...dates.map((d) => d.getTime())) - 30 * 24 * 60 * 60 * 1000,
@@ -821,7 +732,6 @@ export class TransactionsService implements OnModuleInit {
       Math.max(...dates.map((d) => d.getTime())) + 30 * 24 * 60 * 60 * 1000,
     );
 
-    // Fetch manual transactions in date range
     const manualTransactions = await this.prisma.transaction.findMany({
       where: {
         externalId: null,
@@ -840,7 +750,6 @@ export class TransactionsService implements OnModuleInit {
 
     const matches: any[] = [];
 
-    // For each imported transaction, find fuzzy matches
     newDtos.forEach((imported, importedIndex) => {
       const importedDate = new Date(imported.date);
       const importedAmount = imported.amount;
@@ -852,22 +761,18 @@ export class TransactionsService implements OnModuleInit {
             (1000 * 60 * 60 * 24),
         );
 
-        // Check date proximity (±3 days)
         if (daysDiff > 3) return;
 
-        // Check amount similarity
         const amountDiff = Math.abs(manual.amount.toNumber() - importedAmount);
         const amountPercent = (amountDiff / Math.abs(importedAmount)) * 100;
         if (amountDiff > 0.5 && amountPercent > 1) return;
 
-        // Check description similarity (use helper method)
         const descScore = this.calculateDescriptionSimilarity(
           manual.description,
           imported.description,
         );
-        if (descScore < 50) return; // Threshold: 50% similarity
+        if (descScore < 50) return;
 
-        // Calculate overall match score
         const matchScore = this.calculateMatchScore(
           daysDiff,
           amountDiff,
@@ -893,7 +798,6 @@ export class TransactionsService implements OnModuleInit {
       });
     });
 
-    // Sort by match score (highest first)
     return matches.sort((a, b) => b.matchScore - a.matchScore);
   }
 
@@ -906,13 +810,11 @@ export class TransactionsService implements OnModuleInit {
     for (const instruction of mergeInstructions) {
       const { manualId, importedTempId } = instruction;
 
-      // Find the imported DTO by tempId
       const importedIndex = parseInt(importedTempId.replace('import-', ''));
       const importedDto = importedDtos[importedIndex];
 
       if (!importedDto || processedIndices.has(importedIndex)) continue;
 
-      // Fetch manual transaction
       const manual = await this.prisma.transaction.findUnique({
         where: { id: manualId },
       });
@@ -924,7 +826,6 @@ export class TransactionsService implements OnModuleInit {
         continue;
       }
 
-      // Merge logic: Prefer manual categoryId/costObjectId, concatenate notes
       const mergedData = {
         ...importedDto,
         categoryId: manual.categoryId || importedDto.categoryId || null,
@@ -932,20 +833,14 @@ export class TransactionsService implements OnModuleInit {
         notes: this.mergeNotes(manual.notes, importedDto.notes || null),
       };
 
-      // Execute in transaction
       await this.prisma.$transaction(async (tx) => {
-        // Create merged transaction (imported)
         await tx.transaction.create({ data: mergedData });
-
-        // Delete manual transaction
         await tx.transaction.delete({ where: { id: manualId } });
       });
 
-      // Mark this index as processed
       processedIndices.add(importedIndex);
     }
 
-    // Remove merged transactions from the list
     return importedDtos.filter((_, index) => !processedIndices.has(index));
   }
 
