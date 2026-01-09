@@ -262,22 +262,14 @@ export class ViewSettings extends LitElement {
             
             console.log('[ViewSettings] Downloading backup from:', fullUrl);
 
-            const downloadResponse = await fetch(fullUrl);
-            
-            if (!downloadResponse.ok) {
-                 throw new Error(`Download failed: ${downloadResponse.statusText}`);
-            }
-
-            const blob = await downloadResponse.blob();
-
-            // Create download link
-            const url = window.URL.createObjectURL(blob);
+            // Use direct download instead of fetch+blob
+            // This avoids potential auth/CORS issues with fetch in Ingress, handles large files better,
+            // and ensures cookies are sent automatically by the browser.
             const a = document.createElement('a');
-            a.href = url;
-            a.download = filename;
+            a.href = fullUrl;
+            a.download = filename; // Hint to browser, though server Content-Disposition takes precedence
             document.body.appendChild(a);
             a.click();
-            window.URL.revokeObjectURL(url);
             document.body.removeChild(a);
 
             alert(i18n.t('settings.backup_created'));
