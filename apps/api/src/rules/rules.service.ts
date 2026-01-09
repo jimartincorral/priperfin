@@ -224,7 +224,7 @@ export class RulesService {
                 updateData.categoryId = rule.categoryId;
             }
             
-            await this.prisma.transaction.update(
+            await this.prisma.transaction.update({
                 where: { id: tx.id },
                 data: updateData
             });
