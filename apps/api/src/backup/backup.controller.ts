@@ -24,7 +24,8 @@ export class BackupController {
     @Body('encryptionKey') encryptionKey: string | undefined,
     @Res() res: Response,
   ) {
-    const { filename } = await this.backupService.createBackup(encryptionKey);
+    const { filename, filePath } = await this.backupService.createBackup(encryptionKey);
+    console.log('[BackupController] Backup created:', { filename, filePath });
     // For direct download after creation, or just return metadata
     res.status(201).json({
       message: 'Backup created successfully',
@@ -43,14 +44,21 @@ export class BackupController {
     @Param('filename') filename: string,
     @Res() res: Response,
   ) {
-    const [fileStream, mimeType] =
-      await this.backupService.getBackupFileStream(filename);
+    console.log('[BackupController] Download requested for:', filename);
+    try {
+      const [fileStream, mimeType] =
+        await this.backupService.getBackupFileStream(filename);
 
-    res.set({
-      'Content-Type': mimeType,
-      'Content-Disposition': `attachment; filename="${filename}"`,
-    });
-    fileStream.pipe(res);
+      console.log('[BackupController] File stream obtained, sending response');
+      res.set({
+        'Content-Type': mimeType,
+        'Content-Disposition': `attachment; filename="${filename}"`,
+      });
+      fileStream.pipe(res);
+    } catch (error) {
+      console.error('[BackupController] Download failed:', error.message);
+      throw error;
+    }
   }
 
   @Post('restore')

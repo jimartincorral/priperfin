@@ -38,6 +38,9 @@ export class BackupService {
       'BACKUP_ENCRYPTION_KEY',
     );
 
+    this.logger.log(`[BackupService] Backup directory configured: ${this.backupDir}`);
+    this.logger.log(`[BackupService] Encryption key configured: ${!!this.encryptionKey}`);
+
     if (!this.encryptionKey) {
       this.logger.warn(
         'BACKUP_ENCRYPTION_KEY is not set. Backups will NOT be encrypted.',
@@ -202,11 +205,26 @@ export class BackupService {
         this.logger.log('Archive encrypted.');
 
         await fs.unlink(archiveFilePath); // Delete unencrypted tar
+        
+        // Verify encrypted file exists before returning
+        const encFileStats = await fs.stat(encryptedArchiveFilePath).catch(() => null);
+        if (!encFileStats) {
+          throw new InternalServerErrorException('Encrypted backup file was not created');
+        }
+        this.logger.log(`[createBackup] Encrypted file created: ${encryptedArchiveFileName}, size: ${encFileStats.size} bytes`);
+        
         return {
           filename: encryptedArchiveFileName,
           filePath: encryptedArchiveFilePath,
         };
       } else {
+        // Verify unencrypted file exists before returning
+        const fileStats = await fs.stat(archiveFilePath).catch(() => null);
+        if (!fileStats) {
+          throw new InternalServerErrorException('Backup file was not created');
+        }
+        this.logger.log(`[createBackup] Unencrypted file created: ${archiveFileName}, size: ${fileStats.size} bytes, path: ${archiveFilePath}`);
+        
         return { filename: archiveFileName, filePath: archiveFilePath };
       }
     } catch (error) {
@@ -568,35 +586,53 @@ export class BackupService {
   }
 
   async getBackupFileStream(filename: string): Promise<[ReadStream, string]> {
+    this.logger.log(`[getBackupFileStream] Requested filename: ${filename}`);
+    this.logger.log(`[getBackupFileStream] Backup directory: ${this.backupDir}`);
+    
     // Validate filename to prevent path traversal attacks
     // Only allow alphanumeric, underscore, hyphen, and dot characters
     if (!/^[a-zA-Z0-9_\-\.]+$/.test(filename)) {
+      this.logger.error(`[getBackupFileStream] Invalid filename format: ${filename}`);
       throw new BadRequestException('Invalid filename format.');
     }
 
     // Ensure the filename doesn't contain path traversal sequences
     if (filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
+      this.logger.error(`[getBackupFileStream] Path traversal attempt: ${filename}`);
       throw new BadRequestException('Invalid filename.');
     }
 
     // Only allow .tar and .tar.enc extensions
     if (!filename.endsWith('.tar') && !filename.endsWith('.tar.enc')) {
+      this.logger.error(`[getBackupFileStream] Invalid extension: ${filename}`);
       throw new BadRequestException('Invalid backup file extension.');
     }
 
     const filePath = path.join(this.backupDir, filename);
+    this.logger.log(`[getBackupFileStream] Resolved file path: ${filePath}`);
 
     // Verify the resolved path is within the backup directory
     const normalizedFilePath = path.normalize(filePath);
     const normalizedBackupDir = path.normalize(this.backupDir);
     if (!normalizedFilePath.startsWith(normalizedBackupDir + path.sep) && normalizedFilePath !== normalizedBackupDir) {
+      this.logger.error(`[getBackupFileStream] Path outside backup dir: ${normalizedFilePath}`);
       throw new BadRequestException('Invalid file path.');
     }
 
-    if (!(await fs.stat(filePath).catch(() => null))) {
+    const fileStats = await fs.stat(filePath).catch(() => null);
+    if (!fileStats) {
+      this.logger.error(`[getBackupFileStream] File not found: ${filePath}`);
+      // List files in backup directory for debugging
+      try {
+        const files = await fs.readdir(this.backupDir);
+        this.logger.log(`[getBackupFileStream] Files in backup dir: ${JSON.stringify(files)}`);
+      } catch (e) {
+        this.logger.error(`[getBackupFileStream] Could not list backup dir: ${e.message}`);
+      }
       throw new BadRequestException('Backup file not found.');
     }
 
+    this.logger.log(`[getBackupFileStream] File exists, size: ${fileStats.size} bytes`);
     const fileStream = createReadStream(filePath);
     const mimeType = 'application/octet-stream'; // Generic binary
     return [fileStream, mimeType];
