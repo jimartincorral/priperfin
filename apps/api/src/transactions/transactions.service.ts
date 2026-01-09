@@ -2,22 +2,69 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  Logger,
+  OnModuleInit,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTransactionDto } from './create-transaction.dto';
 import { GetTransactionsDto, DateFilterMode } from './get-transactions.dto';
 import { CreateSplitsDto } from './create-split.dto';
 import { CategorizationService } from './categorization.service';
+import { extractMerchant, extractMerchantCore } from './merchant-extractor';
 import * as crypto from 'crypto';
 
 @Injectable()
-export class TransactionsService {
+export class TransactionsService implements OnModuleInit {
+  private logger = new Logger(TransactionsService.name);
+
   constructor(
     private prisma: PrismaService,
     private categorizationService: CategorizationService,
   ) {}
 
+  async onModuleInit() {
+    // Backfill merchant field for existing transactions
+    this.backfillMerchants().catch((err) => {
+      this.logger.error('Failed to backfill merchants', err);
+    });
+  }
+
+  /**
+   * Backfill merchant field for transactions that don't have it set.
+   * Runs on startup to migrate existing data.
+   */
+  private async backfillMerchants() {
+    const transactions = await this.prisma.transaction.findMany({
+      where: { merchant: null },
+      select: { id: true, description: true },
+    });
+
+    if (transactions.length === 0) {
+      this.logger.log('No transactions need merchant backfill');
+      return;
+    }
+
+    this.logger.log(`Backfilling merchant for ${transactions.length} transactions...`);
+    const start = Date.now();
+
+    for (const tx of transactions) {
+      const merchant = extractMerchant(tx.description);
+      if (merchant) {
+        await this.prisma.transaction.update({
+          where: { id: tx.id },
+          data: { merchant },
+        });
+      }
+    }
+
+    const duration = Date.now() - start;
+    this.logger.log(`Merchant backfill complete in ${duration}ms`);
+  }
+
   async create(dto: CreateTransactionDto) {
+    // Extract normalized merchant name
+    const merchant = extractMerchant(dto.description);
+
     // Attempt categorization if missing
     let suggestedCategoryId = null;
     if (!dto.categoryId || dto.categoryId === 'uncategorized') {
@@ -31,6 +78,7 @@ export class TransactionsService {
     return this.prisma.transaction.create({
       data: {
         ...dto,
+        merchant,
         suggestedCategoryId,
       },
     });
@@ -79,29 +127,60 @@ export class TransactionsService {
   }
 
   async suggestCategory(description: string) {
-    if (!description) return { categoryId: null };
+    if (!description) return { categoryId: null, source: null };
 
-    // 1. Strict Match: Find the most recent transaction with a similar description
-    // This is "High Confidence" (deterministic)
-    const match = await this.prisma.transaction.findFirst({
-      where: {
-        description: {
-          contains: description,
+    const merchant = extractMerchant(description);
+
+    // 1. Exact merchant match (FAST - indexed query, learns from ONE example)
+    if (merchant) {
+      const merchantMatch = await this.prisma.transaction.findFirst({
+        where: {
+          merchant: merchant,
+          categoryId: { not: null },
         },
+        orderBy: { date: 'desc' },
+        select: { categoryId: true },
+      });
+
+      if (merchantMatch?.categoryId) {
+        return { categoryId: merchantMatch.categoryId, source: 'merchant' };
+      }
+    }
+
+    // 2. Fuzzy merchant match (prefix-based for close variations)
+    const merchantCore = extractMerchantCore(description);
+    if (merchantCore && merchantCore.length >= 4) {
+      const fuzzyMatch = await this.prisma.transaction.findFirst({
+        where: {
+          merchant: { startsWith: merchantCore },
+          categoryId: { not: null },
+        },
+        orderBy: { date: 'desc' },
+        select: { categoryId: true, merchant: true },
+      });
+
+      if (fuzzyMatch?.categoryId) {
+        return { categoryId: fuzzyMatch.categoryId, source: 'fuzzy' };
+      }
+    }
+
+    // 3. Legacy exact description match (fallback)
+    const exactMatch = await this.prisma.transaction.findFirst({
+      where: {
+        description: { contains: description },
         categoryId: { not: null },
       },
       orderBy: { date: 'desc' },
       select: { categoryId: true },
     });
 
-    if (match?.categoryId) {
-      return { categoryId: match.categoryId, source: 'history' };
+    if (exactMatch?.categoryId) {
+      return { categoryId: exactMatch.categoryId, source: 'history' };
     }
 
-    // 2. ML Prediction: Use Bayes Classifier
-    // This is "Medium Confidence" (probabilistic)
+    // 4. ML Prediction: Use Bayes Classifier (lowest priority)
     const predictedCategoryId = this.categorizationService.predict(description);
-    
+
     if (predictedCategoryId) {
       return { categoryId: predictedCategoryId, source: 'prediction' };
     }
@@ -342,6 +421,9 @@ export class TransactionsService {
         let categoryId = dto.categoryId;
         let suggestedCategoryId = null;
 
+        // Extract normalized merchant name
+        const merchant = extractMerchant(dto.description);
+
         if (!categoryId || categoryId === 'uncategorized') {
           const suggestion = await this.suggestCategory(dto.description);
           if (suggestion && suggestion.categoryId) {
@@ -353,6 +435,7 @@ export class TransactionsService {
         return {
           ...dto,
           categoryId,
+          merchant,
           suggestedCategoryId,
           externalId: dto.externalId || this.generateHash(dto),
         };

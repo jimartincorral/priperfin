@@ -3,7 +3,7 @@ import { CategorizationService } from './categorization.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { createPrismaMock, PrismaMock } from '../test/prisma-mock.factory';
 import { createMockTransaction } from '../test/fixtures';
-import { Decimal } from '@prisma/client/runtime/library';
+import { Decimal } from '../generated/client';
 
 describe('CategorizationService', () => {
   let service: CategorizationService;

@@ -2,7 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { AccountsService } from './accounts.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { PrismaMockFactory } from '../test/prisma-mock.factory';
-import { Decimal } from '@prisma/client/runtime/library';
+import { Decimal } from '../generated/client';
 
 describe('AccountsService', () => {
   let service: AccountsService;

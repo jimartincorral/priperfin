@@ -1,8 +1,6 @@
 import { jest } from '@jest/globals';
 import { MockContext, Context, createMockContext } from './context';
-import { Decimal } from '@prisma/client/runtime/library';
-
-export const PrismaMockFactory = {
+import { Decimal } from '../generated/client';
 
 /**
  * Creates a deep mock of the PrismaService for unit testing.

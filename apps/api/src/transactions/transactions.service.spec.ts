@@ -9,7 +9,7 @@ import {
   createMockAccount,
   createMockCategory,
 } from '../test/fixtures';
-import { Decimal } from '@prisma/client/runtime/library';
+import { Decimal } from '../generated/client';
 
 describe('TransactionsService', () => {
   let service: TransactionsService;
@@ -137,19 +137,36 @@ describe('TransactionsService', () => {
       expect(result.categoryId).toBeNull();
     });
 
-    it('should return category from history match', async () => {
-      prismaMock.transaction.findFirst.mockResolvedValue({
+    it('should return category from merchant match', async () => {
+      // First call: merchant match succeeds
+      prismaMock.transaction.findFirst.mockResolvedValueOnce({
         categoryId: 'cat-groceries',
       });
 
-      const result = await service.suggestCategory('Walmart Purchase');
+      const result = await service.suggestCategory('WALMART STORE #123');
 
       expect(result.categoryId).toBe('cat-groceries');
-      expect(result.source).toBe('history');
+      expect(result.source).toBe('merchant');
       expect(categorizationMock.predict).not.toHaveBeenCalled();
     });
 
-    it('should return category from ML prediction when no history match', async () => {
+    it('should return category from fuzzy match when no exact merchant match', async () => {
+      // First call: merchant match fails
+      prismaMock.transaction.findFirst.mockResolvedValueOnce(null);
+      // Second call: fuzzy match succeeds
+      prismaMock.transaction.findFirst.mockResolvedValueOnce({
+        categoryId: 'cat-groceries',
+        merchant: 'walmart store',
+      });
+
+      const result = await service.suggestCategory('WALMART STORE #456');
+
+      expect(result.categoryId).toBe('cat-groceries');
+      expect(result.source).toBe('fuzzy');
+    });
+
+    it('should return category from ML prediction when no matches', async () => {
+      // All findFirst calls return null
       prismaMock.transaction.findFirst.mockResolvedValue(null);
       categorizationMock.predict.mockReturnValue('cat-restaurants');
 
@@ -169,16 +186,16 @@ describe('TransactionsService', () => {
       expect(result.source).toBeNull();
     });
 
-    it('should prefer history match over ML prediction', async () => {
-      prismaMock.transaction.findFirst.mockResolvedValue({
-        categoryId: 'cat-history',
+    it('should prefer merchant match over ML prediction', async () => {
+      prismaMock.transaction.findFirst.mockResolvedValueOnce({
+        categoryId: 'cat-merchant',
       });
       categorizationMock.predict.mockReturnValue('cat-ml');
 
-      const result = await service.suggestCategory('Some Transaction');
+      const result = await service.suggestCategory('AMAZON.COM*ABC123');
 
-      expect(result.categoryId).toBe('cat-history');
-      expect(result.source).toBe('history');
+      expect(result.categoryId).toBe('cat-merchant');
+      expect(result.source).toBe('merchant');
     });
   });
 

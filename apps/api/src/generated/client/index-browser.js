@@ -157,6 +157,7 @@ exports.Prisma.TransactionScalarFieldEnum = {
   costObjectId: 'costObjectId',
   notes: 'notes',
   suggestedCategoryId: 'suggestedCategoryId',
+  merchant: 'merchant',
   externalId: 'externalId',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'

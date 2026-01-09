@@ -70,11 +70,14 @@ model Transaction {
   costObjectId        String?
   costObject          CostObject?        @relation(fields: [costObjectId], references: [id], onDelete: SetNull)
   notes               String?
-  suggestedCategoryId String? // New field for ML suggestions
+  suggestedCategoryId String? // ML suggestions
+  merchant            String? // Normalized merchant name for matching
   externalId          String?            @unique
   splits              TransactionSplit[] @relation("TransactionSplits")
   createdAt           DateTime           @default(now())
   updatedAt           DateTime           @updatedAt
+
+  @@index([merchant])
 }
 
 model TransactionSplit {

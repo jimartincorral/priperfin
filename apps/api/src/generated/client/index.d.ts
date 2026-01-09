@@ -5382,6 +5382,7 @@ export namespace Prisma {
     costObjectId: string | null
     notes: string | null
     suggestedCategoryId: string | null
+    merchant: string | null
     externalId: string | null
     createdAt: Date | null
     updatedAt: Date | null
@@ -5397,6 +5398,7 @@ export namespace Prisma {
     costObjectId: string | null
     notes: string | null
     suggestedCategoryId: string | null
+    merchant: string | null
     externalId: string | null
     createdAt: Date | null
     updatedAt: Date | null
@@ -5412,6 +5414,7 @@ export namespace Prisma {
     costObjectId: number
     notes: number
     suggestedCategoryId: number
+    merchant: number
     externalId: number
     createdAt: number
     updatedAt: number
@@ -5437,6 +5440,7 @@ export namespace Prisma {
     costObjectId?: true
     notes?: true
     suggestedCategoryId?: true
+    merchant?: true
     externalId?: true
     createdAt?: true
     updatedAt?: true
@@ -5452,6 +5456,7 @@ export namespace Prisma {
     costObjectId?: true
     notes?: true
     suggestedCategoryId?: true
+    merchant?: true
     externalId?: true
     createdAt?: true
     updatedAt?: true
@@ -5467,6 +5472,7 @@ export namespace Prisma {
     costObjectId?: true
     notes?: true
     suggestedCategoryId?: true
+    merchant?: true
     externalId?: true
     createdAt?: true
     updatedAt?: true
@@ -5569,6 +5575,7 @@ export namespace Prisma {
     costObjectId: string | null
     notes: string | null
     suggestedCategoryId: string | null
+    merchant: string | null
     externalId: string | null
     createdAt: Date
     updatedAt: Date
@@ -5603,6 +5610,7 @@ export namespace Prisma {
     costObjectId?: boolean
     notes?: boolean
     suggestedCategoryId?: boolean
+    merchant?: boolean
     externalId?: boolean
     createdAt?: boolean
     updatedAt?: boolean
@@ -5623,6 +5631,7 @@ export namespace Prisma {
     costObjectId?: boolean
     notes?: boolean
     suggestedCategoryId?: boolean
+    merchant?: boolean
     externalId?: boolean
     createdAt?: boolean
     updatedAt?: boolean
@@ -5641,6 +5650,7 @@ export namespace Prisma {
     costObjectId?: boolean
     notes?: boolean
     suggestedCategoryId?: boolean
+    merchant?: boolean
     externalId?: boolean
     createdAt?: boolean
     updatedAt?: boolean
@@ -5659,12 +5669,13 @@ export namespace Prisma {
     costObjectId?: boolean
     notes?: boolean
     suggestedCategoryId?: boolean
+    merchant?: boolean
     externalId?: boolean
     createdAt?: boolean
     updatedAt?: boolean
   }
 
-  export type TransactionOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "date" | "amount" | "description" | "categoryId" | "accountId" | "costObjectId" | "notes" | "suggestedCategoryId" | "externalId" | "createdAt" | "updatedAt", ExtArgs["result"]["transaction"]>
+  export type TransactionOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "date" | "amount" | "description" | "categoryId" | "accountId" | "costObjectId" | "notes" | "suggestedCategoryId" | "merchant" | "externalId" | "createdAt" | "updatedAt", ExtArgs["result"]["transaction"]>
   export type TransactionInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     category?: boolean | Transaction$categoryArgs<ExtArgs>
     account?: boolean | Transaction$accountArgs<ExtArgs>
@@ -5701,6 +5712,7 @@ export namespace Prisma {
       costObjectId: string | null
       notes: string | null
       suggestedCategoryId: string | null
+      merchant: string | null
       externalId: string | null
       createdAt: Date
       updatedAt: Date
@@ -6140,6 +6152,7 @@ export namespace Prisma {
     readonly costObjectId: FieldRef<"Transaction", 'String'>
     readonly notes: FieldRef<"Transaction", 'String'>
     readonly suggestedCategoryId: FieldRef<"Transaction", 'String'>
+    readonly merchant: FieldRef<"Transaction", 'String'>
     readonly externalId: FieldRef<"Transaction", 'String'>
     readonly createdAt: FieldRef<"Transaction", 'DateTime'>
     readonly updatedAt: FieldRef<"Transaction", 'DateTime'>
@@ -12255,6 +12268,7 @@ export namespace Prisma {
     costObjectId: 'costObjectId',
     notes: 'notes',
     suggestedCategoryId: 'suggestedCategoryId',
+    merchant: 'merchant',
     externalId: 'externalId',
     createdAt: 'createdAt',
     updatedAt: 'updatedAt'
@@ -12624,6 +12638,7 @@ export namespace Prisma {
     costObjectId?: StringNullableFilter<"Transaction"> | string | null
     notes?: StringNullableFilter<"Transaction"> | string | null
     suggestedCategoryId?: StringNullableFilter<"Transaction"> | string | null
+    merchant?: StringNullableFilter<"Transaction"> | string | null
     externalId?: StringNullableFilter<"Transaction"> | string | null
     createdAt?: DateTimeFilter<"Transaction"> | Date | string
     updatedAt?: DateTimeFilter<"Transaction"> | Date | string
@@ -12643,6 +12658,7 @@ export namespace Prisma {
     costObjectId?: SortOrderInput | SortOrder
     notes?: SortOrderInput | SortOrder
     suggestedCategoryId?: SortOrderInput | SortOrder
+    merchant?: SortOrderInput | SortOrder
     externalId?: SortOrderInput | SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
@@ -12666,6 +12682,7 @@ export namespace Prisma {
     costObjectId?: StringNullableFilter<"Transaction"> | string | null
     notes?: StringNullableFilter<"Transaction"> | string | null
     suggestedCategoryId?: StringNullableFilter<"Transaction"> | string | null
+    merchant?: StringNullableFilter<"Transaction"> | string | null
     createdAt?: DateTimeFilter<"Transaction"> | Date | string
     updatedAt?: DateTimeFilter<"Transaction"> | Date | string
     category?: XOR<CategoryNullableScalarRelationFilter, CategoryWhereInput> | null
@@ -12684,6 +12701,7 @@ export namespace Prisma {
     costObjectId?: SortOrderInput | SortOrder
     notes?: SortOrderInput | SortOrder
     suggestedCategoryId?: SortOrderInput | SortOrder
+    merchant?: SortOrderInput | SortOrder
     externalId?: SortOrderInput | SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
@@ -12707,6 +12725,7 @@ export namespace Prisma {
     costObjectId?: StringNullableWithAggregatesFilter<"Transaction"> | string | null
     notes?: StringNullableWithAggregatesFilter<"Transaction"> | string | null
     suggestedCategoryId?: StringNullableWithAggregatesFilter<"Transaction"> | string | null
+    merchant?: StringNullableWithAggregatesFilter<"Transaction"> | string | null
     externalId?: StringNullableWithAggregatesFilter<"Transaction"> | string | null
     createdAt?: DateTimeWithAggregatesFilter<"Transaction"> | Date | string
     updatedAt?: DateTimeWithAggregatesFilter<"Transaction"> | Date | string
@@ -13287,6 +13306,7 @@ export namespace Prisma {
     description: string
     notes?: string | null
     suggestedCategoryId?: string | null
+    merchant?: string | null
     externalId?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -13306,6 +13326,7 @@ export namespace Prisma {
     costObjectId?: string | null
     notes?: string | null
     suggestedCategoryId?: string | null
+    merchant?: string | null
     externalId?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -13319,6 +13340,7 @@ export namespace Prisma {
     description?: StringFieldUpdateOperationsInput | string
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     suggestedCategoryId?: NullableStringFieldUpdateOperationsInput | string | null
+    merchant?: NullableStringFieldUpdateOperationsInput | string | null
     externalId?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -13338,6 +13360,7 @@ export namespace Prisma {
     costObjectId?: NullableStringFieldUpdateOperationsInput | string | null
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     suggestedCategoryId?: NullableStringFieldUpdateOperationsInput | string | null
+    merchant?: NullableStringFieldUpdateOperationsInput | string | null
     externalId?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -13354,6 +13377,7 @@ export namespace Prisma {
     costObjectId?: string | null
     notes?: string | null
     suggestedCategoryId?: string | null
+    merchant?: string | null
     externalId?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -13366,6 +13390,7 @@ export namespace Prisma {
     description?: StringFieldUpdateOperationsInput | string
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     suggestedCategoryId?: NullableStringFieldUpdateOperationsInput | string | null
+    merchant?: NullableStringFieldUpdateOperationsInput | string | null
     externalId?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -13381,6 +13406,7 @@ export namespace Prisma {
     costObjectId?: NullableStringFieldUpdateOperationsInput | string | null
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     suggestedCategoryId?: NullableStringFieldUpdateOperationsInput | string | null
+    merchant?: NullableStringFieldUpdateOperationsInput | string | null
     externalId?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -14080,6 +14106,7 @@ export namespace Prisma {
     costObjectId?: SortOrder
     notes?: SortOrder
     suggestedCategoryId?: SortOrder
+    merchant?: SortOrder
     externalId?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
@@ -14099,6 +14126,7 @@ export namespace Prisma {
     costObjectId?: SortOrder
     notes?: SortOrder
     suggestedCategoryId?: SortOrder
+    merchant?: SortOrder
     externalId?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
@@ -14114,6 +14142,7 @@ export namespace Prisma {
     costObjectId?: SortOrder
     notes?: SortOrder
     suggestedCategoryId?: SortOrder
+    merchant?: SortOrder
     externalId?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
@@ -15205,6 +15234,7 @@ export namespace Prisma {
     description: string
     notes?: string | null
     suggestedCategoryId?: string | null
+    merchant?: string | null
     externalId?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -15222,6 +15252,7 @@ export namespace Prisma {
     costObjectId?: string | null
     notes?: string | null
     suggestedCategoryId?: string | null
+    merchant?: string | null
     externalId?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -15398,6 +15429,7 @@ export namespace Prisma {
     costObjectId?: StringNullableFilter<"Transaction"> | string | null
     notes?: StringNullableFilter<"Transaction"> | string | null
     suggestedCategoryId?: StringNullableFilter<"Transaction"> | string | null
+    merchant?: StringNullableFilter<"Transaction"> | string | null
     externalId?: StringNullableFilter<"Transaction"> | string | null
     createdAt?: DateTimeFilter<"Transaction"> | Date | string
     updatedAt?: DateTimeFilter<"Transaction"> | Date | string
@@ -15471,6 +15503,7 @@ export namespace Prisma {
     description: string
     notes?: string | null
     suggestedCategoryId?: string | null
+    merchant?: string | null
     externalId?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -15488,6 +15521,7 @@ export namespace Prisma {
     costObjectId?: string | null
     notes?: string | null
     suggestedCategoryId?: string | null
+    merchant?: string | null
     externalId?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -15635,6 +15669,7 @@ export namespace Prisma {
     description: string
     notes?: string | null
     suggestedCategoryId?: string | null
+    merchant?: string | null
     externalId?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -15652,6 +15687,7 @@ export namespace Prisma {
     accountId?: string | null
     notes?: string | null
     suggestedCategoryId?: string | null
+    merchant?: string | null
     externalId?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -15972,6 +16008,7 @@ export namespace Prisma {
     description: string
     notes?: string | null
     suggestedCategoryId?: string | null
+    merchant?: string | null
     externalId?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -15990,6 +16027,7 @@ export namespace Prisma {
     costObjectId?: string | null
     notes?: string | null
     suggestedCategoryId?: string | null
+    merchant?: string | null
     externalId?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -16078,6 +16116,7 @@ export namespace Prisma {
     description?: StringFieldUpdateOperationsInput | string
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     suggestedCategoryId?: NullableStringFieldUpdateOperationsInput | string | null
+    merchant?: NullableStringFieldUpdateOperationsInput | string | null
     externalId?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -16096,6 +16135,7 @@ export namespace Prisma {
     costObjectId?: NullableStringFieldUpdateOperationsInput | string | null
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     suggestedCategoryId?: NullableStringFieldUpdateOperationsInput | string | null
+    merchant?: NullableStringFieldUpdateOperationsInput | string | null
     externalId?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -16389,6 +16429,7 @@ export namespace Prisma {
     costObjectId?: string | null
     notes?: string | null
     suggestedCategoryId?: string | null
+    merchant?: string | null
     externalId?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -16463,6 +16504,7 @@ export namespace Prisma {
     description?: StringFieldUpdateOperationsInput | string
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     suggestedCategoryId?: NullableStringFieldUpdateOperationsInput | string | null
+    merchant?: NullableStringFieldUpdateOperationsInput | string | null
     externalId?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -16480,6 +16522,7 @@ export namespace Prisma {
     costObjectId?: NullableStringFieldUpdateOperationsInput | string | null
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     suggestedCategoryId?: NullableStringFieldUpdateOperationsInput | string | null
+    merchant?: NullableStringFieldUpdateOperationsInput | string | null
     externalId?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -16495,6 +16538,7 @@ export namespace Prisma {
     costObjectId?: NullableStringFieldUpdateOperationsInput | string | null
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     suggestedCategoryId?: NullableStringFieldUpdateOperationsInput | string | null
+    merchant?: NullableStringFieldUpdateOperationsInput | string | null
     externalId?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -16572,6 +16616,7 @@ export namespace Prisma {
     costObjectId?: string | null
     notes?: string | null
     suggestedCategoryId?: string | null
+    merchant?: string | null
     externalId?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -16601,6 +16646,7 @@ export namespace Prisma {
     description?: StringFieldUpdateOperationsInput | string
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     suggestedCategoryId?: NullableStringFieldUpdateOperationsInput | string | null
+    merchant?: NullableStringFieldUpdateOperationsInput | string | null
     externalId?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -16618,6 +16664,7 @@ export namespace Prisma {
     costObjectId?: NullableStringFieldUpdateOperationsInput | string | null
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     suggestedCategoryId?: NullableStringFieldUpdateOperationsInput | string | null
+    merchant?: NullableStringFieldUpdateOperationsInput | string | null
     externalId?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -16633,6 +16680,7 @@ export namespace Prisma {
     costObjectId?: NullableStringFieldUpdateOperationsInput | string | null
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     suggestedCategoryId?: NullableStringFieldUpdateOperationsInput | string | null
+    merchant?: NullableStringFieldUpdateOperationsInput | string | null
     externalId?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -16698,6 +16746,7 @@ export namespace Prisma {
     accountId?: string | null
     notes?: string | null
     suggestedCategoryId?: string | null
+    merchant?: string | null
     externalId?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -16720,6 +16769,7 @@ export namespace Prisma {
     description?: StringFieldUpdateOperationsInput | string
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     suggestedCategoryId?: NullableStringFieldUpdateOperationsInput | string | null
+    merchant?: NullableStringFieldUpdateOperationsInput | string | null
     externalId?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -16737,6 +16787,7 @@ export namespace Prisma {
     accountId?: NullableStringFieldUpdateOperationsInput | string | null
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     suggestedCategoryId?: NullableStringFieldUpdateOperationsInput | string | null
+    merchant?: NullableStringFieldUpdateOperationsInput | string | null
     externalId?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -16752,6 +16803,7 @@ export namespace Prisma {
     accountId?: NullableStringFieldUpdateOperationsInput | string | null
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     suggestedCategoryId?: NullableStringFieldUpdateOperationsInput | string | null
+    merchant?: NullableStringFieldUpdateOperationsInput | string | null
     externalId?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
