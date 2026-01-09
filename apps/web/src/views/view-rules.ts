@@ -314,7 +314,7 @@ export class ViewRules extends LitElement {
 
   async handleSave(ruleData: any) {
     try {
-      if (this.editingRule) {
+      if (this.editingRule && this.editingRule.id) {
         await api.patch(`/rules/${this.editingRule.id}`, ruleData);
       } else {
         await api.post('/rules', ruleData);
