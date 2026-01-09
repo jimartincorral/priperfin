@@ -263,15 +263,31 @@ export class ViewSettings extends LitElement {
             
             console.log('[ViewSettings] Downloading backup from:', fullUrl);
 
-            // Use direct download instead of fetch+blob
-            // This avoids potential auth/CORS issues with fetch in Ingress, handles large files better,
-            // and ensures cookies are sent automatically by the browser.
+            // Use fetch+blob download to maintain authentication context
+            // This is critical for Home Assistant Ingress where opening a new tab loses auth
+            const downloadResponse = await fetch(fullUrl, {
+                method: 'GET',
+                credentials: 'same-origin', // Ensure cookies/session are included
+            });
+
+            if (!downloadResponse.ok) {
+                throw new Error(`Download failed: ${downloadResponse.statusText}`);
+            }
+
+            // Convert response to blob
+            const blob = await downloadResponse.blob();
+
+            // Create a temporary object URL and trigger download
+            const blobUrl = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
-            a.href = fullUrl;
-            a.download = filename; // Hint to browser, though server Content-Disposition takes precedence
+            a.href = blobUrl;
+            a.download = filename;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
+
+            // Clean up the blob URL to free memory
+            window.URL.revokeObjectURL(blobUrl);
 
             alert(i18n.t('settings.backup_created'));
             this.encryptionKey = ''; // Clear the key after successful backup
@@ -306,6 +322,7 @@ export class ViewSettings extends LitElement {
             const response = await fetch(`${getApiBaseUrl()}/backup/restore`, {
                 method: 'POST',
                 body: formData,
+                credentials: 'same-origin', // Ensure authentication context in HA Ingress
             });
 
             if (!response.ok) {

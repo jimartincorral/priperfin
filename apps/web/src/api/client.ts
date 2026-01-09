@@ -51,7 +51,9 @@ export class ApiClient {
         const url = new URL(`${this.baseUrl}${endpoint}`, window.location.origin);
         Object.keys(params).forEach(key => url.searchParams.append(key, params[key]));
 
-        const response = await fetch(url.toString());
+        const response = await fetch(url.toString(), {
+            credentials: 'same-origin', // Ensure cookies/session are included for HA Ingress
+        });
         return this.parseResponse(response);
     }
 
@@ -60,6 +62,7 @@ export class ApiClient {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data),
+            credentials: 'same-origin', // Ensure cookies/session are included for HA Ingress
         });
         return this.parseResponse(response);
     }
@@ -69,6 +72,7 @@ export class ApiClient {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data),
+            credentials: 'same-origin', // Ensure cookies/session are included for HA Ingress
         });
         return this.parseResponse(response);
     }
@@ -80,6 +84,7 @@ export class ApiClient {
         const response = await fetch(`${this.baseUrl}${endpoint}`, {
             method: 'POST',
             body: formData,
+            credentials: 'same-origin', // Ensure cookies/session are included for HA Ingress
         });
         return this.parseResponse(response);
     }
@@ -89,6 +94,7 @@ export class ApiClient {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data),
+            credentials: 'same-origin', // Ensure cookies/session are included for HA Ingress
         });
         return this.parseResponse(response);
     }
@@ -96,6 +102,7 @@ export class ApiClient {
     async delete(endpoint: string) {
         const response = await fetch(`${this.baseUrl}${endpoint}`, {
             method: 'DELETE',
+            credentials: 'same-origin', // Ensure cookies/session are included for HA Ingress
         });
         return this.parseResponse(response);
     }
