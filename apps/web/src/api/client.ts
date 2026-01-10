@@ -1,21 +1,39 @@
+// Cache the API base URL on first call to prevent it from changing during SPA navigation
+let cachedApiBaseUrl: string | null = null;
+
 // Helper to get base URL for API calls (handles ingress)
 export function getApiBaseUrl(): string {
+    // Return cached URL if available
+    if (cachedApiBaseUrl) {
+        console.log('[getApiBaseUrl] Using cached URL:', cachedApiBaseUrl);
+        return cachedApiBaseUrl;
+    }
+
     // Robustly determine API URL relative to the application base using document.baseURI
     // Home Assistant Ingress injects a <base href="..."> tag which points to the ingress root.
     // By using the URL constructor relative to baseURI, we automatically handle the ingress path.
     try {
-        const base = document.baseURI || window.location.href;
-        // Resolve 'api' relative to the base. 
-        // If base is .../ingress_token/ (standard HA), result is .../ingress_token/api
-        // We ensure we don't accidentally replace the last segment if base doesn't have trailing slash
-        // by checking the behavior, but HA Ingress bases always have trailing slash.
+        // Use window.location.href as the starting point instead of document.baseURI
+        // This is because document.baseURI can change during SPA navigation
+        const currentUrl = window.location.href;
+        console.log('[getApiBaseUrl] Current URL:', currentUrl);
         
-        // Force trailing slash on base if missing to treat it as a directory
-        const safeBase = base.endsWith('/') ? base : base + '/';
-        const url = new URL('api', safeBase);
+        // Check if we're in Home Assistant Ingress (URL contains /api/hassio_ingress/)
+        const ingressMatch = currentUrl.match(/(.*\/api\/hassio_ingress\/[^\/]+)\//);
+        if (ingressMatch) {
+            // We're in HA Ingress - use the ingress path
+            const ingressBase = ingressMatch[1];
+            cachedApiBaseUrl = `${ingressBase}/api`;
+            console.log('[getApiBaseUrl] Detected HA Ingress, resolved base URL:', cachedApiBaseUrl);
+            return cachedApiBaseUrl;
+        }
         
-        console.log('[getApiBaseUrl] Resolved base URL:', url.href);
-        return url.href;
+        // Not in Ingress - use standard relative path
+        // Get the origin (protocol + host + port)
+        const origin = window.location.origin;
+        cachedApiBaseUrl = `${origin}/api`;
+        console.log('[getApiBaseUrl] Standard mode, resolved base URL:', cachedApiBaseUrl);
+        return cachedApiBaseUrl;
     } catch (e) {
         console.warn('[getApiBaseUrl] Error resolving URL:', e);
         // Fallback for dev/direct access
