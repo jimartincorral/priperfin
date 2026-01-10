@@ -174,8 +174,10 @@ model SavingsGoal {
   name         String
   targetAmount Decimal
   startDate    DateTime  @default(now())
-  targetDate   DateTime
+  targetDate   DateTime?
   savedAmount  Decimal   @default(0)
+  isEvergreen  Boolean   @default(false)
+  targetMonths Int?      // For evergreen goals: target months to fully fund
   categoryId   String?
   category     Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   createdAt    DateTime  @default(now())

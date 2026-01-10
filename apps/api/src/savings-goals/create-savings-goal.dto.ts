@@ -4,6 +4,8 @@ import {
   IsDateString,
   IsOptional,
   IsUUID,
+  IsBoolean,
+  IsInt,
 } from 'class-validator';
 
 export class CreateSavingsGoalDto {
@@ -13,8 +15,9 @@ export class CreateSavingsGoalDto {
   @IsNumber()
   targetAmount: number;
 
+  @IsOptional()
   @IsDateString()
-  targetDate: string;
+  targetDate?: string;
 
   @IsOptional()
   @IsDateString()
@@ -27,4 +30,12 @@ export class CreateSavingsGoalDto {
   @IsOptional()
   @IsUUID()
   categoryId?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  isEvergreen?: boolean;
+
+  @IsOptional()
+  @IsInt()
+  targetMonths?: number;
 }

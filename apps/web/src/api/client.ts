@@ -52,7 +52,18 @@ export class ApiClient {
     private async parseResponse(response: Response) {
         if (!response.ok) {
             const error = await response.json().catch(() => ({ message: response.statusText }));
-            throw new Error(error.message || JSON.stringify(error));
+            // Handle nested error structure from NestJS validation
+            let message = response.statusText;
+            if (error.error && error.error.message) {
+                // NestJS validation errors
+                const messages = Array.isArray(error.error.message) ? error.error.message : [error.error.message];
+                message = messages.join(', ');
+            } else if (error.message) {
+                message = Array.isArray(error.message) ? error.message.join(', ') : error.message;
+            } else if (typeof error === 'string') {
+                message = error;
+            }
+            throw new Error(message);
         }
         const text = await response.text();
         try {

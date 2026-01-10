@@ -460,7 +460,7 @@ export class ViewExpenses extends LitElement {
   }
 
   static styles = css`
-    :host { display: block; }
+    :host { display: block; color-scheme: dark; }
     
     .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
     h1 { font: var(--md-sys-typescale-headline-medium); color: var(--md-sys-color-on-surface); margin: 0; }
@@ -472,7 +472,7 @@ export class ViewExpenses extends LitElement {
         padding: 0 12px;
         border: 1px solid var(--md-sys-color-outline);
         border-radius: 4px;
-        background-color: transparent;
+        background-color: var(--md-sys-color-surface-container);
         color: var(--md-sys-color-on-surface);
         font-size: 14px;
         box-sizing: border-box;
@@ -490,9 +490,19 @@ export class ViewExpenses extends LitElement {
     .form-group { margin-bottom: 16px; }
     label { display: block; margin-bottom: 8px; font: var(--md-sys-typescale-label-medium); color: var(--md-sys-color-on-surface-variant); }
 
+    /* Force dark mode for select dropdowns */
+    select {
+        color-scheme: dark;
+    }
+    
     select option {
-        background-color: var(--md-sys-color-surface);
-        color: var(--md-sys-color-on-surface);
+        background-color: var(--md-sys-color-surface-container) !important;
+        color: var(--md-sys-color-on-surface) !important;
+    }
+    
+    /* Target the dropdown list container for browsers that support it */
+    select:not([multiple]):not([size]) {
+        background-image: none;
     }
     
     /* Buttons: MD3 configurations */

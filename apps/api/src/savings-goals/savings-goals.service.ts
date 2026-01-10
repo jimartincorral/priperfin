@@ -13,7 +13,7 @@ export class SavingsGoalsService {
       return await this.prisma.savingsGoal.create({
         data: {
           ...dto,
-          targetDate: new Date(dto.targetDate),
+          targetDate: dto.targetDate ? new Date(dto.targetDate) : null,
           startDate: dto.startDate ? new Date(dto.startDate) : undefined,
           targetAmount: dto.targetAmount,
           savedAmount: dto.savedAmount ?? 0,
@@ -50,16 +50,26 @@ export class SavingsGoalsService {
 
     return goals.map((goal) => ({
       ...goal,
-      monthlySavingsNeeded: this.calculateMonthlySavings(
-        goal.targetAmount.toNumber(),
-        goal.savedAmount.toNumber(),
-        goal.targetDate,
-      ),
-      shouldHaveSaved: this.calculateShouldHaveSaved(
-        goal.targetAmount.toNumber(),
-        goal.startDate,
-        goal.targetDate,
-      ),
+      monthlySavingsNeeded: goal.isEvergreen && goal.targetMonths
+        ? this.calculateMonthlySavingsEvergreen(
+            goal.targetAmount.toNumber(),
+            goal.savedAmount.toNumber(),
+            goal.targetMonths,
+          )
+        : goal.targetDate
+        ? this.calculateMonthlySavings(
+            goal.targetAmount.toNumber(),
+            goal.savedAmount.toNumber(),
+            goal.targetDate,
+          )
+        : 0,
+      shouldHaveSaved: goal.isEvergreen || !goal.targetDate
+        ? null
+        : this.calculateShouldHaveSaved(
+            goal.targetAmount.toNumber(),
+            goal.startDate,
+            goal.targetDate,
+          ),
     }));
   }
 
@@ -91,6 +101,15 @@ export class SavingsGoalsService {
     if (months <= 0) return target - saved; // If due or overdue, need all immediately
 
     const needed = (target - saved) / months;
+    return Math.max(0, parseFloat(needed.toFixed(2)));
+  }
+
+  private calculateMonthlySavingsEvergreen(
+    target: number,
+    saved: number,
+    targetMonths: number,
+  ): number {
+    const needed = (target - saved) / targetMonths;
     return Math.max(0, parseFloat(needed.toFixed(2)));
   }
   async remove(id: string) {

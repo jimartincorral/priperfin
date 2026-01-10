@@ -3,6 +3,7 @@ import { CategoryType } from '../generated/client';
 
 export class CreateCategoryDto {
   @IsString()
+  @IsNotEmpty()
   name: string;
 
   @IsOptional()
@@ -11,11 +12,12 @@ export class CreateCategoryDto {
   color?: string;
 
   @IsString()
+  @IsNotEmpty()
   icon: string;
 
   @IsOptional()
   @IsNumber()
-  budget?: number | null;
+  budget?: number;
 
   @IsOptional()
   @IsEnum(CategoryType)

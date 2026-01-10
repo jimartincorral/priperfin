@@ -10637,11 +10637,13 @@ export namespace Prisma {
   export type SavingsGoalAvgAggregateOutputType = {
     targetAmount: Decimal | null
     savedAmount: Decimal | null
+    targetMonths: number | null
   }
 
   export type SavingsGoalSumAggregateOutputType = {
     targetAmount: Decimal | null
     savedAmount: Decimal | null
+    targetMonths: number | null
   }
 
   export type SavingsGoalMinAggregateOutputType = {
@@ -10651,6 +10653,8 @@ export namespace Prisma {
     startDate: Date | null
     targetDate: Date | null
     savedAmount: Decimal | null
+    isEvergreen: boolean | null
+    targetMonths: number | null
     categoryId: string | null
     createdAt: Date | null
     updatedAt: Date | null
@@ -10663,6 +10667,8 @@ export namespace Prisma {
     startDate: Date | null
     targetDate: Date | null
     savedAmount: Decimal | null
+    isEvergreen: boolean | null
+    targetMonths: number | null
     categoryId: string | null
     createdAt: Date | null
     updatedAt: Date | null
@@ -10675,6 +10681,8 @@ export namespace Prisma {
     startDate: number
     targetDate: number
     savedAmount: number
+    isEvergreen: number
+    targetMonths: number
     categoryId: number
     createdAt: number
     updatedAt: number
@@ -10685,11 +10693,13 @@ export namespace Prisma {
   export type SavingsGoalAvgAggregateInputType = {
     targetAmount?: true
     savedAmount?: true
+    targetMonths?: true
   }
 
   export type SavingsGoalSumAggregateInputType = {
     targetAmount?: true
     savedAmount?: true
+    targetMonths?: true
   }
 
   export type SavingsGoalMinAggregateInputType = {
@@ -10699,6 +10709,8 @@ export namespace Prisma {
     startDate?: true
     targetDate?: true
     savedAmount?: true
+    isEvergreen?: true
+    targetMonths?: true
     categoryId?: true
     createdAt?: true
     updatedAt?: true
@@ -10711,6 +10723,8 @@ export namespace Prisma {
     startDate?: true
     targetDate?: true
     savedAmount?: true
+    isEvergreen?: true
+    targetMonths?: true
     categoryId?: true
     createdAt?: true
     updatedAt?: true
@@ -10723,6 +10737,8 @@ export namespace Prisma {
     startDate?: true
     targetDate?: true
     savedAmount?: true
+    isEvergreen?: true
+    targetMonths?: true
     categoryId?: true
     createdAt?: true
     updatedAt?: true
@@ -10820,8 +10836,10 @@ export namespace Prisma {
     name: string
     targetAmount: Decimal
     startDate: Date
-    targetDate: Date
+    targetDate: Date | null
     savedAmount: Decimal
+    isEvergreen: boolean
+    targetMonths: number | null
     categoryId: string | null
     createdAt: Date
     updatedAt: Date
@@ -10853,6 +10871,8 @@ export namespace Prisma {
     startDate?: boolean
     targetDate?: boolean
     savedAmount?: boolean
+    isEvergreen?: boolean
+    targetMonths?: boolean
     categoryId?: boolean
     createdAt?: boolean
     updatedAt?: boolean
@@ -10866,6 +10886,8 @@ export namespace Prisma {
     startDate?: boolean
     targetDate?: boolean
     savedAmount?: boolean
+    isEvergreen?: boolean
+    targetMonths?: boolean
     categoryId?: boolean
     createdAt?: boolean
     updatedAt?: boolean
@@ -10879,6 +10901,8 @@ export namespace Prisma {
     startDate?: boolean
     targetDate?: boolean
     savedAmount?: boolean
+    isEvergreen?: boolean
+    targetMonths?: boolean
     categoryId?: boolean
     createdAt?: boolean
     updatedAt?: boolean
@@ -10892,12 +10916,14 @@ export namespace Prisma {
     startDate?: boolean
     targetDate?: boolean
     savedAmount?: boolean
+    isEvergreen?: boolean
+    targetMonths?: boolean
     categoryId?: boolean
     createdAt?: boolean
     updatedAt?: boolean
   }
 
-  export type SavingsGoalOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "name" | "targetAmount" | "startDate" | "targetDate" | "savedAmount" | "categoryId" | "createdAt" | "updatedAt", ExtArgs["result"]["savingsGoal"]>
+  export type SavingsGoalOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "name" | "targetAmount" | "startDate" | "targetDate" | "savedAmount" | "isEvergreen" | "targetMonths" | "categoryId" | "createdAt" | "updatedAt", ExtArgs["result"]["savingsGoal"]>
   export type SavingsGoalInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     category?: boolean | SavingsGoal$categoryArgs<ExtArgs>
   }
@@ -10918,8 +10944,10 @@ export namespace Prisma {
       name: string
       targetAmount: Prisma.Decimal
       startDate: Date
-      targetDate: Date
+      targetDate: Date | null
       savedAmount: Prisma.Decimal
+      isEvergreen: boolean
+      targetMonths: number | null
       categoryId: string | null
       createdAt: Date
       updatedAt: Date
@@ -11353,6 +11381,8 @@ export namespace Prisma {
     readonly startDate: FieldRef<"SavingsGoal", 'DateTime'>
     readonly targetDate: FieldRef<"SavingsGoal", 'DateTime'>
     readonly savedAmount: FieldRef<"SavingsGoal", 'Decimal'>
+    readonly isEvergreen: FieldRef<"SavingsGoal", 'Boolean'>
+    readonly targetMonths: FieldRef<"SavingsGoal", 'Int'>
     readonly categoryId: FieldRef<"SavingsGoal", 'String'>
     readonly createdAt: FieldRef<"SavingsGoal", 'DateTime'>
     readonly updatedAt: FieldRef<"SavingsGoal", 'DateTime'>
@@ -15125,6 +15155,8 @@ export namespace Prisma {
     startDate: 'startDate',
     targetDate: 'targetDate',
     savedAmount: 'savedAmount',
+    isEvergreen: 'isEvergreen',
+    targetMonths: 'targetMonths',
     categoryId: 'categoryId',
     createdAt: 'createdAt',
     updatedAt: 'updatedAt'
@@ -15873,8 +15905,10 @@ export namespace Prisma {
     name?: StringFilter<"SavingsGoal"> | string
     targetAmount?: DecimalFilter<"SavingsGoal"> | Decimal | DecimalJsLike | number | string
     startDate?: DateTimeFilter<"SavingsGoal"> | Date | string
-    targetDate?: DateTimeFilter<"SavingsGoal"> | Date | string
+    targetDate?: DateTimeNullableFilter<"SavingsGoal"> | Date | string | null
     savedAmount?: DecimalFilter<"SavingsGoal"> | Decimal | DecimalJsLike | number | string
+    isEvergreen?: BoolFilter<"SavingsGoal"> | boolean
+    targetMonths?: IntNullableFilter<"SavingsGoal"> | number | null
     categoryId?: StringNullableFilter<"SavingsGoal"> | string | null
     createdAt?: DateTimeFilter<"SavingsGoal"> | Date | string
     updatedAt?: DateTimeFilter<"SavingsGoal"> | Date | string
@@ -15886,8 +15920,10 @@ export namespace Prisma {
     name?: SortOrder
     targetAmount?: SortOrder
     startDate?: SortOrder
-    targetDate?: SortOrder
+    targetDate?: SortOrderInput | SortOrder
     savedAmount?: SortOrder
+    isEvergreen?: SortOrder
+    targetMonths?: SortOrderInput | SortOrder
     categoryId?: SortOrderInput | SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
@@ -15902,8 +15938,10 @@ export namespace Prisma {
     name?: StringFilter<"SavingsGoal"> | string
     targetAmount?: DecimalFilter<"SavingsGoal"> | Decimal | DecimalJsLike | number | string
     startDate?: DateTimeFilter<"SavingsGoal"> | Date | string
-    targetDate?: DateTimeFilter<"SavingsGoal"> | Date | string
+    targetDate?: DateTimeNullableFilter<"SavingsGoal"> | Date | string | null
     savedAmount?: DecimalFilter<"SavingsGoal"> | Decimal | DecimalJsLike | number | string
+    isEvergreen?: BoolFilter<"SavingsGoal"> | boolean
+    targetMonths?: IntNullableFilter<"SavingsGoal"> | number | null
     categoryId?: StringNullableFilter<"SavingsGoal"> | string | null
     createdAt?: DateTimeFilter<"SavingsGoal"> | Date | string
     updatedAt?: DateTimeFilter<"SavingsGoal"> | Date | string
@@ -15915,8 +15953,10 @@ export namespace Prisma {
     name?: SortOrder
     targetAmount?: SortOrder
     startDate?: SortOrder
-    targetDate?: SortOrder
+    targetDate?: SortOrderInput | SortOrder
     savedAmount?: SortOrder
+    isEvergreen?: SortOrder
+    targetMonths?: SortOrderInput | SortOrder
     categoryId?: SortOrderInput | SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
@@ -15935,8 +15975,10 @@ export namespace Prisma {
     name?: StringWithAggregatesFilter<"SavingsGoal"> | string
     targetAmount?: DecimalWithAggregatesFilter<"SavingsGoal"> | Decimal | DecimalJsLike | number | string
     startDate?: DateTimeWithAggregatesFilter<"SavingsGoal"> | Date | string
-    targetDate?: DateTimeWithAggregatesFilter<"SavingsGoal"> | Date | string
+    targetDate?: DateTimeNullableWithAggregatesFilter<"SavingsGoal"> | Date | string | null
     savedAmount?: DecimalWithAggregatesFilter<"SavingsGoal"> | Decimal | DecimalJsLike | number | string
+    isEvergreen?: BoolWithAggregatesFilter<"SavingsGoal"> | boolean
+    targetMonths?: IntNullableWithAggregatesFilter<"SavingsGoal"> | number | null
     categoryId?: StringNullableWithAggregatesFilter<"SavingsGoal"> | string | null
     createdAt?: DateTimeWithAggregatesFilter<"SavingsGoal"> | Date | string
     updatedAt?: DateTimeWithAggregatesFilter<"SavingsGoal"> | Date | string
@@ -16773,8 +16815,10 @@ export namespace Prisma {
     name: string
     targetAmount: Decimal | DecimalJsLike | number | string
     startDate?: Date | string
-    targetDate: Date | string
+    targetDate?: Date | string | null
     savedAmount?: Decimal | DecimalJsLike | number | string
+    isEvergreen?: boolean
+    targetMonths?: number | null
     createdAt?: Date | string
     updatedAt?: Date | string
     category?: CategoryCreateNestedOneWithoutSavingsGoalsInput
@@ -16785,8 +16829,10 @@ export namespace Prisma {
     name: string
     targetAmount: Decimal | DecimalJsLike | number | string
     startDate?: Date | string
-    targetDate: Date | string
+    targetDate?: Date | string | null
     savedAmount?: Decimal | DecimalJsLike | number | string
+    isEvergreen?: boolean
+    targetMonths?: number | null
     categoryId?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -16797,8 +16843,10 @@ export namespace Prisma {
     name?: StringFieldUpdateOperationsInput | string
     targetAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     startDate?: DateTimeFieldUpdateOperationsInput | Date | string
-    targetDate?: DateTimeFieldUpdateOperationsInput | Date | string
+    targetDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     savedAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    isEvergreen?: BoolFieldUpdateOperationsInput | boolean
+    targetMonths?: NullableIntFieldUpdateOperationsInput | number | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     category?: CategoryUpdateOneWithoutSavingsGoalsNestedInput
@@ -16809,8 +16857,10 @@ export namespace Prisma {
     name?: StringFieldUpdateOperationsInput | string
     targetAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     startDate?: DateTimeFieldUpdateOperationsInput | Date | string
-    targetDate?: DateTimeFieldUpdateOperationsInput | Date | string
+    targetDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     savedAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    isEvergreen?: BoolFieldUpdateOperationsInput | boolean
+    targetMonths?: NullableIntFieldUpdateOperationsInput | number | null
     categoryId?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -16821,8 +16871,10 @@ export namespace Prisma {
     name: string
     targetAmount: Decimal | DecimalJsLike | number | string
     startDate?: Date | string
-    targetDate: Date | string
+    targetDate?: Date | string | null
     savedAmount?: Decimal | DecimalJsLike | number | string
+    isEvergreen?: boolean
+    targetMonths?: number | null
     categoryId?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -16833,8 +16885,10 @@ export namespace Prisma {
     name?: StringFieldUpdateOperationsInput | string
     targetAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     startDate?: DateTimeFieldUpdateOperationsInput | Date | string
-    targetDate?: DateTimeFieldUpdateOperationsInput | Date | string
+    targetDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     savedAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    isEvergreen?: BoolFieldUpdateOperationsInput | boolean
+    targetMonths?: NullableIntFieldUpdateOperationsInput | number | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -16844,8 +16898,10 @@ export namespace Prisma {
     name?: StringFieldUpdateOperationsInput | string
     targetAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     startDate?: DateTimeFieldUpdateOperationsInput | Date | string
-    targetDate?: DateTimeFieldUpdateOperationsInput | Date | string
+    targetDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     savedAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    isEvergreen?: BoolFieldUpdateOperationsInput | boolean
+    targetMonths?: NullableIntFieldUpdateOperationsInput | number | null
     categoryId?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -17717,6 +17773,17 @@ export namespace Prisma {
     amount?: SortOrder
   }
 
+  export type IntNullableFilter<$PrismaModel = never> = {
+    equals?: number | IntFieldRefInput<$PrismaModel> | null
+    in?: number[] | null
+    notIn?: number[] | null
+    lt?: number | IntFieldRefInput<$PrismaModel>
+    lte?: number | IntFieldRefInput<$PrismaModel>
+    gt?: number | IntFieldRefInput<$PrismaModel>
+    gte?: number | IntFieldRefInput<$PrismaModel>
+    not?: NestedIntNullableFilter<$PrismaModel> | number | null
+  }
+
   export type SavingsGoalCountOrderByAggregateInput = {
     id?: SortOrder
     name?: SortOrder
@@ -17724,6 +17791,8 @@ export namespace Prisma {
     startDate?: SortOrder
     targetDate?: SortOrder
     savedAmount?: SortOrder
+    isEvergreen?: SortOrder
+    targetMonths?: SortOrder
     categoryId?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
@@ -17732,6 +17801,7 @@ export namespace Prisma {
   export type SavingsGoalAvgOrderByAggregateInput = {
     targetAmount?: SortOrder
     savedAmount?: SortOrder
+    targetMonths?: SortOrder
   }
 
   export type SavingsGoalMaxOrderByAggregateInput = {
@@ -17741,6 +17811,8 @@ export namespace Prisma {
     startDate?: SortOrder
     targetDate?: SortOrder
     savedAmount?: SortOrder
+    isEvergreen?: SortOrder
+    targetMonths?: SortOrder
     categoryId?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
@@ -17753,6 +17825,8 @@ export namespace Prisma {
     startDate?: SortOrder
     targetDate?: SortOrder
     savedAmount?: SortOrder
+    isEvergreen?: SortOrder
+    targetMonths?: SortOrder
     categoryId?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
@@ -17761,6 +17835,23 @@ export namespace Prisma {
   export type SavingsGoalSumOrderByAggregateInput = {
     targetAmount?: SortOrder
     savedAmount?: SortOrder
+    targetMonths?: SortOrder
+  }
+
+  export type IntNullableWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: number | IntFieldRefInput<$PrismaModel> | null
+    in?: number[] | null
+    notIn?: number[] | null
+    lt?: number | IntFieldRefInput<$PrismaModel>
+    lte?: number | IntFieldRefInput<$PrismaModel>
+    gt?: number | IntFieldRefInput<$PrismaModel>
+    gte?: number | IntFieldRefInput<$PrismaModel>
+    not?: NestedIntNullableWithAggregatesFilter<$PrismaModel> | number | null
+    _count?: NestedIntNullableFilter<$PrismaModel>
+    _avg?: NestedFloatNullableFilter<$PrismaModel>
+    _sum?: NestedIntNullableFilter<$PrismaModel>
+    _min?: NestedIntNullableFilter<$PrismaModel>
+    _max?: NestedIntNullableFilter<$PrismaModel>
   }
 
   export type SettingCountOrderByAggregateInput = {
@@ -18631,6 +18722,14 @@ export namespace Prisma {
     connect?: CategoryWhereUniqueInput
   }
 
+  export type NullableIntFieldUpdateOperationsInput = {
+    set?: number | null
+    increment?: number
+    decrement?: number
+    multiply?: number
+    divide?: number
+  }
+
   export type CategoryUpdateOneWithoutSavingsGoalsNestedInput = {
     create?: XOR<CategoryCreateWithoutSavingsGoalsInput, CategoryUncheckedCreateWithoutSavingsGoalsInput>
     connectOrCreate?: CategoryCreateOrConnectWithoutSavingsGoalsInput
@@ -18969,6 +19068,33 @@ export namespace Prisma {
     _max?: NestedEnumSuggestionStatusFilter<$PrismaModel>
   }
 
+  export type NestedIntNullableWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: number | IntFieldRefInput<$PrismaModel> | null
+    in?: number[] | null
+    notIn?: number[] | null
+    lt?: number | IntFieldRefInput<$PrismaModel>
+    lte?: number | IntFieldRefInput<$PrismaModel>
+    gt?: number | IntFieldRefInput<$PrismaModel>
+    gte?: number | IntFieldRefInput<$PrismaModel>
+    not?: NestedIntNullableWithAggregatesFilter<$PrismaModel> | number | null
+    _count?: NestedIntNullableFilter<$PrismaModel>
+    _avg?: NestedFloatNullableFilter<$PrismaModel>
+    _sum?: NestedIntNullableFilter<$PrismaModel>
+    _min?: NestedIntNullableFilter<$PrismaModel>
+    _max?: NestedIntNullableFilter<$PrismaModel>
+  }
+
+  export type NestedFloatNullableFilter<$PrismaModel = never> = {
+    equals?: number | FloatFieldRefInput<$PrismaModel> | null
+    in?: number[] | null
+    notIn?: number[] | null
+    lt?: number | FloatFieldRefInput<$PrismaModel>
+    lte?: number | FloatFieldRefInput<$PrismaModel>
+    gt?: number | FloatFieldRefInput<$PrismaModel>
+    gte?: number | FloatFieldRefInput<$PrismaModel>
+    not?: NestedFloatNullableFilter<$PrismaModel> | number | null
+  }
+
   export type CategoryCreateWithoutChildrenInput = {
     id?: string
     name: string
@@ -19128,8 +19254,10 @@ export namespace Prisma {
     name: string
     targetAmount: Decimal | DecimalJsLike | number | string
     startDate?: Date | string
-    targetDate: Date | string
+    targetDate?: Date | string | null
     savedAmount?: Decimal | DecimalJsLike | number | string
+    isEvergreen?: boolean
+    targetMonths?: number | null
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -19139,8 +19267,10 @@ export namespace Prisma {
     name: string
     targetAmount: Decimal | DecimalJsLike | number | string
     startDate?: Date | string
-    targetDate: Date | string
+    targetDate?: Date | string | null
     savedAmount?: Decimal | DecimalJsLike | number | string
+    isEvergreen?: boolean
+    targetMonths?: number | null
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -19396,8 +19526,10 @@ export namespace Prisma {
     name?: StringFilter<"SavingsGoal"> | string
     targetAmount?: DecimalFilter<"SavingsGoal"> | Decimal | DecimalJsLike | number | string
     startDate?: DateTimeFilter<"SavingsGoal"> | Date | string
-    targetDate?: DateTimeFilter<"SavingsGoal"> | Date | string
+    targetDate?: DateTimeNullableFilter<"SavingsGoal"> | Date | string | null
     savedAmount?: DecimalFilter<"SavingsGoal"> | Decimal | DecimalJsLike | number | string
+    isEvergreen?: BoolFilter<"SavingsGoal"> | boolean
+    targetMonths?: IntNullableFilter<"SavingsGoal"> | number | null
     categoryId?: StringNullableFilter<"SavingsGoal"> | string | null
     createdAt?: DateTimeFilter<"SavingsGoal"> | Date | string
     updatedAt?: DateTimeFilter<"SavingsGoal"> | Date | string
@@ -20761,8 +20893,10 @@ export namespace Prisma {
     name: string
     targetAmount: Decimal | DecimalJsLike | number | string
     startDate?: Date | string
-    targetDate: Date | string
+    targetDate?: Date | string | null
     savedAmount?: Decimal | DecimalJsLike | number | string
+    isEvergreen?: boolean
+    targetMonths?: number | null
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -20925,8 +21059,10 @@ export namespace Prisma {
     name?: StringFieldUpdateOperationsInput | string
     targetAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     startDate?: DateTimeFieldUpdateOperationsInput | Date | string
-    targetDate?: DateTimeFieldUpdateOperationsInput | Date | string
+    targetDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     savedAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    isEvergreen?: BoolFieldUpdateOperationsInput | boolean
+    targetMonths?: NullableIntFieldUpdateOperationsInput | number | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -20936,8 +21072,10 @@ export namespace Prisma {
     name?: StringFieldUpdateOperationsInput | string
     targetAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     startDate?: DateTimeFieldUpdateOperationsInput | Date | string
-    targetDate?: DateTimeFieldUpdateOperationsInput | Date | string
+    targetDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     savedAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    isEvergreen?: BoolFieldUpdateOperationsInput | boolean
+    targetMonths?: NullableIntFieldUpdateOperationsInput | number | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -20947,8 +21085,10 @@ export namespace Prisma {
     name?: StringFieldUpdateOperationsInput | string
     targetAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     startDate?: DateTimeFieldUpdateOperationsInput | Date | string
-    targetDate?: DateTimeFieldUpdateOperationsInput | Date | string
+    targetDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     savedAmount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    isEvergreen?: BoolFieldUpdateOperationsInput | boolean
+    targetMonths?: NullableIntFieldUpdateOperationsInput | number | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }

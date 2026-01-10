@@ -297,13 +297,31 @@ export class ViewCategories extends LitElement {
 
   async saveCategory() {
     try {
-      const payload = {
-        name: this.categoryForm.name,
-        icon: this.categoryForm.icon,
-        budget: this.categoryForm.type === 'EXPENSE' ? this.categoryForm.budget : null,
+      // Validation
+      if (!this.categoryForm.name.trim()) {
+        alert(i18n.t('settings.category_name') + ' is required');
+        return;
+      }
+      if (!this.categoryForm.icon.trim()) {
+        alert(i18n.t('settings.icon') + ' is required');
+        return;
+      }
+
+      const payload: any = {
+        name: this.categoryForm.name.trim(),
+        icon: this.categoryForm.icon.trim(),
         type: this.categoryForm.type,
-        parentId: this.categoryForm.parentId || null
       };
+
+      // Only include budget for EXPENSE categories
+      if (this.categoryForm.type === 'EXPENSE' && this.categoryForm.budget !== null) {
+        payload.budget = this.categoryForm.budget;
+      }
+
+      // Only include parentId if it's not empty
+      if (this.categoryForm.parentId && this.categoryForm.parentId.trim()) {
+        payload.parentId = this.categoryForm.parentId.trim();
+      }
 
       if (this.editModeId) {
         await api.patch(`/categories/${this.editModeId}`, payload);
@@ -428,7 +446,10 @@ export class ViewCategories extends LitElement {
             <label>${i18n.t('settings.type')}</label>
             <select 
               .value="${this.categoryForm.type}" 
-              @change="${(e: any) => this.categoryForm = { ...this.categoryForm, type: e.target.value }}"
+              @change="${(e: any) => {
+                // Reset parentId when type changes since available parents change
+                this.categoryForm = { ...this.categoryForm, type: e.target.value, parentId: '' };
+              }}"
             >
               <option value="EXPENSE">${i18n.t('settings.expense_categories')}</option>
               <option value="GOAL">${i18n.t('settings.goal_categories')}</option>
@@ -452,7 +473,11 @@ export class ViewCategories extends LitElement {
               @change="${(e: any) => this.categoryForm = { ...this.categoryForm, parentId: e.target.value }}"
             >
               <option value="">None (Top Level)</option>
-              ${this.categories.filter(c => !c.parentId && c.id !== this.editModeId).map(c => html`
+              ${this.categories.filter(c => 
+                !c.parentId && 
+                c.id !== this.editModeId && 
+                c.type === this.categoryForm.type
+              ).map(c => html`
                 <option value="${c.id}">${c.icon} ${c.name}</option>
               `)}
             </select>
@@ -479,12 +504,12 @@ export class ViewCategories extends LitElement {
                   </button>
                 </div>
                 ${this.showEmojiPicker ? html`
-                  <div style="position: absolute; z-index: 2000; bottom: 100%; left: 0; margin-bottom: 8px;">
-                    <div 
-                      style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 1000;" 
-                      @click="${() => this.showEmojiPicker = false}"
-                    ></div>
+                  <div style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 1000; display: flex; align-items: center; justify-content: center;" 
+                    @click="${() => this.showEmojiPicker = false}"
+                  >
                     <emoji-picker 
+                      style="position: relative; z-index: 1001;"
+                      @click="${(e: Event) => e.stopPropagation()}"
                       @emoji-click="${(e: any) => {
                         this.categoryForm = { ...this.categoryForm, icon: e.detail.unicode };
                         this.showEmojiPicker = false;

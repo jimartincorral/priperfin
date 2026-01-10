@@ -33,6 +33,9 @@ export class ViewGoals extends LitElement {
   @state() filterOperator: string = 'contains';
   @state() filterValue: string = '';
 
+  @state() showDistributeMenu: 'unassigned' | 'all' | null = null;
+
+
   get sortedGoals() {
     let goalsArray = Array.isArray(this.goals) ? [...this.goals] : [];
 
@@ -167,7 +170,7 @@ export class ViewGoals extends LitElement {
 
   // New Goal State
   @state() showAddRow = false; // Toggle to show the 'new line'
-  @state() newGoal = { name: '', targetAmount: 0, startDate: new Date().toISOString().split('T')[0], targetDate: '', savedAmount: 0, categoryId: '' };
+  @state() newGoal = { name: '', targetAmount: 0, startDate: new Date().toISOString().split('T')[0], targetDate: '', savedAmount: 0, categoryId: '', isEvergreen: false, targetMonths: 12 };
 
   static styles = css`
     :host { display: block; }
@@ -230,11 +233,71 @@ export class ViewGoals extends LitElement {
         box-shadow: 0 1px 3px 1px rgba(0,0,0,0.15);
         background-image: linear-gradient(rgba(255,255,255,0.08), rgba(255,255,255,0.08));
     }
+    .btn-secondary {
+        background-color: var(--md-sys-color-surface-container-high);
+        color: var(--md-sys-color-on-surface);
+        box-shadow: 0 1px 2px rgba(0,0,0,0.12);
+    }
+    .btn-secondary:hover {
+        box-shadow: 0 1px 3px 1px rgba(0,0,0,0.15);
+        background-image: linear-gradient(rgba(0,0,0,0.05), rgba(0,0,0,0.05));
+    }
+    .btn-secondary:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+    }
+    .btn-warning {
+        background-color: var(--md-sys-color-error-container);
+        color: var(--md-sys-color-on-error-container);
+        box-shadow: 0 1px 2px rgba(0,0,0,0.12);
+    }
+    .btn-warning:hover {
+        box-shadow: 0 1px 3px 1px rgba(0,0,0,0.15);
+        background-image: linear-gradient(rgba(0,0,0,0.08), rgba(0,0,0,0.08));
+    }
     .btn-danger {
         background-color: var(--md-sys-color-error);
         color: var(--md-sys-color-on-error);
         width: 32px; height: 32px; padding: 0;
     }
+
+    /* Distribute Menu */
+    .distribute-menu {
+        position: absolute;
+        top: 100%;
+        right: 0;
+        margin-top: 4px;
+        background: var(--md-sys-color-surface);
+        border: 1px solid var(--md-sys-color-outline);
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        z-index: 100;
+        min-width: 320px;
+    }
+    .distribute-menu .menu-item {
+        padding: 12px 16px;
+        cursor: pointer;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        border-bottom: 1px solid var(--md-sys-color-outline-variant);
+    }
+    .distribute-menu .menu-item:last-child {
+        border-bottom: none;
+    }
+    .distribute-menu .menu-item:hover {
+        background: var(--md-sys-color-surface-container-highest);
+    }
+    .distribute-menu .menu-item strong {
+        color: var(--md-sys-color-on-surface);
+        font: var(--md-sys-typescale-label-large);
+    }
+    .distribute-menu .menu-item span {
+        font-size: 0.75rem;
+        color: var(--md-sys-color-on-surface-variant);
+        font: var(--md-sys-typescale-body-small);
+    }
+
 
     /* Tables */
     .table-container { 
@@ -285,6 +348,12 @@ export class ViewGoals extends LitElement {
     }
 
     /* Filter Styles */
+    .card {
+        background: var(--md-sys-color-surface-container-low);
+        border-radius: var(--md-sys-shape-corner-medium);
+        box-shadow: 0 1px 3px 0 rgba(0,0,0,0.12), 0 1px 2px 0 rgba(0,0,0,0.24);
+    }
+    
     .filter-controls {
         margin-bottom: 1rem;
         background: var(--md-sys-color-surface-container);
@@ -379,12 +448,20 @@ export class ViewGoals extends LitElement {
   connectedCallback() {
     super.connectedCallback();
     i18n.addEventListener('lang-change', () => this.requestUpdate());
+    document.addEventListener('click', this.handleOutsideClick);
   }
 
   disconnectedCallback() {
     super.disconnectedCallback();
     i18n.removeEventListener('lang-change', () => this.requestUpdate());
+    document.removeEventListener('click', this.handleOutsideClick);
   }
+
+  handleOutsideClick = () => {
+    if (this.showDistributeMenu) {
+      this.showDistributeMenu = null;
+    }
+  };
 
   async loadData() {
     this.loading = true;
@@ -407,11 +484,20 @@ export class ViewGoals extends LitElement {
     const targetAmount = Number(g.targetAmount || 0);
     const savedAmount = Number(g.savedAmount || 0);
     if (targetAmount <= savedAmount) return 0;
-    const now = new Date();
-    const target = new Date(g.targetDate);
-    if (target <= now) return targetAmount - savedAmount;
-    const diffMonths = (target.getFullYear() - now.getFullYear()) * 12 + (target.getMonth() - now.getMonth());
-    return (targetAmount - savedAmount) / Math.max(1, diffMonths);
+    
+    if (g.isEvergreen && g.targetMonths) {
+      // For evergreen goals, use targetMonths
+      return (targetAmount - savedAmount) / g.targetMonths;
+    } else if (g.targetDate) {
+      // For timed goals, calculate based on target date
+      const now = new Date();
+      const target = new Date(g.targetDate);
+      if (target <= now) return targetAmount - savedAmount;
+      const diffMonths = (target.getFullYear() - now.getFullYear()) * 12 + (target.getMonth() - now.getMonth());
+      return (targetAmount - savedAmount) / Math.max(1, diffMonths);
+    }
+    
+    return 0;
   }
 
   calculateUnassigned() {
@@ -495,13 +581,27 @@ export class ViewGoals extends LitElement {
     // Validation
     if (!payload.name) { alert('Name is required'); return; }
     if (!payload.targetAmount) { alert('Target Amount is required'); return; }
-    if (!payload.targetDate) { alert('Target Date is required'); return; }
-
-    const startDate = new Date(payload.startDate);
-    const targetDate = new Date(payload.targetDate);
-    if (targetDate < startDate) {
-      alert('Target date cannot be before start date.');
-      return;
+    
+    if (payload.isEvergreen) {
+      // Evergreen goal validation
+      if (!payload.targetMonths || payload.targetMonths <= 0) {
+        alert('Target months is required for evergreen goals');
+        return;
+      }
+      // Clear targetDate for evergreen goals
+      payload.targetDate = null;
+    } else {
+      // Timed goal validation
+      if (!payload.targetDate) { alert('Target Date is required'); return; }
+      
+      const startDate = new Date(payload.startDate);
+      const targetDate = new Date(payload.targetDate);
+      if (targetDate < startDate) {
+        alert('Target date cannot be before start date.');
+        return;
+      }
+      // Clear targetMonths for timed goals
+      payload.targetMonths = null;
     }
 
     // Sanitization
@@ -509,13 +609,10 @@ export class ViewGoals extends LitElement {
     if (isNaN(payload.targetAmount)) payload.targetAmount = 0;
     if (isNaN(payload.savedAmount)) payload.savedAmount = 0;
 
-    // Dates are already strings from input[type=date], but explicit ensure
-    // remove empty non-required dates
-
     try {
       await api.post('/savings-goals', payload);
       // Reset form
-      this.newGoal = { name: '', targetAmount: 0, startDate: new Date().toISOString().split('T')[0], targetDate: '', savedAmount: 0, categoryId: '' };
+      this.newGoal = { name: '', targetAmount: 0, startDate: new Date().toISOString().split('T')[0], targetDate: '', savedAmount: 0, categoryId: '', isEvergreen: false, targetMonths: 12 };
       this.showAddRow = false;
       await this.loadData();
     } catch (e: any) {
@@ -537,6 +634,264 @@ export class ViewGoals extends LitElement {
   getCategoryName(id: string) {
     const cat = this.categories.find(c => c.id === id);
     return cat ? cat.name : '';
+  }
+
+  // --- Distribution Helper Methods ---
+
+  getEffectiveTargetDate(goal: any): Date {
+    if (goal.isEvergreen && goal.targetMonths) {
+      const start = goal.startDate ? new Date(goal.startDate) : new Date();
+      start.setMonth(start.getMonth() + goal.targetMonths);
+      return start;
+    }
+    return goal.targetDate ? new Date(goal.targetDate) : new Date('9999-12-31');
+  }
+
+  getEffectiveShouldHaveSaved(goal: any): number {
+    // If backend already calculated it (timed goals)
+    if (goal.shouldHaveSaved !== null && goal.shouldHaveSaved !== undefined) {
+      return Number(goal.shouldHaveSaved);
+    }
+    
+    // For evergreen goals, calculate based on elapsed time vs targetMonths
+    if (goal.isEvergreen && goal.targetMonths) {
+      const start = goal.startDate ? new Date(goal.startDate) : new Date();
+      const now = new Date();
+      const elapsedMs = now.getTime() - start.getTime();
+      const totalMs = goal.targetMonths * 30.44 * 24 * 60 * 60 * 1000; // Average month duration
+      const progress = Math.min(1, Math.max(0, elapsedMs / totalMs));
+      return Number(goal.targetAmount) * progress;
+    }
+    
+    return 0;
+  }
+
+  getDistributableGoals(): any[] {
+    return this.goals.filter(g => {
+      const target = Number(g.targetAmount || 0);
+      const saved = Number(g.savedAmount || 0);
+      return target > saved; // Not completed
+    });
+  }
+
+  // --- Distribution Methods ---
+
+  async distributeByDate(availableFunds: number, resetFirst: boolean) {
+    // If resetting, we need to reset ALL goals first, then distribute to distributable ones
+    let updates: { id: string; savedAmount: number }[] = [];
+    
+    if (resetFirst) {
+      // Reset all goals to 0
+      updates = this.goals.map(g => ({ id: g.id, savedAmount: 0 }));
+      // Apply resets first
+      for (const { id, savedAmount } of updates) {
+        await api.patch(`/savings-goals/${id}`, { savedAmount });
+      }
+      // Reload data to get fresh state
+      await this.loadData();
+      updates = [];
+    }
+    
+    const goals = this.getDistributableGoals()
+      .sort((a, b) => this.getEffectiveTargetDate(a).getTime() - this.getEffectiveTargetDate(b).getTime());
+    
+    let remaining = availableFunds;
+    let totalAllocated = 0;
+    
+    for (let i = 0; i < goals.length; i++) {
+      const goal = goals[i];
+      const isLast = i === goals.length - 1;
+      
+      if (remaining <= 0) break;
+      
+      const currentSaved = Number(goal.savedAmount || 0);
+      const target = Number(goal.targetAmount);
+      const needed = target - currentSaved;
+      
+      if (needed > 0) {
+        let toAdd: number;
+        if (isLast) {
+          // Last goal gets exactly what's remaining to ensure total = availableFunds
+          toAdd = Math.round((availableFunds - totalAllocated) * 100) / 100;
+        } else {
+          toAdd = Math.min(remaining, needed);
+          toAdd = Math.round(toAdd * 100) / 100; // Round to 2 decimals
+        }
+        
+        const newAmount = Math.round((currentSaved + toAdd) * 100) / 100;
+        updates.push({ id: goal.id, savedAmount: newAmount });
+        remaining -= toAdd;
+        totalAllocated += toAdd;
+      }
+    }
+    
+    await this.applyDistribution(updates);
+  }
+
+  async distributeToOnTrackByDate(availableFunds: number, resetFirst: boolean) {
+    // If resetting, we need to reset ALL goals first, then distribute to distributable ones
+    let updates: { id: string; savedAmount: number }[] = [];
+    
+    if (resetFirst) {
+      // Reset all goals to 0
+      updates = this.goals.map(g => ({ id: g.id, savedAmount: 0 }));
+      // Apply resets first
+      for (const { id, savedAmount } of updates) {
+        await api.patch(`/savings-goals/${id}`, { savedAmount });
+      }
+      // Reload data to get fresh state
+      await this.loadData();
+      updates = [];
+    }
+    
+    const goals = this.getDistributableGoals()
+      .sort((a, b) => this.getEffectiveTargetDate(a).getTime() - this.getEffectiveTargetDate(b).getTime());
+    
+    let remaining = availableFunds;
+    let totalAllocated = 0;
+    
+    for (let i = 0; i < goals.length; i++) {
+      const goal = goals[i];
+      const isLast = i === goals.length - 1;
+      
+      if (remaining <= 0) break;
+      
+      const currentSaved = Number(goal.savedAmount || 0);
+      const shouldHave = this.getEffectiveShouldHaveSaved(goal);
+      const needed = Math.max(0, shouldHave - currentSaved);
+      
+      if (needed > 0) {
+        let toAdd: number;
+        if (isLast) {
+          // Last goal gets exactly what's remaining to ensure total = availableFunds
+          toAdd = Math.round((availableFunds - totalAllocated) * 100) / 100;
+        } else {
+          toAdd = Math.min(remaining, needed);
+          toAdd = Math.round(toAdd * 100) / 100; // Round to 2 decimals
+        }
+        
+        const newAmount = Math.round((currentSaved + toAdd) * 100) / 100;
+        updates.push({ id: goal.id, savedAmount: newAmount });
+        remaining -= toAdd;
+        totalAllocated += toAdd;
+      }
+    }
+    
+    await this.applyDistribution(updates);
+  }
+
+  async distributeProportional(availableFunds: number, resetFirst: boolean) {
+    // If resetting, we need to reset ALL goals first, then distribute to distributable ones
+    let updates: { id: string; savedAmount: number }[] = [];
+    
+    if (resetFirst) {
+      // Reset all goals to 0
+      updates = this.goals.map(g => ({ id: g.id, savedAmount: 0 }));
+      // Apply resets first
+      for (const { id, savedAmount } of updates) {
+        await api.patch(`/savings-goals/${id}`, { savedAmount });
+      }
+      // Reload data to get fresh state
+      await this.loadData();
+      updates = [];
+    }
+    
+    const goals = this.getDistributableGoals();
+    
+    // Calculate total shortfall
+    const shortfalls = goals.map(goal => {
+      const currentSaved = Number(goal.savedAmount || 0);
+      const shouldHave = this.getEffectiveShouldHaveSaved(goal);
+      return {
+        goal,
+        currentSaved,
+        shortfall: Math.max(0, shouldHave - currentSaved)
+      };
+    }).filter(s => s.shortfall > 0);
+    
+    const totalShortfall = shortfalls.reduce((sum, s) => sum + s.shortfall, 0);
+    
+    if (totalShortfall === 0) {
+      alert(i18n.t('goals.distribute.no_goals'));
+      this.showDistributeMenu = null;
+      return;
+    }
+    
+    let totalAllocated = 0;
+    
+    // Allocate proportionally, keeping track of remaining funds
+    for (let i = 0; i < shortfalls.length; i++) {
+      const { goal, currentSaved, shortfall } = shortfalls[i];
+      const isLast = i === shortfalls.length - 1;
+      
+      let allocation: number;
+      if (isLast) {
+        // Last goal gets exactly what's remaining to avoid rounding errors
+        allocation = Math.round((availableFunds - totalAllocated) * 100) / 100;
+      } else {
+        const proportion = shortfall / totalShortfall;
+        allocation = availableFunds * proportion;
+        allocation = Math.round(allocation * 100) / 100; // Round to 2 decimals
+      }
+      
+      const newAmount = Math.round((currentSaved + allocation) * 100) / 100;
+      updates.push({ id: goal.id, savedAmount: newAmount });
+      totalAllocated += allocation;
+    }
+    
+    await this.applyDistribution(updates);
+  }
+
+  async applyDistribution(updates: { id: string; savedAmount: number }[]) {
+    try {
+      for (const { id, savedAmount } of updates) {
+        await api.patch(`/savings-goals/${id}`, { savedAmount });
+      }
+      await this.loadData();
+      this.showDistributeMenu = null;
+      alert(i18n.t('goals.distribute.success'));
+    } catch (e) {
+      console.error('Distribution failed:', e);
+      alert('Distribution failed');
+    }
+  }
+
+  handleDistribute(mode: 'byDate' | 'toOnTrack' | 'proportional') {
+    const isRedistributeAll = this.showDistributeMenu === 'all';
+    
+    if (isRedistributeAll) {
+      const confirmed = confirm(i18n.t('goals.distribute.confirm_redistribute'));
+      if (!confirmed) {
+        this.showDistributeMenu = null;
+        return;
+      }
+    }
+    
+    const availableFunds = isRedistributeAll ? this.totalSavings : this.unassigned;
+    
+    if (availableFunds <= 0 && !isRedistributeAll) {
+      alert(i18n.t('goals.distribute.no_unassigned'));
+      this.showDistributeMenu = null;
+      return;
+    }
+    
+    if (this.getDistributableGoals().length === 0) {
+      alert(i18n.t('goals.distribute.no_goals'));
+      this.showDistributeMenu = null;
+      return;
+    }
+    
+    switch (mode) {
+      case 'byDate':
+        this.distributeByDate(availableFunds, isRedistributeAll);
+        break;
+      case 'toOnTrack':
+        this.distributeToOnTrackByDate(availableFunds, isRedistributeAll);
+        break;
+      case 'proportional':
+        this.distributeProportional(availableFunds, isRedistributeAll);
+        break;
+    }
   }
 
   render() {
@@ -564,6 +919,36 @@ export class ViewGoals extends LitElement {
                 ${this.unassigned >= 0 ? '' : '-'}${symbol}${Math.abs(this.unassigned).toFixed(2)}
              </div>
         </div>
+
+        <div style="position: relative; display: flex; flex-direction: column; gap: 8px;">
+          <button class="btn-secondary" 
+                  @click="${(e: Event) => { e.stopPropagation(); this.showDistributeMenu = this.showDistributeMenu === 'unassigned' ? null : 'unassigned'; }}"
+                  ?disabled="${this.unassigned <= 0}">
+            ${i18n.t('goals.distribute.distribute_unassigned')}
+          </button>
+          
+          <button class="btn-warning" 
+                  @click="${(e: Event) => { e.stopPropagation(); this.showDistributeMenu = this.showDistributeMenu === 'all' ? null : 'all'; }}">
+            ${i18n.t('goals.distribute.redistribute_all')}
+          </button>
+          
+          ${this.showDistributeMenu ? html`
+            <div class="distribute-menu" @click="${(e: Event) => e.stopPropagation()}">
+              <div class="menu-item" @click="${() => this.handleDistribute('byDate')}">
+                <strong>${i18n.t('goals.distribute.fill_by_date')}</strong>
+                <span>${i18n.t('goals.distribute.fill_by_date_desc')}</span>
+              </div>
+              <div class="menu-item" @click="${() => this.handleDistribute('toOnTrack')}">
+                <strong>${i18n.t('goals.distribute.fill_to_on_track')}</strong>
+                <span>${i18n.t('goals.distribute.fill_to_on_track_desc')}</span>
+              </div>
+              <div class="menu-item" @click="${() => this.handleDistribute('proportional')}">
+                <strong>${i18n.t('goals.distribute.proportional')}</strong>
+                <span>${i18n.t('goals.distribute.proportional_desc')}</span>
+              </div>
+            </div>
+          ` : ''}
+        </div>
       </div>
 
       <div style="display: flex; justify-content: flex-end; margin-bottom: 1rem;">
@@ -571,6 +956,60 @@ export class ViewGoals extends LitElement {
             ${this.showAddRow ? i18n.t('common.cancel') : '+ ' + i18n.t('goals.add_goal')}
         </button>
       </div>
+
+      ${this.showAddRow ? html`
+        <div class="card" style="margin-bottom: 1rem; padding: 20px;">
+          <h3 style="margin: 0 0 16px 0; color: var(--md-sys-color-on-surface);">${i18n.t('goals.add_goal')}</h3>
+          <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px;">
+            <div>
+              <label style="display: block; margin-bottom: 4px; font-size: 0.875rem; color: var(--md-sys-color-on-surface-variant);">${i18n.t('goals.goal_name')}</label>
+              <input type="text" placeholder="${i18n.t('goals.goal_name')}" .value="${this.newGoal.name}" @input="${(e: any) => this.newGoal = { ...this.newGoal, name: e.target.value }}" style="width: 100%; padding: 8px; border: 1px solid var(--md-sys-color-outline); border-radius: 4px; background: var(--md-sys-color-surface); color: var(--md-sys-color-on-surface); box-sizing: border-box;">
+            </div>
+            
+            <div>
+              <label style="display: block; margin-bottom: 4px; font-size: 0.875rem; color: var(--md-sys-color-on-surface-variant);">${i18n.t('common.category')}</label>
+              <select .value="${this.newGoal.categoryId}" @change="${(e: any) => this.newGoal = { ...this.newGoal, categoryId: e.target.value }}" style="width: 100%; padding: 8px; border: 1px solid var(--md-sys-color-outline); border-radius: 4px; background: var(--md-sys-color-surface); color: var(--md-sys-color-on-surface); box-sizing: border-box;">
+                <option value="">${i18n.t('common.uncategorized')}</option>
+                ${this.categories.map(c => html`<option value="${c.id}">${c.name}</option>`)}
+              </select>
+            </div>
+            
+            <div>
+              <label style="display: block; margin-bottom: 4px; font-size: 0.875rem; color: var(--md-sys-color-on-surface-variant);">${i18n.t('goals.start_date')}</label>
+              <input type="text" pattern="\d{4}-\d{2}-\d{2}" placeholder="yyyy-mm-dd" title="Format: yyyy-mm-dd" .value="${this.newGoal.startDate}" @input="${(e: any) => this.newGoal = { ...this.newGoal, startDate: e.target.value }}" style="width: 100%; padding: 8px; border: 1px solid var(--md-sys-color-outline); border-radius: 4px; background: var(--md-sys-color-surface); color: var(--md-sys-color-on-surface); box-sizing: border-box;">
+            </div>
+            
+            <div>
+              <label style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 0.875rem; color: var(--md-sys-color-on-surface-variant);">
+                <input type="checkbox" .checked="${this.newGoal.isEvergreen}" @change="${(e: any) => this.newGoal = { ...this.newGoal, isEvergreen: e.target.checked }}" style="width: auto; height: auto;">
+                ${i18n.t('goals.evergreen_goal')}
+              </label>
+              <label style="display: block; margin-bottom: 4px; font-size: 0.75rem; color: var(--md-sys-color-on-surface-variant); font-weight: 500;">
+                ${this.newGoal.isEvergreen ? i18n.t('goals.target_months') : i18n.t('goals.target_date')}
+              </label>
+              ${this.newGoal.isEvergreen ? html`
+                <input type="number" placeholder="${i18n.t('goals.target_months')}" .value="${this.newGoal.targetMonths || ''}" @input="${(e: any) => this.newGoal = { ...this.newGoal, targetMonths: parseInt(e.target.value) }}" style="width: 100%; padding: 8px; border: 1px solid var(--md-sys-color-outline); border-radius: 4px; background: var(--md-sys-color-surface); color: var(--md-sys-color-on-surface); box-sizing: border-box;">
+              ` : html`
+                <input type="text" pattern="\d{4}-\d{2}-\d{2}" placeholder="yyyy-mm-dd" .value="${this.newGoal.targetDate}" @input="${(e: any) => this.newGoal = { ...this.newGoal, targetDate: e.target.value }}" style="width: 100%; padding: 8px; border: 1px solid var(--md-sys-color-outline); border-radius: 4px; background: var(--md-sys-color-surface); color: var(--md-sys-color-on-surface); box-sizing: border-box;">
+              `}
+            </div>
+            
+            <div>
+              <label style="display: block; margin-bottom: 4px; font-size: 0.875rem; color: var(--md-sys-color-on-surface-variant);">${i18n.t('goals.target_amount')}</label>
+              <input type="number" placeholder="0" .value="${this.newGoal.targetAmount || ''}" @input="${(e: any) => this.newGoal = { ...this.newGoal, targetAmount: parseFloat(e.target.value) }}" style="width: 100%; padding: 8px; border: 1px solid var(--md-sys-color-outline); border-radius: 4px; background: var(--md-sys-color-surface); color: var(--md-sys-color-on-surface); box-sizing: border-box;">
+            </div>
+            
+            <div>
+              <label style="display: block; margin-bottom: 4px; font-size: 0.875rem; color: var(--md-sys-color-on-surface-variant);">${i18n.t('goals.current_saved')}</label>
+              <input type="number" placeholder="0" .value="${this.newGoal.savedAmount || ''}" @input="${(e: any) => this.newGoal = { ...this.newGoal, savedAmount: parseFloat(e.target.value) }}" style="width: 100%; padding: 8px; border: 1px solid var(--md-sys-color-outline); border-radius: 4px; background: var(--md-sys-color-surface); color: var(--md-sys-color-on-surface); box-sizing: border-box;">
+            </div>
+          </div>
+          <div style="display: flex; gap: 12px; margin-top: 16px; justify-content: flex-end;">
+            <button class="btn-secondary" @click="${() => this.showAddRow = false}">${i18n.t('common.cancel')}</button>
+            <button class="btn-primary" @click="${this.createGoal}">${i18n.t('common.save')}</button>
+          </div>
+        </div>
+      ` : ''}
 
       <div class="filter-controls">
           <div class="filter-row">
@@ -660,26 +1099,7 @@ export class ViewGoals extends LitElement {
                 </tr>
             </thead>
             <tbody>
-                ${this.showAddRow ? html`
-                    <tr class="new-line">
-                        <td><input type="text" placeholder="${i18n.t('goals.goal_name')}" .value="${this.newGoal.name}" @input="${(e: any) => this.newGoal = { ...this.newGoal, name: e.target.value }}"></td>
-                        <td>
-                            <select .value="${this.newGoal.categoryId}" @change="${(e: any) => this.newGoal = { ...this.newGoal, categoryId: e.target.value }}">
-                                <option value="">${i18n.t('common.uncategorized')}</option>
-                                ${this.categories.map(c => html`<option value="${c.id}">${c.name}</option>`)}
-                            </select>
-                        </td>
-                        <td><input type="date" .value="${this.newGoal.startDate}" @input="${(e: any) => this.newGoal = { ...this.newGoal, startDate: e.target.value }}"></td>
-                        <td><input type="date" .value="${this.newGoal.targetDate}" @input="${(e: any) => this.newGoal = { ...this.newGoal, targetDate: e.target.value }}"></td>
-                        <td><input type="number" placeholder="0" .value="${this.newGoal.targetAmount || ''}" @input="${(e: any) => this.newGoal = { ...this.newGoal, targetAmount: parseFloat(e.target.value) }}"></td>
-                        <td></td>
-                        <td><input type="number" placeholder="0" .value="${this.newGoal.savedAmount || ''}" @input="${(e: any) => this.newGoal = { ...this.newGoal, savedAmount: parseFloat(e.target.value) }}"></td>
-                        <td><button class="btn-primary" @click="${this.createGoal}">${i18n.t('common.save')}</button></td>
-                        <td></td>
-                    </tr>
-                ` : ''}
-
-                ${sorted.length === 0 && !this.showAddRow ? html`<tr><td colspan="9" style="text-align: center; color: #666; padding: 2rem;">${i18n.t('common.no_data')}</td></tr>` : ''}
+                ${sorted.length === 0 ? html`<tr><td colspan="9" style="text-align: center; color: #666; padding: 2rem;">${i18n.t('common.no_data')}</td></tr>` : ''}
 
                 ${sorted.map(goal => {
       const targetAmount = Number(goal.targetAmount || 0);
@@ -733,7 +1153,7 @@ export class ViewGoals extends LitElement {
                                                                                                         @input="${(e: any) => this.editValue = e.target.value}"
                                                                                                         @blur="${() => this.saveCell(goal.id, 'targetDate')}"
                                                                                                         @keydown="${(e: any) => this.handleKeyDown(e, goal.id, 'targetDate')}">
-                                                                                                ` : new Date(goal.targetDate).toISOString().split('T')[0]}
+                                                                                                ` : (goal.isEvergreen ? html`<span style="color: var(--md-sys-color-tertiary);">∞ ${i18n.t('goals.evergreen')}${percent < 100 ? ` (${goal.targetMonths || 12}mo)` : ''}</span>` : (goal.targetDate ? new Date(goal.targetDate).toISOString().split('T')[0] : '-'))}
                                                                                             </td>                            <td class="editable" @click="${() => !isEditingTarget && this.startEditing(goal.id, 'targetAmount', goal.targetAmount)}">
                                 ${isEditingTarget ? html`
                                     <input id="edit-${goal.id}-targetAmount" type="number" .value="${this.editValue}"
@@ -761,9 +1181,9 @@ export class ViewGoals extends LitElement {
                                     <div class="progress-bar"><div class="progress-fill" style="width: ${percent}%"></div></div>
                                     <span style="font-size: 0.8rem; font-weight: 500; min-width: 35px;">${percent.toFixed(0)}%</span>
                                 </div>
-                                <div class="${isBehind && percent < 100 ? 'status-behind' : 'status-ok'}" style="font-size: 0.75rem;">
+                                <div class="${isBehind && percent < 100 && !goal.isEvergreen ? 'status-behind' : 'status-ok'}" style="font-size: 0.75rem;">
                                     ${percent >= 100 ? i18n.t('goals.status.completed') :
-          (isBehind ? i18n.t('goals.status.at_risk') + ` (${symbol}${Math.abs(diff).toFixed(0)})` : i18n.t('goals.status.on_track'))}
+          (goal.isEvergreen ? i18n.t('goals.building') : (isBehind ? i18n.t('goals.status.at_risk') + ` (${symbol}${Math.abs(diff).toFixed(0)})` : i18n.t('goals.status.on_track')))}
                                 </div>
                             </td>
                             

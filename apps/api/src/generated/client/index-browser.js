@@ -212,6 +212,8 @@ exports.Prisma.SavingsGoalScalarFieldEnum = {
   startDate: 'startDate',
   targetDate: 'targetDate',
   savedAmount: 'savedAmount',
+  isEvergreen: 'isEvergreen',
+  targetMonths: 'targetMonths',
   categoryId: 'categoryId',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
