@@ -249,36 +249,54 @@ export class ViewSettings extends LitElement {
     async createBackup() {
         this.backupLoading = true;
         try {
+            console.log('[ViewSettings] Starting backup creation...');
             const response = await api.post('/backup/create', {
                 encryptionKey: this.encryptionKey || undefined
             });
+            console.log('[ViewSettings] Backup creation response:', response);
             const { filename, downloadUrl } = response;
 
             // Download the backup file
             // Use the established API base URL (which works for POST) and append the endpoint
             // downloadUrl comes as '/api/backup/download/...' so we strip the leading '/api' to avoid duplication
             const apiBase = getApiBaseUrl();
-            const endpoint = downloadUrl.startsWith('/api') ? downloadUrl.substring(4) : downloadUrl;
-            const fullUrl = `${apiBase}${endpoint}`;
+            console.log('[ViewSettings] API base URL:', apiBase);
+            console.log('[ViewSettings] Download URL from response:', downloadUrl);
             
-            console.log('[ViewSettings] Downloading backup from:', fullUrl);
+            const endpoint = downloadUrl.startsWith('/api') ? downloadUrl.substring(4) : downloadUrl;
+            console.log('[ViewSettings] Endpoint after processing:', endpoint);
+            
+            const fullUrl = `${apiBase}${endpoint}`;
+            console.log('[ViewSettings] Full download URL:', fullUrl);
+            console.log('[ViewSettings] Document base URI:', document.baseURI);
+            console.log('[ViewSettings] Window location:', window.location.href);
 
             // Use fetch+blob download to maintain authentication context
             // This is critical for Home Assistant Ingress where opening a new tab loses auth
+            console.log('[ViewSettings] Fetching backup file...');
             const downloadResponse = await fetch(fullUrl, {
                 method: 'GET',
                 credentials: 'same-origin', // Ensure cookies/session are included
             });
 
+            console.log('[ViewSettings] Download response status:', downloadResponse.status, downloadResponse.statusText);
+            console.log('[ViewSettings] Download response headers:', Object.fromEntries(downloadResponse.headers.entries()));
+
             if (!downloadResponse.ok) {
+                const errorText = await downloadResponse.text();
+                console.error('[ViewSettings] Download failed. Response body:', errorText);
                 throw new Error(`Download failed: ${downloadResponse.statusText}`);
             }
 
             // Convert response to blob
+            console.log('[ViewSettings] Converting response to blob...');
             const blob = await downloadResponse.blob();
+            console.log('[ViewSettings] Blob created, size:', blob.size, 'type:', blob.type);
 
             // Create a temporary object URL and trigger download
             const blobUrl = window.URL.createObjectURL(blob);
+            console.log('[ViewSettings] Blob URL created:', blobUrl);
+            
             const a = document.createElement('a');
             a.href = blobUrl;
             a.download = filename;
@@ -288,11 +306,12 @@ export class ViewSettings extends LitElement {
 
             // Clean up the blob URL to free memory
             window.URL.revokeObjectURL(blobUrl);
+            console.log('[ViewSettings] Download completed successfully');
 
             alert(i18n.t('settings.backup_created'));
             this.encryptionKey = ''; // Clear the key after successful backup
         } catch (e: any) {
-            console.error('Failed to create backup', e);
+            console.error('[ViewSettings] Backup creation or download failed:', e);
             alert(i18n.t('settings.backup_failed') + ': ' + (e.message || 'Unknown error'));
         } finally {
             this.backupLoading = false;
