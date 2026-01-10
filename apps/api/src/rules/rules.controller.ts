@@ -35,6 +35,11 @@ export class RulesController {
     return this.rulesService.suggestRuleForTransaction(transactionId);
   }
 
+  @Post('suggestions/reject-prompt')
+  rejectRulePrompt(@Body() body: { conditionsJson: string, categoryId: string }) {
+    return this.rulesService.rejectRulePrompt(body.conditionsJson, body.categoryId);
+  }
+
   @Post('suggestions/:id/accept')
   acceptSuggestion(@Param('id') id: string) {
     return this.rulesService.acceptSuggestion(id);

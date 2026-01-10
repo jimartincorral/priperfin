@@ -104,20 +104,20 @@ export class CsvWizard extends LitElement {
     static styles = css`
     :host { display: block; }
     .overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; display: flex; align-items: center; justify-content: center; }
-    .modal { background: white; padding: 2rem; border-radius: 12px; width: 600px; max-width: 90%; max-height: 90vh; overflow-y: auto; box-shadow: 0 4px 20px rgba(0,0,0,0.15); }
-    h2 { margin-top: 0; }
-    .step-indicator { display: flex; gap: 1rem; margin-bottom: 2rem; border-bottom: 1px solid #eee; padding-bottom: 1rem; }
-    .step { font-weight: 600; color: #ccc; }
-    .step.active { color: #2563eb; }
+    .modal { background: var(--md-sys-color-surface); color: var(--md-sys-color-on-surface); padding: 2rem; border-radius: 12px; width: 600px; max-width: 90%; max-height: 90vh; overflow-y: auto; box-shadow: 0 4px 20px rgba(0,0,0,0.15); }
+    h2 { margin-top: 0; color: var(--md-sys-color-on-surface); }
+    .step-indicator { display: flex; gap: 1rem; margin-bottom: 2rem; border-bottom: 1px solid var(--md-sys-color-outline-variant); padding-bottom: 1rem; }
+    .step { font-weight: 600; color: var(--md-sys-color-on-surface-variant); }
+    .step.active { color: var(--md-sys-color-primary); }
     
     .actions { display: flex; justify-content: flex-end; gap: 1rem; margin-top: 2rem; }
     button { padding: 0.5rem 1rem; border-radius: 6px; border: none; cursor: pointer; font-weight: 500; }
-    button.primary { background: #2563eb; color: white; }
-    button.secondary { background: #e2e8f0; color: #475569; }
+    button.primary { background: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary); }
+    button.secondary { background: var(--md-sys-color-surface-container); color: var(--md-sys-color-on-surface); }
     
     .preview-table { width: 100%; border-collapse: collapse; margin-top: 1rem; font-size: 0.875rem; }
-    .preview-table th, .preview-table td { border: 1px solid #e2e8f0; padding: 0.5rem; text-align: left; }
-    .preview-table th { background: #f8fafc; }
+    .preview-table th, .preview-table td { border: 1px solid var(--md-sys-color-outline-variant); padding: 0.5rem; text-align: left; }
+    .preview-table th { background: var(--md-sys-color-surface-container); color: var(--md-sys-color-on-surface); }
 
     .mapping-row { display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; }
     .mapping-label { flex: 1; font-weight: 500; }
@@ -618,7 +618,7 @@ export class CsvWizard extends LitElement {
 
         if (this.step === 4) {
             return html`
-        <div style="background: #fff3cd; padding: 1rem; border-radius: 8px; margin-bottom: 1rem; border-left: 4px solid #ffc107;">
+        <div style="background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container); padding: 1rem; border-radius: 8px; margin-bottom: 1rem; border-left: 4px solid var(--md-sys-color-error);">
             <strong>⚠️ ${i18n.t('csv_wizard.duplicates_detected')}</strong>
             <p style="margin: 0.5rem 0 0 0; font-size: 0.9rem;">
                 ${i18n.t('csv_wizard.duplicates_found').replace('{count}', String(this.duplicates.length))}
@@ -667,7 +667,7 @@ export class CsvWizard extends LitElement {
 
         if (this.step === 5) {
             return html`
-        <div style="background: #e0f2fe; padding: 1rem; border-radius: 8px; margin-bottom: 1rem; border-left: 4px solid #0284c7;">
+        <div style="background: var(--md-sys-color-primary-container); color: var(--md-sys-color-on-primary-container); padding: 1rem; border-radius: 8px; margin-bottom: 1rem; border-left: 4px solid var(--md-sys-color-primary);">
             <strong>🔗 ${i18n.t('csv_wizard.merge_detected')}</strong>
             <p style="margin: 0.5rem 0 0 0; font-size: 0.9rem;">
                 ${i18n.t('csv_wizard.merge_found').replace('{count}', String(this.manualMatches.length))}
@@ -716,18 +716,18 @@ export class CsvWizard extends LitElement {
                                         <tr>
                                             <td>Date</td>
                                             <td>${new Date(match.manualDate).toLocaleDateString()}</td>
-                                            <td style="background: #fef3c7;">${new Date(match.importedDate).toLocaleDateString()}</td>
+                                            <td style="background: var(--md-sys-color-tertiary-container); color: var(--md-sys-color-on-tertiary-container);">${new Date(match.importedDate).toLocaleDateString()}</td>
                                             <td><strong>Use Imported</strong></td>
                                         </tr>
                                         <tr>
                                             <td>Amount</td>
                                             <td>$${match.manualAmount.toFixed(2)}</td>
-                                            <td style="background: #fef3c7;">$${match.importedAmount.toFixed(2)}</td>
+                                            <td style="background: var(--md-sys-color-tertiary-container); color: var(--md-sys-color-on-tertiary-container);">$${match.importedAmount.toFixed(2)}</td>
                                             <td><strong>Use Imported</strong></td>
                                         </tr>
                                         <tr>
                                             <td>Category</td>
-                                            <td style="background: #dcfce7;">${match.manualCategoryId || 'None'}</td>
+                                            <td style="background: var(--md-sys-color-secondary-container); color: var(--md-sys-color-on-secondary-container);">${match.manualCategoryId || 'None'}</td>
                                             <td>${match.importedCategoryId || 'None'}</td>
                                             <td><strong>Use Manual</strong></td>
                                         </tr>

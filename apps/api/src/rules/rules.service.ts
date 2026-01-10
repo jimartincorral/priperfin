@@ -141,30 +141,77 @@ export class RulesService {
   }
 
   async detectAndStoreSuggestions() {
+    // Delete old PENDING suggestions to avoid duplicates piling up
+    await this.prisma.ruleSuggestion.deleteMany({
+      where: { status: SuggestionStatus.PENDING }
+    });
+    
     const suggestions = await this.patternDetection.detectPatterns();
+    
+    // Get all existing rules to avoid suggesting duplicates
+    const existingRules = await this.prisma.categorizationRule.findMany({
+      select: { conditionsJson: true, categoryId: true }
+    });
     
     const savedSuggestions = [];
     for (const s of suggestions) {
-      // Check if similar suggestion exists
-      // For now, simpler to just create new ones or check duplicates?
-      // Let's create new ones for now, user can reject.
-      
-      const created = await this.prisma.ruleSuggestion.create({
-        data: {
-          name: `${s.patternType === 'merchant' ? 'Merchant' : 'Description'} matches "${s.conditions.conditions[0].value}"`,
-          conditionsJson: JSON.stringify(s.conditions),
-          categoryId: s.categoryId,
-          confidence: s.confidence,
-          matchCount: s.matchCount,
-          similarityType: s.patternType,
-          sampleTxIds: JSON.stringify(s.sampleTxIds),
-          status: SuggestionStatus.PENDING
+      // Check if a similar rule already exists
+      const similarRuleExists = existingRules.some(rule => {
+        // Must match same category
+        if (rule.categoryId !== s.categoryId) return false;
+        
+        // Parse and compare conditions
+        try {
+          const ruleConditions = JSON.parse(rule.conditionsJson);
+          const suggestionConditions = s.conditions;
+          
+          // Normalize both for comparison (stringify and compare)
+          const ruleStr = this.normalizeConditionsForComparison(ruleConditions);
+          const suggestionStr = this.normalizeConditionsForComparison(suggestionConditions);
+          
+          return ruleStr === suggestionStr;
+        } catch (e) {
+          return false;
         }
       });
-      savedSuggestions.push(created);
+      
+      // Only create suggestion if no similar rule exists
+      if (!similarRuleExists) {
+        const created = await this.prisma.ruleSuggestion.create({
+          data: {
+            name: `${s.patternType === 'merchant' ? 'Merchant' : 'Description'} matches "${s.conditions.conditions[0].value}"`,
+            conditionsJson: JSON.stringify(s.conditions),
+            categoryId: s.categoryId,
+            confidence: s.confidence,
+            matchCount: s.matchCount,
+            similarityType: s.patternType,
+            sampleTxIds: JSON.stringify(s.sampleTxIds),
+            status: SuggestionStatus.PENDING
+          }
+        });
+        savedSuggestions.push(created);
+      } else {
+        this.logger.log(`Skipping suggestion - similar rule already exists for category ${s.categoryId}`);
+      }
     }
     
     return savedSuggestions;
+  }
+
+  /**
+   * Normalizes rule conditions for comparison.
+   * Extracts key condition values and sorts them for consistent comparison.
+   */
+  private normalizeConditionsForComparison(conditions: any): string {
+    if (!conditions || !conditions.conditions) return '';
+    
+    // Extract condition values and sort them
+    const values = conditions.conditions
+      .map((c: any) => `${c.field}:${c.operator}:${c.value}`.toLowerCase())
+      .sort()
+      .join('|');
+    
+    return values;
   }
 
   async getSuggestions(status?: SuggestionStatus) {
@@ -203,6 +250,26 @@ export class RulesService {
     return this.prisma.ruleSuggestion.update({
       where: { id },
       data: { status: SuggestionStatus.REJECTED }
+    });
+  }
+
+  async rejectRulePrompt(conditionsJson: string, categoryId: string) {
+    // Create a REJECTED suggestion to track that user declined creating this rule
+    // This prevents us from asking again for the same pattern
+    const conditions = JSON.parse(conditionsJson);
+    const patternValue = conditions.conditions?.[0]?.value || 'unknown';
+    
+    return this.prisma.ruleSuggestion.create({
+      data: {
+        name: `User declined: ${patternValue}`,
+        conditionsJson,
+        categoryId,
+        confidence: 0,
+        matchCount: 0,
+        similarityType: 'description',
+        sampleTxIds: '[]',
+        status: SuggestionStatus.REJECTED
+      }
     });
   }
 
@@ -377,13 +444,49 @@ export class RulesService {
       return null; // No good conditions found
     }
 
+    const conditionsJson = JSON.stringify({
+      operator: 'AND',
+      conditions
+    });
+
+    // Check if this pattern was already rejected by the user
+    const rejectedSuggestions = await this.prisma.ruleSuggestion.findMany({
+      where: {
+        status: SuggestionStatus.REJECTED,
+        categoryId: transaction.categoryId
+      }
+    });
+
+    for (const rejected of rejectedSuggestions) {
+      const rejectedNormalized = this.normalizeConditionsForComparison(JSON.parse(rejected.conditionsJson));
+      const currentNormalized = this.normalizeConditionsForComparison(JSON.parse(conditionsJson));
+      
+      if (rejectedNormalized === currentNormalized) {
+        this.logger.log(`Skipping suggestion - user previously rejected this pattern`);
+        return null; // Don't suggest if user already rejected it
+      }
+    }
+
+    // Check if a similar rule already exists
+    const existingRules = await this.prisma.categorizationRule.findMany({
+      where: { categoryId: transaction.categoryId },
+      select: { conditionsJson: true }
+    });
+
+    for (const rule of existingRules) {
+      const ruleNormalized = this.normalizeConditionsForComparison(JSON.parse(rule.conditionsJson));
+      const currentNormalized = this.normalizeConditionsForComparison(JSON.parse(conditionsJson));
+      
+      if (ruleNormalized === currentNormalized) {
+        this.logger.log(`Skipping suggestion - similar rule already exists`);
+        return null; // Don't suggest if rule already exists
+      }
+    }
+
     // Return suggestion (not saved to DB, just returned for UI)
     return {
       name: `Auto-categorize as ${transaction.category?.name || 'Unknown'}`,
-      conditionsJson: JSON.stringify({
-        operator: 'AND',
-        conditions
-      }),
+      conditionsJson,
       categoryId: transaction.categoryId,
       confidence: Math.round(weightedConfidence),
       matchCount: similarTransactions.length,

@@ -19,7 +19,7 @@ export class RuleEditor extends LitElement {
     
     .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; }
     .modal { 
-        background: var(--md-sys-color-surface-container-high); 
+        background: var(--md-sys-color-surface); 
         padding: 24px; 
         border-radius: 28px; 
         box-shadow: 0 4px 8px rgba(0,0,0,0.2); 
@@ -30,7 +30,7 @@ export class RuleEditor extends LitElement {
         color: var(--md-sys-color-on-surface); 
     }
     
-    h3 { margin-top: 0; }
+    h3 { margin-top: 0; color: var(--md-sys-color-on-surface); }
     
     .form-group { margin-bottom: 16px; }
     label { display: block; margin-bottom: 8px; font-size: 0.875rem; color: var(--md-sys-color-on-surface-variant); }
@@ -41,8 +41,13 @@ export class RuleEditor extends LitElement {
         box-sizing: border-box; 
         border: 1px solid var(--md-sys-color-outline); 
         border-radius: 4px;
-        background: transparent;
+        background: var(--md-sys-color-surface-container);
         color: var(--md-sys-color-on-surface);
+    }
+    
+    input:focus, select:focus {
+        outline: 2px solid var(--md-sys-color-primary);
+        outline-offset: 2px;
     }
 
     .conditions-list {
@@ -214,10 +219,13 @@ export class RuleEditor extends LitElement {
 
             <div class="form-group">
                 <label>Action: Set Category</label>
-                <select .value="${this.categoryId}" @change="${(e: any) => this.categoryId = e.target.value}">
-                    <option value="">Select Category...</option>
-                    ${this.categories.map(c => html`
-                        <option value="${c.id}">${c.icon} ${c.name}</option>
+                <select @change="${(e: any) => this.categoryId = e.target.value}">
+                    <option value="" ?selected="${this.categoryId === ''}">Select Category...</option>
+                    ${this.categories.filter(c => !c.parentId).map(parent => html`
+                        <option value="${parent.id}" ?selected="${this.categoryId === parent.id}">${parent.icon} ${parent.name}</option>
+                        ${this.categories.filter(c => c.parentId === parent.id).map(child => html`
+                            <option value="${child.id}" ?selected="${this.categoryId === child.id}">&nbsp;&nbsp;&nbsp;&nbsp;${child.icon} ${child.name}</option>
+                        `)}
                     `)}
                 </select>
             </div>

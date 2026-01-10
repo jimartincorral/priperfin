@@ -975,6 +975,28 @@ export class ViewExpenses extends LitElement {
             await api.post('/transactions/propagate', { description: tx.description, categoryId });
           }
         }
+        
+        // NEW: Offer to create a rule for this pattern
+        // Check if a rule already exists or was rejected for this transaction
+        const suggestions = await api.get(`/rules/suggestions/for-transaction/${txId}`);
+        if (suggestions && suggestions.length > 0) {
+          // There's a pattern and it hasn't been rejected - ask if user wants to create a rule
+          const categoryName = this.categories.find(c => c.id === categoryId)?.name;
+          const shouldCreateRule = confirm(`Create a rule to automatically categorize similar transactions as "${categoryName}"?`);
+          
+          if (shouldCreateRule) {
+            this.openCreateRuleModal(tx);
+          } else {
+            // User declined - track this rejection so we don't ask again
+            const suggestion = suggestions[0];
+            if (suggestion.conditionsJson) {
+              await api.post('/rules/suggestions/reject-prompt', {
+                conditionsJson: suggestion.conditionsJson,
+                categoryId: categoryId
+              });
+            }
+          }
+        }
       }
 
       await this.loadData(true, true);
@@ -1333,7 +1355,7 @@ Tables: ${result.tables?.join(', ')}`;
       ` : ''}
 
       ${this.showAddForm ? html`
-        <div class="card" style="margin-bottom: 2rem; padding: 1rem; background: #f8f9fa; border-radius: 8px;">
+        <div class="card" style="margin-bottom: 2rem; padding: 1rem; border-radius: 8px;">
             <h3>${i18n.t('expenses.add_manual_title')}</h3>
             <div style="display: flex; gap: 1rem; align-items: flex-end; flex-wrap: wrap;">
                 <label>
@@ -1341,7 +1363,7 @@ Tables: ${result.tables?.join(', ')}`;
                     <input type="date" 
                         .value="${this.newTransaction.date}"
                         @input="${(e: any) => this.newTransaction = { ...this.newTransaction, date: e.target.value }}"
-                        style="display: block; padding: 0.5rem; border: 1px solid #ccc; border-radius: 4px"
+                        style="display: block; padding: 0.5rem; border: 1px solid var(--md-sys-color-outline); border-radius: 4px; background: var(--md-sys-color-surface-container); color: var(--md-sys-color-on-surface);"
                     />
                 </label>
                 <label>
@@ -1350,7 +1372,7 @@ Tables: ${result.tables?.join(', ')}`;
                         .value="${this.newTransaction.description}"
                         @input="${(e: any) => this.newTransaction = { ...this.newTransaction, description: e.target.value }}"
                         @blur="${this.handleDescriptionBlur}"
-                        style="display: block; padding: 0.5rem; border: 1px solid #ccc; border-radius: 4px"
+                        style="display: block; padding: 0.5rem; border: 1px solid var(--md-sys-color-outline); border-radius: 4px; background: var(--md-sys-color-surface-container); color: var(--md-sys-color-on-surface);"
                     />
                 </label>
                 <label>
@@ -1358,7 +1380,7 @@ Tables: ${result.tables?.join(', ')}`;
                     <input type="number" placeholder="-10.00"
                         .value="${this.newTransaction.amount || ''}"
                         @input="${(e: any) => this.newTransaction = { ...this.newTransaction, amount: parseFloat(e.target.value) }}"
-                        style="display: block; padding: 0.5rem; border: 1px solid #ccc; border-radius: 4px"
+                        style="display: block; padding: 0.5rem; border: 1px solid var(--md-sys-color-outline); border-radius: 4px; background: var(--md-sys-color-surface-container); color: var(--md-sys-color-on-surface);"
                     />
                 </label>
                 <label>
@@ -1373,7 +1395,7 @@ Tables: ${result.tables?.join(', ')}`;
           }
           this.newTransaction = { ...this.newTransaction, categoryId: e.target.value };
         }}"
-                        style="display: block; padding: 0.5rem; border: 1px solid #ccc; border-radius: 4px">
+                        style="display: block; padding: 0.5rem; border: 1px solid var(--md-sys-color-outline); border-radius: 4px; background: var(--md-sys-color-surface-container); color: var(--md-sys-color-on-surface);">
                         <option value="">-- ${i18n.t('common.category')} --</option>
                         ${this.categories.filter(c => !c.parentId && (c.type === 'EXPENSE' || !c.type)).map(parent => html`
                             <option value="${parent.id}">${parent.icon} ${parent.name}</option>
@@ -1391,7 +1413,7 @@ Tables: ${result.tables?.join(', ')}`;
                     <select
                         .value="${this.newTransaction.costObjectId}"
                         @change="${(e: any) => this.newTransaction = { ...this.newTransaction, costObjectId: e.target.value }}"
-                        style="display: block; padding: 0.5rem; border: 1px solid #ccc; border-radius: 4px">
+                        style="display: block; padding: 0.5rem; border: 1px solid var(--md-sys-color-outline); border-radius: 4px; background: var(--md-sys-color-surface-container); color: var(--md-sys-color-on-surface);">
                         <option value="">-- ${i18n.t('cost_objects.funding_source')} --</option>
                         ${this.costObjects.map(co => html`
                             <option value="${co.id}">${co.icon} ${co.name}</option>
@@ -1404,10 +1426,10 @@ Tables: ${result.tables?.join(', ')}`;
                     <input type="text" placeholder="${i18n.t('common.notes')}"
                         .value="${this.newTransaction.notes || ''}"
                         @input="${(e: any) => this.newTransaction = { ...this.newTransaction, notes: e.target.value }}"
-                        style="display: block; padding: 0.5rem; border: 1px solid #ccc; border-radius: 4px; width: 100%;"
+                        style="display: block; padding: 0.5rem; border: 1px solid var(--md-sys-color-outline); border-radius: 4px; width: 100%; background: var(--md-sys-color-surface-container); color: var(--md-sys-color-on-surface);"
                     />
                 </label>
-                <button @click="${this.createTransaction}" style="background: #2563eb; color: white; border: none; padding: 0.6rem 1rem; border-radius: 4px; cursor: pointer;">${i18n.t('common.save')}</button>
+                <button @click="${this.createTransaction}" style="background: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary); border: none; padding: 0.6rem 1rem; border-radius: 4px; cursor: pointer;">${i18n.t('common.save')}</button>
             </div>
         </div>
       ` : ''
@@ -1522,7 +1544,7 @@ Tables: ${result.tables?.join(', ')}`;
                   <p>${i18n.t('common.confirm_delete')}</p>
                   <div class="modal-actions">
                       <button @click="${() => this.transactionToDelete = null}">${i18n.t('common.cancel')}</button>
-                      <button class="danger" style="background: #fee2e2; color: #dc2626;" @click="${this.confirmDelete}">${i18n.t('common.delete')}</button>
+                      <button class="danger" style="background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container);" @click="${this.confirmDelete}">${i18n.t('common.delete')}</button>
                   </div>
               </div>
           </div>

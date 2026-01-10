@@ -319,6 +319,13 @@ export class ViewRules extends LitElement {
       } else {
         await api.post('/rules', ruleData);
       }
+      
+      // If this came from a suggestion, mark it as accepted
+      if (this.editingRule && this.editingRule._suggestionId) {
+        await api.post(`/rules/suggestions/${this.editingRule._suggestionId}/accept`, {});
+        await this.loadSuggestions(); // Reload to remove from list
+      }
+      
       this.showEditor = false;
       await this.loadRules();
     } catch (e: any) {

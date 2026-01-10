@@ -17,6 +17,43 @@ export class PatternDetectionService {
 
   constructor(private prisma: PrismaService) {}
 
+  /**
+   * Checks if a token is noise (transaction IDs, reference codes, etc.)
+   * and should be excluded from pattern detection.
+   */
+  private isNoiseToken(token: string): boolean {
+    // Must be at least 4 characters (increased from 3)
+    if (token.length < 4) return true;
+    
+    // All digits = transaction ID or reference number
+    if (/^\d+$/.test(token)) return true;
+    
+    // More than 30% digits = likely a code (e.g., "ppha01hpxc", "es4")
+    const digitCount = (token.match(/\d/g) || []).length;
+    if (digitCount / token.length > 0.3) return true;
+    
+    return false;
+  }
+
+  /**
+   * Normalizes an n-gram by removing duplicate tokens.
+   * "anytime xplor anytime fitness" → "anytime xplor fitness"
+   */
+  private normalizeNgram(ngram: string): string {
+    const tokens = ngram.split(' ');
+    const seen = new Set<string>();
+    const unique: string[] = [];
+    
+    for (const token of tokens) {
+      if (!seen.has(token)) {
+        seen.add(token);
+        unique.push(token);
+      }
+    }
+    
+    return unique.join(' ');
+  }
+
   async detectPatterns(): Promise<RuleSuggestionResult[]> {
     const transactions = await this.prisma.transaction.findMany({
       where: { categoryId: { not: null } },
@@ -81,39 +118,81 @@ export class PatternDetectionService {
 
   private detectDescriptionPatterns(transactions: Transaction[], categoryId: string): RuleSuggestionResult[] {
     const results: RuleSuggestionResult[] = [];
-    // Simple approach: Look for frequent words/tokens in descriptions
-    // exclude common stop words
+    
+    // N-gram approach: Look for common phrases (2-grams, 3-grams, 4-grams) instead of individual tokens
     const stopWords = new Set(['purchase', 'payment', 'transfer', 'withdrawal', 'pos', 'debit', 'card', 'date']);
     
-    const tokenCounts = new Map<string, Transaction[]>();
+    // Track n-grams and which transactions contain them
+    const ngramCounts = new Map<string, { txs: Transaction[], ngramLength: number }>();
 
     for (const tx of transactions) {
+      // Tokenize description
       const tokens = tx.description.toLowerCase()
         .split(/[^a-z0-9]/) // Split by non-alphanumeric
-        .filter(t => t.length > 3 && !stopWords.has(t));
+        .filter(t => !this.isNoiseToken(t) && !stopWords.has(t));
       
-      for (const token of new Set(tokens)) { // Unique per tx
-        if (!tokenCounts.has(token)) tokenCounts.set(token, []);
-        tokenCounts.get(token)?.push(tx);
+      if (tokens.length === 0) continue;
+
+      // Generate n-grams for n=1,2,3,4
+      const ngrams = new Set<string>();
+      
+      // 1-grams (individual tokens)
+      for (const token of tokens) {
+        ngrams.add(token);
+      }
+      
+      // 2-grams
+      for (let i = 0; i < tokens.length - 1; i++) {
+        ngrams.add(`${tokens[i]} ${tokens[i + 1]}`);
+      }
+      
+      // 3-grams
+      for (let i = 0; i < tokens.length - 2; i++) {
+        ngrams.add(`${tokens[i]} ${tokens[i + 1]} ${tokens[i + 2]}`);
+      }
+      
+      // 4-grams
+      for (let i = 0; i < tokens.length - 3; i++) {
+        ngrams.add(`${tokens[i]} ${tokens[i + 1]} ${tokens[i + 2]} ${tokens[i + 3]}`);
+      }
+      
+      // Normalize n-grams (remove duplicate words within each n-gram)
+      const normalizedNgrams = new Set<string>();
+      for (const ngram of ngrams) {
+        normalizedNgrams.add(this.normalizeNgram(ngram));
+      }
+      
+      // Track which transactions contain each normalized n-gram
+      for (const ngram of normalizedNgrams) {
+        if (!ngramCounts.has(ngram)) {
+          ngramCounts.set(ngram, { 
+            txs: [], 
+            ngramLength: ngram.split(' ').length 
+          });
+        }
+        ngramCounts.get(ngram)!.txs.push(tx);
       }
     }
 
-    for (const [token, group] of tokenCounts.entries()) {
-      // If token appears in significant portion of category transactions
-      if (group.length >= 5 && group.length >= transactions.length * 0.3) {
-        // Check if this token is specific to this category (would need global context, but for now skip)
-        
+    // Create suggestions from n-grams
+    for (const [ngram, data] of ngramCounts.entries()) {
+      const { txs, ngramLength } = data;
+      
+      // Only suggest if appears in significant portion of transactions
+      if (txs.length >= 5 && txs.length >= transactions.length * 0.3) {
         results.push({
           patternType: 'description',
           conditions: {
             operator: 'AND',
-            conditions: [{ field: 'description', operator: 'contains', value: token, caseSensitive: false }]
+            conditions: [{ field: 'description', operator: 'contains', value: ngram, caseSensitive: false }]
           },
           categoryId,
-          confidence: Math.min(75 + (group.length * 3), 99), // Base 75, +3% per match, max 99
-          sampleTxIds: group.map(t => t.id).slice(0, 10),
-          matchCount: group.length
-        });
+          confidence: Math.min(75 + (txs.length * 3), 99), // Base 75, +3% per match, max 99
+          sampleTxIds: txs.map(t => t.id).slice(0, 10),
+          matchCount: txs.length,
+          // Store n-gram length for later filtering (prefer longer matches)
+          metadata: { ngramLength, ngram }
+        } as any);
       }
     }
 
@@ -137,12 +216,12 @@ export class PatternDetectionService {
     for (const tx of transactions) {
       const descTokens = tx.description.toLowerCase()
         .split(/[^a-z0-9]/)
-        .filter(t => t.length > 3 && !stopWords.has(t));
+        .filter(t => !this.isNoiseToken(t) && !stopWords.has(t));
       
       const noteTokens = tx.notes 
         ? tx.notes.toLowerCase()
             .split(/[^a-z0-9]/)
-            .filter(t => t.length > 3 && !stopWords.has(t))
+            .filter(t => !this.isNoiseToken(t) && !stopWords.has(t))
         : [];
 
       // Try to find existing pattern group or create new one
@@ -271,6 +350,7 @@ export class PatternDetectionService {
   }
 
   private deduplicateSuggestions(suggestions: RuleSuggestionResult[]): RuleSuggestionResult[] {
+    // Step 1: Basic deduplication by exact conditions
     const unique = new Map<string, RuleSuggestionResult>();
     
     for (const s of suggestions) {
@@ -280,6 +360,97 @@ export class PatternDetectionService {
       }
     }
     
-    return Array.from(unique.values());
+    const deduplicated = Array.from(unique.values());
+    
+    // Step 2: Transaction-based deduplication - merge suggestions with overlapping samples
+    const filtered: RuleSuggestionResult[] = [];
+    const toSkip = new Set<number>();
+    
+    for (let i = 0; i < deduplicated.length; i++) {
+      if (toSkip.has(i)) continue;
+      
+      const current = deduplicated[i];
+      let keepCurrent = true;
+      
+      // Compare with all other suggestions
+      for (let j = i + 1; j < deduplicated.length; j++) {
+        if (toSkip.has(j)) continue;
+        
+        const other = deduplicated[j];
+        
+        // Only compare suggestions for the same category
+        if (current.categoryId !== other.categoryId) continue;
+        
+        // Calculate transaction overlap
+        const currentTxSet = new Set(current.sampleTxIds);
+        const otherTxSet = new Set(other.sampleTxIds);
+        const intersection = new Set([...currentTxSet].filter(x => otherTxSet.has(x)));
+        const union = new Set([...currentTxSet, ...otherTxSet]);
+        const overlapRatio = intersection.size / union.size;
+        
+        // If 80%+ overlap, keep only the better one
+        if (overlapRatio >= 0.8) {
+          // Prefer longer n-grams
+          const currentLength = (current as any).metadata?.ngramLength || 1;
+          const otherLength = (other as any).metadata?.ngramLength || 1;
+          
+          if (otherLength > currentLength) {
+            // Other has longer n-gram, skip current
+            toSkip.add(i);
+            keepCurrent = false;
+            break;
+          } else if (otherLength < currentLength) {
+            // Current has longer n-gram, skip other
+            toSkip.add(j);
+          } else {
+            // Same n-gram length, prefer higher confidence
+            if (other.confidence > current.confidence) {
+              toSkip.add(i);
+              keepCurrent = false;
+              break;
+            } else {
+              toSkip.add(j);
+            }
+          }
+        }
+      }
+      
+      if (keepCurrent) {
+        filtered.push(current);
+      }
+    }
+    
+    // Step 3: Pattern-value deduplication
+    // Merge suggestions that have the same normalized pattern value
+    const byPatternValue = new Map<string, RuleSuggestionResult>();
+
+    for (const s of filtered) {
+      // Extract the pattern value from conditions
+      const conditions = s.conditions?.conditions || [];
+      const descCondition = conditions.find((c: any) => c.field === 'description');
+      
+      if (!descCondition) {
+        // Non-description conditions, keep as-is
+        byPatternValue.set(JSON.stringify(s.conditions) + s.categoryId, s);
+        continue;
+      }
+      
+      // Normalize the pattern value
+      const normalizedValue = this.normalizeNgram(descCondition.value);
+      const key = normalizedValue + '|' + s.categoryId;
+      
+      if (!byPatternValue.has(key)) {
+        byPatternValue.set(key, s);
+      } else {
+        const existing = byPatternValue.get(key)!;
+        // Keep the one with higher matchCount, then confidence
+        if (s.matchCount > existing.matchCount || 
+            (s.matchCount === existing.matchCount && s.confidence > existing.confidence)) {
+          byPatternValue.set(key, s);
+        }
+      }
+    }
+    
+    return Array.from(byPatternValue.values());
   }
 }
