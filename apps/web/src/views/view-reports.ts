@@ -1,12 +1,19 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, state, query } from 'lit/decorators.js';
 import { Chart, registerables } from 'chart.js';
-import { SankeyController, Flow } from 'chartjs-chart-sankey';
 import { api } from '../api/client';
 
 import { i18n } from '../i18n/i18n';
 
-Chart.register(...registerables, SankeyController, Flow);
+Chart.register(...registerables);
+
+// Helper function to get text color from CSS variables for dark mode support
+function getTextColor(): string {
+  const color = getComputedStyle(document.documentElement)
+    .getPropertyValue('--md-sys-color-on-surface')
+    .trim();
+  return color || '#e1e2e6'; // Fallback for dark mode
+}
 
 type DateFilterMode = 'month' | 'year' | 'custom' | 'all_time';
 
@@ -35,12 +42,11 @@ export class ViewReports extends LitElement {
   @state() selectedAccountId = '';
   @state() groupByCategory = false; // Toggle for parent category grouping
   @state() breakdownData: any[] = []; // Store raw API response
+  @state() legendItems: any[] = []; // For custom legend rendering
 
   @query('#breakdownChart') breakdownCanvas!: HTMLCanvasElement;
-  @query('#sankeyChart') sankeyCanvas!: HTMLCanvasElement;
 
   private breakdownChart: Chart | null = null;
-  private sankeyChart: Chart | null = null;
 
   static styles = css`
     :host { display: block; }
@@ -98,7 +104,6 @@ export class ViewReports extends LitElement {
     }
 
     .charts-container { display: grid; grid-template-columns: 1fr; gap: 24px; margin-top: 24px; }
-    @media (min-width: 1024px) { .charts-container { grid-template-columns: 1fr 1fr; } }
     
     .chart-card { 
         background: var(--md-sys-color-surface-container-low); 
@@ -109,11 +114,213 @@ export class ViewReports extends LitElement {
     .chart-card h3 { margin-top: 0; font: var(--md-sys-typescale-title-medium); color: var(--md-sys-color-on-surface-variant); margin-bottom: 24px; }
     
     canvas { width: 100%; height: 100%; }
+    
+    .chart-with-legend { 
+      display: flex; 
+      gap: 24px; 
+      align-items: flex-start; 
+    }
+    .chart-canvas { 
+      flex: 1; 
+      min-width: 0; 
+    }
+    .custom-legend { 
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 4px 16px;
+      min-width: 560px;
+      max-width: 700px;
+      max-height: 100%;
+      overflow-y: auto;
+      padding-right: 8px;
+    }
+    .custom-legend::-webkit-scrollbar {
+      width: 6px;
+    }
+    .custom-legend::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    .custom-legend::-webkit-scrollbar-thumb {
+      background: var(--md-sys-color-outline);
+      border-radius: 3px;
+    }
+    .legend-item { 
+      display: grid;
+      grid-template-columns: 20px 1fr auto auto auto;
+      align-items: center; 
+      gap: 10px; 
+      font-size: 13px;
+      padding: 6px 8px;
+      border-radius: 6px;
+      transition: background-color 0.2s;
+    }
+    .legend-item.child {
+      grid-template-columns: 20px 1fr auto auto;
+    }
+    .legend-item.parent-header {
+      font-weight: 600;
+      font-size: 14px;
+      padding: 8px 8px 4px 8px;
+      margin-top: 12px;
+      grid-column: 1 / -1; /* Span all columns */
+      grid-template-columns: auto 1fr auto auto auto; /* color picker, name, eye, arrow */
+      opacity: 0.9;
+      border-bottom: 1px solid var(--md-sys-color-outline-variant);
+      background-color: var(--md-sys-color-surface-container);
+      gap: 10px;
+    }
+    .legend-item.parent-header:first-child {
+      margin-top: 0;
+    }
+    .color-picker {
+      width: 24px;
+      height: 24px;
+      border: 2px solid var(--md-sys-color-outline);
+      border-radius: 4px;
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+    .color-picker:hover {
+      transform: scale(1.1);
+    }
+    .color-picker::-webkit-color-swatch-wrapper {
+      padding: 0;
+    }
+    .color-picker::-webkit-color-swatch {
+      border: none;
+      border-radius: 2px;
+    }
+    .legend-item.child { 
+      padding-left: 28px;
+      font-size: 12px;
+      grid-template-columns: 16px 1fr auto auto;
+    }
+    .legend-item.child .legend-color {
+      width: 16px;
+      height: 16px;
+    }
+    .color-picker-small {
+      width: 20px;
+      height: 20px;
+      border: 1px solid var(--md-sys-color-outline);
+      border-radius: 3px;
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+    .color-picker-small:hover {
+      transform: scale(1.1);
+    }
+    .color-picker-small::-webkit-color-swatch-wrapper {
+      padding: 0;
+    }
+    .color-picker-small::-webkit-color-swatch {
+      border: none;
+      border-radius: 2px;
+    }
+    .legend-item:hover:not(.parent-header) { 
+      background-color: var(--md-sys-color-surface-variant);
+    }
+    .legend-item.hidden { 
+      opacity: 0.4; 
+    }
+    .legend-color { 
+      width: 20px; 
+      height: 20px; 
+      border-radius: 4px; 
+      flex-shrink: 0;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    }
+    .legend-text { 
+      color: var(--md-sys-color-on-surface);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      line-height: 1.4;
+    }
+    .legend-icon { 
+      cursor: pointer; 
+      font-size: 18px;
+      width: 28px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 4px;
+      transition: background-color 0.2s, transform 0.1s;
+      user-select: none;
+      flex-shrink: 0;
+    }
+    .legend-icon:hover { 
+      background-color: var(--md-sys-color-surface-variant);
+      transform: scale(1.05);
+    }
+    .legend-icon:active {
+      transform: scale(0.95);
+    }
+    .eye-icon { 
+      opacity: 0.6; 
+    }
+    .eye-icon:hover { 
+      opacity: 1; 
+    }
+    .nav-icon { 
+      opacity: 0.5; 
+    }
+    .nav-icon:hover {
+      opacity: 1;
+    }
   `;
 
   async firstUpdated() {
+    this.loadFiltersFromURL();
     await this.loadAccounts();
     await this.loadData();
+  }
+
+  loadFiltersFromURL() {
+    const params = new URLSearchParams(window.location.search);
+    
+    if (params.has('mode')) {
+      this.dateFilterMode = params.get('mode') as DateFilterMode;
+    }
+    if (params.has('month')) {
+      this.month = parseInt(params.get('month')!);
+    }
+    if (params.has('year')) {
+      this.year = parseInt(params.get('year')!);
+    }
+    if (params.has('startDate')) {
+      this.customStartDate = params.get('startDate')!;
+    }
+    if (params.has('endDate')) {
+      this.customEndDate = params.get('endDate')!;
+    }
+    if (params.has('accountId')) {
+      this.selectedAccountId = params.get('accountId')!;
+    }
+  }
+
+  updateURL() {
+    const params = new URLSearchParams();
+    
+    params.set('mode', this.dateFilterMode);
+    
+    if (this.dateFilterMode === 'month') {
+      params.set('month', this.month.toString());
+      params.set('year', this.year.toString());
+    } else if (this.dateFilterMode === 'year') {
+      params.set('year', this.year.toString());
+    } else if (this.dateFilterMode === 'custom') {
+      if (this.customStartDate) params.set('startDate', this.customStartDate);
+      if (this.customEndDate) params.set('endDate', this.customEndDate);
+    }
+    
+    if (this.selectedAccountId) {
+      params.set('accountId', this.selectedAccountId);
+    }
+    
+    const newURL = `${window.location.pathname}?${params.toString()}`;
+    window.history.replaceState({}, '', newURL);
   }
 
   async loadAccounts() {
@@ -145,6 +352,7 @@ export class ViewReports extends LitElement {
 
   async loadData() {
     this.loading = true;
+    this.updateURL(); // Save filters to URL
     try {
       // Build query params based on filter mode
       const params: any = { filterMode: this.dateFilterMode };
@@ -170,16 +378,12 @@ export class ViewReports extends LitElement {
         params.accountId = this.selectedAccountId;
       }
 
-      const [breakdown, sankey] = await Promise.all([
-        api.get('/reports/category-breakdown', params),
-        api.get('/reports/sankey', params)
-      ]);
+      const breakdown = await api.get('/reports/category-breakdown', params);
 
       this.breakdownData = breakdown;
       
       await this.updateComplete; // Ensure DOM is ready
       this.renderBreakdown();
-      this.renderSankey(sankey);
     } catch (e: any) {
       console.error(e);
       alert('Failed to load reports: ' + (e.message || e));
@@ -197,7 +401,7 @@ export class ViewReports extends LitElement {
 
       // Aggregation Logic
       if (this.groupByCategory) {
-        const familyMap = new Map<string, { name: string, spent: number, color: string }>();
+        const familyMap = new Map<string, { id: string, name: string, spent: number, color: string }>();
         
         data.forEach(item => {
           const familyId = item.familyId || item.id; // Fallback to ID if no family
@@ -209,6 +413,7 @@ export class ViewReports extends LitElement {
           
           if (!familyMap.has(familyId)) {
             familyMap.set(familyId, {
+              id: familyId,
               name: familyName,
               spent: 0,
               color: item.color // Use color of first child (usually they share base hue)
@@ -230,6 +435,69 @@ export class ViewReports extends LitElement {
         return CHART_PALETTE[i % CHART_PALETTE.length];
       });
 
+      // Store category data for custom legend with parent grouping
+      // Group items by family
+      const familyGroups = new Map<string, any[]>();
+      
+      data.forEach((d: any, i: number) => {
+        const familyId = d.familyId || d.id;
+        if (!familyGroups.has(familyId)) {
+          familyGroups.set(familyId, []);
+        }
+        
+        familyGroups.get(familyId)!.push({
+          id: d.id,
+          name: d.name,
+          icon: d.icon || '',
+          color: backgroundColors[i],
+          hidden: false,
+          index: i,
+          parentId: d.parentId,
+          familyId: d.familyId,
+          familyName: d.familyName
+        });
+      });
+      
+      // Build legend items with parent headers
+      this.legendItems = [];
+      familyGroups.forEach((items, familyId) => {
+        // Check if this is a parent with children
+        const hasChildren = items.some(item => item.parentId);
+        
+        // Always show as parent header (whether it has children or not)
+        const parentItem = items.find(item => !item.parentId);
+        const firstItem = items[0];
+        
+        // Add parent header - familyName already includes icon
+        this.legendItems.push({
+          id: familyId,
+          name: firstItem.familyName || (parentItem ? `${parentItem.icon} ${parentItem.name}` : firstItem.name),
+          icon: '', // Don't show icon separately since it's in familyName
+          color: 'transparent',
+          hidden: false,
+          index: -1,
+          isParentHeader: true
+        });
+        
+        if (hasChildren) {
+          // Add all items as children (including parent if it has data)
+          items.forEach(item => {
+            this.legendItems.push({
+              ...item,
+              isChild: true
+            });
+          });
+        } else {
+          // Standalone category - add as child under its own header
+          items.forEach(item => {
+            this.legendItems.push({
+              ...item,
+              isChild: true
+            });
+          });
+        }
+      });
+
       this.breakdownChart = new Chart(this.breakdownCanvas, {
         type: 'doughnut',
         data: {
@@ -244,19 +512,11 @@ export class ViewReports extends LitElement {
             maintainAspectRatio: false,
             plugins: {
                 legend: {
-                    display: true,
-                    position: 'right',
-                    onClick: (_e: any, legendItem: any, legend: any) => {
-                        const index = legendItem.index;
-                        const chart = legend.chart;
-                        const meta = chart.getDatasetMeta(0);
-
-                        // Toggle visibility
-                        meta.data[index].hidden = !meta.data[index].hidden;
-                        chart.update();
-                    }
+                    display: false, // Disable default legend, use custom HTML legend
                 },
                 tooltip: {
+                    bodyColor: getTextColor(), // Dynamic color for dark mode
+                    titleColor: getTextColor(),
                     callbacks: {
                         label: function(context: any) {
                             let label = context.label || '';
@@ -279,44 +539,180 @@ export class ViewReports extends LitElement {
     }
   }
 
-  renderSankey(data: any) {
+  toggleLegendItem(index: number) {
+    if (!this.breakdownChart) return;
+    
+    const meta = this.breakdownChart.getDatasetMeta(0);
+    const element = meta.data[index] as any;
+    element.hidden = !element.hidden;
+    
+    // Update legend items state
+    this.legendItems = this.legendItems.map((item, i) => 
+      i === index ? { ...item, hidden: !item.hidden } : item
+    );
+    
+    this.breakdownChart.update();
+  }
+
+  toggleParentGroup(familyId: string) {
+    if (!this.breakdownChart) return;
+    
+    // Find all children in this family
+    const childrenIndices = this.legendItems
+      .filter(item => !item.isParentHeader && item.familyId === familyId)
+      .map(item => item.index);
+    
+    if (childrenIndices.length === 0) return;
+    
+    // Check if any children are visible
+    const meta = this.breakdownChart.getDatasetMeta(0);
+    const anyVisible = childrenIndices.some(index => {
+      const element = meta.data[index] as any;
+      return !element.hidden;
+    });
+    
+    // Toggle all children to the opposite state
+    const newHiddenState = anyVisible;
+    childrenIndices.forEach(index => {
+      const element = meta.data[index] as any;
+      element.hidden = newHiddenState;
+    });
+    
+    // Update legend items state
+    this.legendItems = this.legendItems.map(item => {
+      if (!item.isParentHeader && item.familyId === familyId) {
+        return { ...item, hidden: newHiddenState };
+      }
+      return item;
+    });
+    
+    this.breakdownChart.update();
+  }
+
+  async updateSingleCategoryColor(categoryId: string, color: string) {
     try {
-      if (this.sankeyChart) this.sankeyChart.destroy();
-      if (!this.sankeyCanvas) return;
-
-      if (!data || !data.links || data.links.length === 0) return;
-
-      const flows = data.links.map((l: any) => ({
-        from: l.source,
-        to: l.target,
-        flow: l.value
-      }));
-
-      // Create a map of nodes to colors for consistency
-      const nodes = [...new Set([...data.links.map((l: any) => l.source), ...data.links.map((l: any) => l.target)])];
-      const nodeColorMap: { [key: string]: string } = {};
-      nodes.forEach((node, i) => {
-        nodeColorMap[node as string] = CHART_PALETTE[i % CHART_PALETTE.length];
-      });
-
-      this.sankeyChart = new Chart(this.sankeyCanvas, {
-        type: 'sankey',
-        data: {
-          datasets: [{
-            data: flows,
-            colorFrom: (c: any) => nodeColorMap[c.dataset.data[c.dataIndex].from],
-            colorTo: (c: any) => nodeColorMap[c.dataset.data[c.dataIndex].to],
-            colorMode: 'gradient',
-          }]
-        },
-        options: { 
-            responsive: true, 
-            maintainAspectRatio: false,
-        }
-      });
+      await api.patch(`/categories/${categoryId}`, { color });
+      await this.loadData();
     } catch (e: any) {
-      console.error('Sankey Chart Error', e);
+      console.error('Failed to update category color:', e);
+      alert('Failed to update color: ' + (e.message || e));
     }
+  }
+
+  async updateCategoryColor(familyId: string, color: string) {
+    try {
+      console.log('Updating family color:', familyId, color);
+      
+      // Find ALL categories in this family (including parent if it has data)
+      const familyCategories = this.legendItems.filter(
+        item => !item.isParentHeader && item.familyId === familyId
+      );
+      
+      console.log('Found family categories to update:', familyCategories);
+      
+      if (familyCategories.length === 0) {
+        // Maybe the parent itself doesn't have data, just update it directly
+        await api.patch(`/categories/${familyId}`, { color });
+        await this.loadData();
+        return;
+      }
+      
+      // Update each category in the family with a color variation
+      for (let i = 0; i < familyCategories.length; i++) {
+        const category = familyCategories[i];
+        // Create color variations by adjusting brightness
+        const variance = (i * 15) % 60;
+        const categoryColor = this.adjustBrightness(color, variance - 10);
+        console.log(`Updating category ${category.id} (${category.name}) to color ${categoryColor}`);
+        await api.patch(`/categories/${category.id}`, { color: categoryColor });
+      }
+      
+      // Also update the parent category itself if it exists
+      await api.patch(`/categories/${familyId}`, { color }).catch(() => {
+        // Parent might not exist as a real category, ignore error
+        console.log('Parent category not found or already updated');
+      });
+      
+      // Reload the data to reflect the new colors
+      await this.loadData();
+    } catch (e: any) {
+      console.error('Failed to update category color:', e);
+      alert('Failed to update color: ' + (e.message || e));
+    }
+  }
+
+  private adjustBrightness(col: string, amt: number): string {
+    let color = col.replace(/^#/, '');
+    if (color.length === 3) {
+      color = color[0] + color[0] + color[1] + color[1] + color[2] + color[2];
+    }
+
+    let r = parseInt(color.substring(0, 2), 16);
+    let g = parseInt(color.substring(2, 4), 16);
+    let b = parseInt(color.substring(4, 6), 16);
+
+    r = Math.max(0, Math.min(255, r + amt));
+    g = Math.max(0, Math.min(255, g + amt));
+    b = Math.max(0, Math.min(255, b + amt));
+
+    const toHex = (c: number) => {
+      const hex = c.toString(16);
+      return hex.length === 1 ? '0' + hex : hex;
+    };
+
+    return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+  }
+
+  navigateToParentCategory(familyId: string) {
+    // Navigate to expenses with all children categories selected
+    const params = new URLSearchParams();
+    params.set('mode', this.dateFilterMode);
+    
+    if (this.dateFilterMode === 'month') {
+      params.set('month', this.month.toString());
+      params.set('year', this.year.toString());
+    } else if (this.dateFilterMode === 'year') {
+      params.set('year', this.year.toString());
+    } else if (this.dateFilterMode === 'custom') {
+      if (this.customStartDate) params.set('startDate', this.customStartDate);
+      if (this.customEndDate) params.set('endDate', this.customEndDate);
+    }
+    
+    if (this.selectedAccountId) {
+      params.set('accountId', this.selectedAccountId);
+    }
+    
+    // Use the parent/family ID for filtering
+    if (familyId) {
+      params.set('categoryId', familyId);
+    }
+    
+    window.location.href = `/?${params.toString()}`;
+  }
+
+  navigateToCategory(categoryId: string) {
+    const params = new URLSearchParams();
+    params.set('mode', this.dateFilterMode);
+    
+    if (this.dateFilterMode === 'month') {
+      params.set('month', this.month.toString());
+      params.set('year', this.year.toString());
+    } else if (this.dateFilterMode === 'year') {
+      params.set('year', this.year.toString());
+    } else if (this.dateFilterMode === 'custom') {
+      if (this.customStartDate) params.set('startDate', this.customStartDate);
+      if (this.customEndDate) params.set('endDate', this.customEndDate);
+    }
+    
+    if (this.selectedAccountId) {
+      params.set('accountId', this.selectedAccountId);
+    }
+    
+    if (categoryId) {
+      params.set('categoryId', categoryId);
+    }
+    
+    window.location.href = `/?${params.toString()}`;
   }
 
   render() {
@@ -364,14 +760,62 @@ export class ViewReports extends LitElement {
       <div class="charts-container">
         <div class="chart-card">
             <h3>${i18n.t('reports.category_breakdown')}</h3>
-            <div style="position: relative; height: 400px; width: 100%">
-                <canvas id="breakdownChart"></canvas>
-            </div>
-        </div>
-        <div class="chart-card">
-            <h3>${i18n.t('reports.sankey_chart')}</h3>
-            <div style="position: relative; height: 400px; width: 100%">
-                <canvas id="sankeyChart"></canvas>
+            <div class="chart-with-legend" style="height: 500px;">
+                <div class="chart-canvas" style="position: relative; height: 100%;">
+                    <canvas id="breakdownChart"></canvas>
+                </div>
+                <div class="custom-legend">
+                    ${this.legendItems.map(item => {
+                      if (item.isParentHeader) {
+                        // Check if any children are hidden
+                        const children = this.legendItems.filter(child => !child.isParentHeader && child.familyId === item.id);
+                        const anyHidden = children.some(child => child.hidden);
+                        // Get the color from the first child (they share the same base color)
+                        const baseColor = children.length > 0 ? children[0].color : '#cccccc';
+                        
+                        return html`
+                          <div class="legend-item parent-header">
+                              <input 
+                                type="color" 
+                                class="color-picker"
+                                .value="${baseColor}"
+                                @change="${(e: any) => this.updateCategoryColor(item.id, e.target.value)}"
+                                title="Change category color"
+                              />
+                              <div style="flex: 1;">${item.name}</div>
+                              <span class="legend-icon eye-icon" @click="${() => this.toggleParentGroup(item.id)}" title="Toggle all children visibility">
+                                  ${anyHidden ? '👁️' : '👁'}
+                              </span>
+                              <span class="legend-icon nav-icon" @click="${() => this.navigateToParentCategory(item.id)}" title="View all children transactions">
+                                  →
+                              </span>
+                          </div>
+                        `;
+                      } else {
+                        return html`
+                          <div class="legend-item ${item.isChild ? 'child' : ''} ${item.hidden ? 'hidden' : ''}">
+                              <div class="legend-color" style="background-color: ${item.color}"></div>
+                              <div class="legend-text">${item.icon} ${item.name}</div>
+                              ${!item.isChild ? html`
+                                <input 
+                                  type="color" 
+                                  class="color-picker-small"
+                                  .value="${item.color}"
+                                  @change="${(e: any) => this.updateSingleCategoryColor(item.id, e.target.value)}"
+                                  title="Change color"
+                                />
+                              ` : ''}
+                              <span class="legend-icon eye-icon" @click="${() => this.toggleLegendItem(item.index)}" title="Toggle visibility">
+                                  ${item.hidden ? '👁️' : '👁'}
+                              </span>
+                              <span class="legend-icon nav-icon" @click="${() => this.navigateToCategory(item.id)}" title="View transactions">
+                                  →
+                              </span>
+                          </div>
+                        `;
+                      }
+                    })}
+                </div>
             </div>
         </div>
       </div>

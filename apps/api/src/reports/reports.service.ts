@@ -43,11 +43,13 @@ export class ReportsService {
     const categoryMap = new Map<
       string,
       {
+        id: string;
         name: string;
         color: string;
         spent: number;
         budget: number;
         icon: string;
+        parentId?: string;
         familyId?: string;
         familyName?: string;
       }
@@ -94,8 +96,16 @@ export class ReportsService {
     const sortedFamilies = Array.from(familyMap.keys()).sort();
 
     sortedFamilies.forEach((fId) => {
-      familyBaseColors.set(fId, palette[colorIndex % palette.length]);
-      colorIndex++;
+      // Check if this family (parent category) has a saved color
+      const parentCategory = categories.find(c => c.id === fId);
+      if (parentCategory && parentCategory.color) {
+        // Use the saved color
+        familyBaseColors.set(fId, parentCategory.color);
+      } else {
+        // Use palette color as fallback
+        familyBaseColors.set(fId, palette[colorIndex % palette.length]);
+        colorIndex++;
+      }
     });
 
     // 3. Assign Colors to Categories
@@ -114,33 +124,29 @@ export class ReportsService {
         familyName = `${c.icon} ${c.name}`;
       }
 
-      // Calculate shade
-      let finalColor = baseColor;
-      const siblings = familyMap.get(familyId) || [];
+      // Use saved color if available, otherwise calculate shade
+      let finalColor = c.color || baseColor;
+      
+      // If no saved color, calculate variation based on position in family
+      if (!c.color) {
+        const siblings = familyMap.get(familyId) || [];
 
-      if (siblings.length > 1) {
-        // If there are multiple items in this family, vary the shade
-        const index = siblings.indexOf(c.id);
-        // Vary by simply adjusting brightness based on index
-        // Alternating darken/lighten to keep it close to base?
-        // Or just progressive steps.
-        // Let's do: (index * 20) - (siblings.length * 10)?
-        // Simple variation:
-        const variance = (index * 15) % 60;
-        // We want some to be lighter, some darker than base.
-        // if base is index 0: 0
-        // index 1: +15
-        // index 2: +30
-        // index 3: +45
-        finalColor = this.adjustBrightness(baseColor, variance - 10);
+        if (siblings.length > 1) {
+          // If there are multiple items in this family, vary the shade
+          const index = siblings.indexOf(c.id);
+          const variance = (index * 15) % 60;
+          finalColor = this.adjustBrightness(baseColor, variance - 10);
+        }
       }
 
       categoryMap.set(c.id, {
+        id: c.id, // Include ID for navigation
         name: c.name,
         color: finalColor,
         icon: c.icon,
         spent: 0,
         budget: c.budget ? c.budget.toNumber() : 0,
+        parentId: c.parentId || undefined, // Include parent relationship
         familyId: familyId, // Used for sorting
         familyName: familyName, // For grouping
       });
@@ -148,11 +154,13 @@ export class ReportsService {
 
     // Add Uncategorized bucket
     categoryMap.set('uncategorized', {
+      id: 'uncategorized', // Include ID for navigation
       name: 'Uncategorized',
       color: '#94a3b8',
       icon: '?',
       spent: 0,
       budget: 0,
+      parentId: undefined,
       familyId: 'zzzzzz', // Ensure it's last
       familyName: 'Uncategorized',
     });

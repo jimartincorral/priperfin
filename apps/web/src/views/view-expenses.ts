@@ -441,9 +441,18 @@ export class ViewExpenses extends LitElement {
       valB = catB ? catB.name : '';
     }
 
+    // Handle numeric fields (amount)
+    if (field === 'amount') {
+      valA = Number(valA) || 0;
+      valB = Number(valB) || 0;
+    }
     // Safe lowercasing for strings
-    if (typeof valA === 'string') valA = valA.toLowerCase();
-    if (typeof valB === 'string') valB = valB.toLowerCase();
+    else if (typeof valA === 'string') {
+      valA = valA.toLowerCase();
+    }
+    if (typeof valB === 'string' && field !== 'amount') {
+      valB = valB.toLowerCase();
+    }
 
     if (valA < valB) return direction === 'asc' ? -1 : 1;
     if (valA > valB) return direction === 'asc' ? 1 : -1;
@@ -650,7 +659,61 @@ export class ViewExpenses extends LitElement {
       } catch (e) { console.error('Failed to parse column config', e); }
     }
 
+    this.loadFiltersFromURL();
     await this.loadData();
+  }
+
+  loadFiltersFromURL() {
+    const params = new URLSearchParams(window.location.search);
+    
+    if (params.has('mode')) {
+      this.dateFilterMode = params.get('mode') as DateFilterMode;
+    }
+    if (params.has('month')) {
+      this.month = parseInt(params.get('month')!);
+    }
+    if (params.has('year')) {
+      this.year = parseInt(params.get('year')!);
+    }
+    if (params.has('startDate')) {
+      this.customStartDate = params.get('startDate')!;
+    }
+    if (params.has('endDate')) {
+      this.customEndDate = params.get('endDate')!;
+    }
+    if (params.has('accountId')) {
+      this.selectedAccountId = params.get('accountId')!;
+    }
+    if (params.has('categoryId')) {
+      this.filterCategoryId = params.get('categoryId')!;
+    }
+  }
+
+  updateURL() {
+    const params = new URLSearchParams();
+    
+    params.set('mode', this.dateFilterMode);
+    
+    if (this.dateFilterMode === 'month') {
+      params.set('month', this.month.toString());
+      params.set('year', this.year.toString());
+    } else if (this.dateFilterMode === 'year') {
+      params.set('year', this.year.toString());
+    } else if (this.dateFilterMode === 'custom') {
+      if (this.customStartDate) params.set('startDate', this.customStartDate);
+      if (this.customEndDate) params.set('endDate', this.customEndDate);
+    }
+    
+    if (this.selectedAccountId) {
+      params.set('accountId', this.selectedAccountId);
+    }
+    
+    if (this.filterCategoryId) {
+      params.set('categoryId', this.filterCategoryId);
+    }
+    
+    const newURL = `${window.location.pathname}?${params.toString()}`;
+    window.history.replaceState({}, '', newURL);
   }
 
   updated(changedProperties: Map<string, any>) {
@@ -842,6 +905,7 @@ export class ViewExpenses extends LitElement {
   async loadData(preserveScroll = false, isBackground = false) {
     const scrollPos = window.scrollY;
     if (!isBackground) this.loading = true;
+    this.updateURL(); // Save filters to URL
     try {
       // Build query params based on filter mode
       const txQuery: any = { filterMode: this.dateFilterMode };
