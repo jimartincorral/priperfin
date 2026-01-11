@@ -136,6 +136,20 @@ export class RuleEvaluatorService {
       val === null || val === undefined ? '' : String(val);
     const normalizeString = (val: any) =>
       caseSensitive ? toString(val) : toString(val).toLowerCase();
+    
+    // Advanced normalization for contains/startsWith/endsWith: 
+    // Remove punctuation and collapse whitespace for fuzzy matching
+    const fuzzyNormalize = (val: any) => {
+      const str = normalizeString(val);
+      // Remove all non-alphanumeric characters except spaces
+      let cleaned = str.replace(/[^a-z0-9\s]/g, ' ');
+      // Remove standalone single digits (often transaction suffixes like "-0", "-1")
+      cleaned = cleaned.replace(/\s\d\s/g, ' ');
+      // Remove digits at start or end of string
+      cleaned = cleaned.replace(/^\d\s/g, '').replace(/\s\d$/g, '');
+      // Collapse multiple spaces into one
+      return cleaned.replace(/\s+/g, ' ').trim();
+    };
 
     // Number normalization
     const toNumber = (val: any) => {
@@ -155,13 +169,16 @@ export class RuleEvaluatorService {
         return normalizeString(actual) === normalizeString(expected);
 
       case 'contains':
-        return normalizeString(actual).includes(normalizeString(expected));
+        // Use fuzzy normalization to handle punctuation/spacing variations
+        return fuzzyNormalize(actual).includes(fuzzyNormalize(expected));
 
       case 'startsWith':
-        return normalizeString(actual).startsWith(normalizeString(expected));
+        // Use fuzzy normalization for startsWith too
+        return fuzzyNormalize(actual).startsWith(fuzzyNormalize(expected));
 
       case 'endsWith':
-        return normalizeString(actual).endsWith(normalizeString(expected));
+        // Use fuzzy normalization for endsWith too
+        return fuzzyNormalize(actual).endsWith(fuzzyNormalize(expected));
 
       case 'regex':
         try {

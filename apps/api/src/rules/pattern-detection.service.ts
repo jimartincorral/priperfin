@@ -22,15 +22,19 @@ export class PatternDetectionService {
    * and should be excluded from pattern detection.
    */
   private isNoiseToken(token: string): boolean {
-    // Must be at least 4 characters (increased from 3)
-    if (token.length < 4) return true;
+    // Must be at least 3 characters
+    if (token.length < 3) return true;
 
     // All digits = transaction ID or reference number
     if (/^\d+$/.test(token)) return true;
 
-    // More than 30% digits = likely a code (e.g., "ppha01hpxc", "es4")
+    // More than 60% digits = likely a transaction code
+    // Reduced from 30% to 60% to allow codes like "ppha01hpxc" (20% digits)
     const digitCount = (token.match(/\d/g) || []).length;
-    if (digitCount / token.length > 0.3) return true;
+    if (digitCount / token.length > 0.6) return true;
+
+    // All single letters (like "a", "x", "es")
+    if (token.length <= 2 && /^[a-z]+$/.test(token)) return true;
 
     return false;
   }
