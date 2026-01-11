@@ -24,15 +24,23 @@ async function bootstrap() {
       ];
 
   app.enableCors({
-    origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+    origin: (
+      origin: string | undefined,
+      callback: (err: Error | null, allow?: boolean) => void,
+    ) => {
       // Allow requests with no origin (like mobile apps, curl, or same-origin)
       if (!origin) {
         callback(null, true);
         return;
       }
       // Allow localhost and private network IPs (this is a self-hosted app)
-      const isLocalhost = origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:');
-      const isPrivateNetwork = /^https?:\/\/(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)/.test(origin);
+      const isLocalhost =
+        origin.startsWith('http://localhost:') ||
+        origin.startsWith('http://127.0.0.1:');
+      const isPrivateNetwork =
+        /^https?:\/\/(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)/.test(
+          origin,
+        );
       if (allowedOrigins.includes(origin) || isLocalhost || isPrivateNetwork) {
         callback(null, true);
       } else {

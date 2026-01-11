@@ -82,7 +82,10 @@ export class AccountBalancesService {
 
   async calculateBalanceAtDate(targetDate: Date, accountId?: string | null) {
     // 1. Find the most recent AccountBalance before or on targetDate
-    const latestBalance = await this.findLatestBeforeOrOn(targetDate, accountId);
+    const latestBalance = await this.findLatestBeforeOrOn(
+      targetDate,
+      accountId,
+    );
 
     const startingBalance = latestBalance
       ? latestBalance.balance.toNumber()

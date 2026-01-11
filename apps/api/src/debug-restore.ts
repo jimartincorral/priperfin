@@ -1,7 +1,7 @@
 import { PrismaClient } from './generated/client';
 import { PrismaBetterSqlite3 } from '@prisma/adapter-better-sqlite3';
 import path from 'path';
-import Database from 'better-sqlite3'; // Import better-sqlite3 directly if needed, or rely on adapter internals? 
+import Database from 'better-sqlite3'; // Import better-sqlite3 directly if needed, or rely on adapter internals?
 // The adapter constructor takes Database instance or config?
 // Check PrismaService: new PrismaBetterSqlite3({ url: resolvedUrl });
 // Actually, PrismaBetterSqlite3 usually takes a Database instance from 'better-sqlite3' package.
@@ -16,7 +16,7 @@ import Database from 'better-sqlite3'; // Import better-sqlite3 directly if need
 async function main() {
   const rawUrl = process.env.DATABASE_URL || 'file:./dev.db';
   console.log('Connecting to:', rawUrl);
-  
+
   // Replicate logic from PrismaService
   const adapter = new PrismaBetterSqlite3({ url: rawUrl });
   const prisma = new PrismaClient({ adapter });
@@ -65,30 +65,29 @@ async function main() {
     if (count > 0) {
       const first = await prisma.transaction.findFirst({
         include: {
-            category: true,
-            // Only include these if tables exist to avoid crash if they don't
-            costObject: hasCostObject, 
-            splits: hasSplits ? { include: { category: true } } : false
-        }
+          category: true,
+          // Only include these if tables exist to avoid crash if they don't
+          costObject: hasCostObject,
+          splits: hasSplits ? { include: { category: true } } : false,
+        },
       });
       console.log('Sample Transaction:', JSON.stringify(first, null, 2));
     } else {
-        console.log("No transactions found. Attempting to create one...");
-        try {
-            const newTx = await prisma.transaction.create({
-                data: {
-                    date: new Date(),
-                    amount: -10.50,
-                    description: "Debug Transaction",
-                    categoryId: null
-                }
-            });
-            console.log("Created debug transaction:", newTx);
-        } catch (e) {
-            console.error("Failed to create transaction:", e);
-        }
+      console.log('No transactions found. Attempting to create one...');
+      try {
+        const newTx = await prisma.transaction.create({
+          data: {
+            date: new Date(),
+            amount: -10.5,
+            description: 'Debug Transaction',
+            categoryId: null,
+          },
+        });
+        console.log('Created debug transaction:', newTx);
+      } catch (e) {
+        console.error('Failed to create transaction:', e);
+      }
     }
-
   } catch (e) {
     console.error('Debug script failed:', e);
   } finally {

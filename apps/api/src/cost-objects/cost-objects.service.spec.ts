@@ -109,7 +109,9 @@ describe('CostObjectsService', () => {
       });
       prismaMock.costObject.update.mockResolvedValue(updatedCostObject);
 
-      const result = await service.update('cost-1', { name: 'Renamed Project' });
+      const result = await service.update('cost-1', {
+        name: 'Renamed Project',
+      });
 
       expect(result.name).toBe('Renamed Project');
       expect(prismaMock.costObject.update).toHaveBeenCalledWith({

@@ -14,23 +14,24 @@ describe('RuleEvaluatorService', () => {
     service = module.get<RuleEvaluatorService>(RuleEvaluatorService);
   });
 
-  const mockTransaction = (overrides: Partial<Transaction> = {}): Transaction => ({
-    id: 'tx-1',
-    date: new Date('2023-01-01'),
-    amount: 100 as any, // Decimal
-    description: 'Amazon Marketplace',
-    merchant: 'amazon',
-    categoryId: null,
-    accountId: null,
-    costObjectId: null,
-    notes: 'Book purchase',
-    externalId: null,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    suggestedByRuleId: null,
-    suggestedCategoryId: null,
-    ...overrides,
-  } as unknown as Transaction);
+  const mockTransaction = (overrides: Partial<Transaction> = {}): Transaction =>
+    ({
+      id: 'tx-1',
+      date: new Date('2023-01-01'),
+      amount: 100 as any, // Decimal
+      description: 'Amazon Marketplace',
+      merchant: 'amazon',
+      categoryId: null,
+      accountId: null,
+      costObjectId: null,
+      notes: 'Book purchase',
+      externalId: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      suggestedByRuleId: null,
+      suggestedCategoryId: null,
+      ...overrides,
+    }) as unknown as Transaction;
 
   const createRule = (conditionsJson: string): CategorizationRule => ({
     id: 'rule-1',
@@ -49,72 +50,90 @@ describe('RuleEvaluatorService', () => {
 
   it('should match simple description contains', () => {
     const tx = mockTransaction({ description: 'Amazon Prime' });
-    const rule = createRule(JSON.stringify({
-      operator: 'AND',
-      conditions: [{ field: 'description', operator: 'contains', value: 'Prime' }]
-    }));
+    const rule = createRule(
+      JSON.stringify({
+        operator: 'AND',
+        conditions: [
+          { field: 'description', operator: 'contains', value: 'Prime' },
+        ],
+      }),
+    );
 
     expect(service.matches(tx, rule)).toBe(true);
   });
 
   it('should fail if description does not contain', () => {
     const tx = mockTransaction({ description: 'Netflix' });
-    const rule = createRule(JSON.stringify({
-      operator: 'AND',
-      conditions: [{ field: 'description', operator: 'contains', value: 'Prime' }]
-    }));
+    const rule = createRule(
+      JSON.stringify({
+        operator: 'AND',
+        conditions: [
+          { field: 'description', operator: 'contains', value: 'Prime' },
+        ],
+      }),
+    );
 
     expect(service.matches(tx, rule)).toBe(false);
   });
 
   it('should match numeric comparison', () => {
     const tx = mockTransaction({ amount: 150 as any });
-    const rule = createRule(JSON.stringify({
-      operator: 'AND',
-      conditions: [{ field: 'amount', operator: 'greaterThan', value: 100 }]
-    }));
+    const rule = createRule(
+      JSON.stringify({
+        operator: 'AND',
+        conditions: [{ field: 'amount', operator: 'greaterThan', value: 100 }],
+      }),
+    );
 
     expect(service.matches(tx, rule)).toBe(true);
   });
 
   it('should match combined conditions (AND)', () => {
     const tx = mockTransaction({ description: 'Uber', amount: 50 as any });
-    const rule = createRule(JSON.stringify({
-      operator: 'AND',
-      conditions: [
-        { field: 'description', operator: 'equals', value: 'Uber' },
-        { field: 'amount', operator: 'lessThan', value: 100 }
-      ]
-    }));
+    const rule = createRule(
+      JSON.stringify({
+        operator: 'AND',
+        conditions: [
+          { field: 'description', operator: 'equals', value: 'Uber' },
+          { field: 'amount', operator: 'lessThan', value: 100 },
+        ],
+      }),
+    );
 
     expect(service.matches(tx, rule)).toBe(true);
   });
 
   it('should fail combined conditions (AND) if one fails', () => {
     const tx = mockTransaction({ description: 'Uber', amount: 150 as any });
-    const rule = createRule(JSON.stringify({
-      operator: 'AND',
-      conditions: [
-        { field: 'description', operator: 'equals', value: 'Uber' },
-        { field: 'amount', operator: 'lessThan', value: 100 }
-      ]
-    }));
+    const rule = createRule(
+      JSON.stringify({
+        operator: 'AND',
+        conditions: [
+          { field: 'description', operator: 'equals', value: 'Uber' },
+          { field: 'amount', operator: 'lessThan', value: 100 },
+        ],
+      }),
+    );
 
     expect(service.matches(tx, rule)).toBe(false);
   });
 
   it('should match combined conditions (OR)', () => {
     const tx = mockTransaction({ description: 'Lyft' });
-    const rule = createRule(JSON.stringify({
-      operator: 'AND',
-      conditions: [{
-        operator: 'OR',
+    const rule = createRule(
+      JSON.stringify({
+        operator: 'AND',
         conditions: [
-          { field: 'description', operator: 'equals', value: 'Uber' },
-          { field: 'description', operator: 'equals', value: 'Lyft' }
-        ]
-      }]
-    }));
+          {
+            operator: 'OR',
+            conditions: [
+              { field: 'description', operator: 'equals', value: 'Uber' },
+              { field: 'description', operator: 'equals', value: 'Lyft' },
+            ],
+          },
+        ],
+      }),
+    );
 
     expect(service.matches(tx, rule)).toBe(true);
   });

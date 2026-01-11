@@ -124,7 +124,10 @@ describe('ReportsService', () => {
       prismaMock.transaction.findMany.mockResolvedValue(transactions);
       prismaMock.category.findMany.mockResolvedValue([category]);
 
-      const result = await service.getCategoryBreakdown({ month: 1, year: 2025 });
+      const result = await service.getCategoryBreakdown({
+        month: 1,
+        year: 2025,
+      });
 
       expect(result).toHaveLength(1);
       expect(result[0].name).toBe('Groceries');
@@ -163,7 +166,10 @@ describe('ReportsService', () => {
       prismaMock.transaction.findMany.mockResolvedValue([transaction]);
       prismaMock.category.findMany.mockResolvedValue([category1, category2]);
 
-      const result = await service.getCategoryBreakdown({ month: 1, year: 2025 });
+      const result = await service.getCategoryBreakdown({
+        month: 1,
+        year: 2025,
+      });
 
       expect(result).toHaveLength(2);
       const cat1Result = result.find((c) => c.name === 'Category 1');
@@ -184,7 +190,10 @@ describe('ReportsService', () => {
       prismaMock.transaction.findMany.mockResolvedValue([transaction]);
       prismaMock.category.findMany.mockResolvedValue([]);
 
-      const result = await service.getCategoryBreakdown({ month: 1, year: 2025 });
+      const result = await service.getCategoryBreakdown({
+        month: 1,
+        year: 2025,
+      });
 
       expect(result).toHaveLength(1);
       expect(result[0].name).toBe('Uncategorized');
@@ -195,7 +204,11 @@ describe('ReportsService', () => {
       prismaMock.transaction.findMany.mockResolvedValue([]);
       prismaMock.category.findMany.mockResolvedValue([]);
 
-      await service.getCategoryBreakdown({ month: 1, year: 2025, accountId: 'acc-1' });
+      await service.getCategoryBreakdown({
+        month: 1,
+        year: 2025,
+        accountId: 'acc-1',
+      });
 
       expect(prismaMock.transaction.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -210,7 +223,10 @@ describe('ReportsService', () => {
       prismaMock.transaction.findMany.mockResolvedValue([]);
       prismaMock.category.findMany.mockResolvedValue([]);
 
-      const result = await service.getCategoryBreakdown({ month: 1, year: 2025 });
+      const result = await service.getCategoryBreakdown({
+        month: 1,
+        year: 2025,
+      });
 
       expect(result).toEqual([]);
     });
@@ -238,9 +254,15 @@ describe('ReportsService', () => {
       });
 
       prismaMock.transaction.findMany.mockResolvedValue([transaction]);
-      prismaMock.category.findMany.mockResolvedValue([parentCategory, childCategory]);
+      prismaMock.category.findMany.mockResolvedValue([
+        parentCategory,
+        childCategory,
+      ]);
 
-      const result = await service.getCategoryBreakdown({ month: 1, year: 2025 });
+      const result = await service.getCategoryBreakdown({
+        month: 1,
+        year: 2025,
+      });
 
       expect(result).toHaveLength(1);
       expect(result[0].color).toMatch(/^#[0-9a-f]{6}$/i);
@@ -414,7 +436,10 @@ describe('ReportsService', () => {
   // ============================================
   describe('getCostObjectBreakdown', () => {
     it('should return empty array when no accountId provided', async () => {
-      const result = await service.getCostObjectBreakdown({ month: 1, year: 2025 });
+      const result = await service.getCostObjectBreakdown({
+        month: 1,
+        year: 2025,
+      });
       expect(result).toEqual([]);
     });
 
@@ -479,7 +504,10 @@ describe('ReportsService', () => {
     });
 
     it('should only count expenses (negative amounts)', async () => {
-      const costObject = createMockCostObject({ id: 'cost-1', name: 'Project A' });
+      const costObject = createMockCostObject({
+        id: 'cost-1',
+        name: 'Project A',
+      });
 
       const transactions = [
         createMockTransaction({
@@ -511,7 +539,10 @@ describe('ReportsService', () => {
     });
 
     it('should handle split transactions', async () => {
-      const costObject = createMockCostObject({ id: 'cost-1', name: 'Project A' });
+      const costObject = createMockCostObject({
+        id: 'cost-1',
+        name: 'Project A',
+      });
 
       const transaction = createMockTransaction({
         id: 'tx-1',

@@ -19,10 +19,12 @@ import { AccountBalancesModule } from './account-balances/account-balances.modul
 import { RulesModule } from './rules/rules.module';
 import { ConfigModule } from '@nestjs/config';
 
-
 // Determine static files path: Docker container uses /app/client, dev uses relative path
 function getStaticPath(): string {
-  console.log('[getStaticPath] process.env.STATIC_PATH:', process.env.STATIC_PATH);
+  console.log(
+    '[getStaticPath] process.env.STATIC_PATH:',
+    process.env.STATIC_PATH,
+  );
   console.log('[getStaticPath] __dirname:', __dirname);
 
   if (process.env.STATIC_PATH) {
@@ -38,13 +40,13 @@ function getStaticPath(): string {
   // Fallback: try to find web/dist relative to current location
   // 1. From apps/api/src (Dev): ../../web/dist
   // 2. From apps/api/dist (Prod): ../../../web/dist
-  
+
   const possiblePaths = [
-    join(__dirname, '../..', 'web/dist'),       // Dev structure
-    join(__dirname, '../../..', 'web/dist'),    // Built structure (dist/src/...)
-    join(__dirname, '../../../../web/dist'),    // Deeper nesting?
-    join(process.cwd(), 'apps/web/dist'),       // CWD based (Robust for monorepo)
-    join(process.cwd(), '../web/dist')          // CWD if in apps/api
+    join(__dirname, '../..', 'web/dist'), // Dev structure
+    join(__dirname, '../../..', 'web/dist'), // Built structure (dist/src/...)
+    join(__dirname, '../../../../web/dist'), // Deeper nesting?
+    join(process.cwd(), 'apps/web/dist'), // CWD based (Robust for monorepo)
+    join(process.cwd(), '../web/dist'), // CWD if in apps/api
   ];
 
   for (const p of possiblePaths) {

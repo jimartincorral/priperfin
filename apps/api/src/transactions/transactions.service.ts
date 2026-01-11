@@ -23,7 +23,8 @@ export class TransactionsService {
   ) {}
 
   async create(dto: CreateTransactionDto) {
-    this.logger.log(`Creating transaction: ${dto.description} (${dto.amount})`);
+    // Disabled: too verbose during imports
+    // this.logger.log(`Creating transaction: ${dto.description} (${dto.amount})`);
     const transaction = await this.prisma.transaction.create({
       data: {
         ...dto,
@@ -35,13 +36,17 @@ export class TransactionsService {
     const match = await this.rulesService.evaluateTransaction(transaction);
 
     if (match) {
-      this.logger.log(`Rule match found: ${match.rule.name}, mode: ${match.mode}`);
+      // Disabled: too verbose during imports
+      // this.logger.log(
+      //   `Rule match found: ${match.rule.name}, mode: ${match.mode}`,
+      // );
       const updateData: any = {
         suggestedByRuleId: match.rule.id,
       };
 
       if (match.mode === RuleMode.AUTO_APPLY && match.categoryId) {
-        this.logger.log(`Auto-applying category: ${match.categoryId}`);
+        // Disabled: too verbose during imports
+        // this.logger.log(`Auto-applying category: ${match.categoryId}`);
         updateData.categoryId = match.categoryId;
       }
 
@@ -66,28 +71,32 @@ export class TransactionsService {
 
     // Create a minimal mock transaction for rule evaluation
     const mockTx = {
-        description,
-        notes: notes || null,
-        amount: new Prisma.Decimal(0),
-        date: new Date(),
-        merchant: null,
-        id: 'temp',
-        categoryId: null,
-        accountId: null,
-        costObjectId: null,
-        suggestedCategoryId: null,
-        suggestedByRuleId: null,
-        externalId: null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        splits: []
+      description,
+      notes: notes || null,
+      amount: new Prisma.Decimal(0),
+      date: new Date(),
+      merchant: null,
+      id: 'temp',
+      categoryId: null,
+      accountId: null,
+      costObjectId: null,
+      suggestedCategoryId: null,
+      suggestedByRuleId: null,
+      externalId: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      splits: [],
     } as any;
 
     const match = await this.rulesService.evaluateTransaction(mockTx);
     if (match && match.categoryId) {
-        return { categoryId: match.categoryId, source: 'rule', ruleId: match.rule.id };
+      return {
+        categoryId: match.categoryId,
+        source: 'rule',
+        ruleId: match.rule.id,
+      };
     }
-    
+
     return { categoryId: null, source: null };
   }
 
@@ -327,7 +336,9 @@ export class TransactionsService {
     force: boolean = false,
     mergeInstructions: any[] = [],
   ) {
-    console.log(`[TransactionsService] createMany called with ${dtos?.length} transactions, force=${force}`);
+    console.log(
+      `[TransactionsService] createMany called with ${dtos?.length} transactions, force=${force}`,
+    );
 
     if (!dtos || !Array.isArray(dtos)) {
       console.warn(
@@ -350,30 +361,30 @@ export class TransactionsService {
 
         // Mock transaction for rule evaluation
         const mockTx = {
-            ...dto,
-            amount: new Prisma.Decimal(dto.amount),
-            date: new Date(dto.date),
-            merchant: null,
-            id: 'temp',
-            accountId: null,
-            costObjectId: null,
-            suggestedCategoryId: null,
-            suggestedByRuleId: null,
-            externalId: null,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-            splits: []
+          ...dto,
+          amount: new Prisma.Decimal(dto.amount),
+          date: new Date(dto.date),
+          merchant: null,
+          id: 'temp',
+          accountId: null,
+          costObjectId: null,
+          suggestedCategoryId: null,
+          suggestedByRuleId: null,
+          externalId: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          splits: [],
         } as any;
 
         // Evaluate rules
         const match = await this.rulesService.evaluateTransaction(mockTx);
         if (match) {
-            if (match.mode === RuleMode.AUTO_APPLY && match.categoryId) {
-                categoryId = match.categoryId;
-                suggestedByRuleId = match.rule.id;
-            } else {
-                suggestedByRuleId = match.rule.id;
-            }
+          if (match.mode === RuleMode.AUTO_APPLY && match.categoryId) {
+            categoryId = match.categoryId;
+            suggestedByRuleId = match.rule.id;
+          } else {
+            suggestedByRuleId = match.rule.id;
+          }
         }
 
         return {
@@ -401,7 +412,9 @@ export class TransactionsService {
 
     const seenInBatch = new Map<string, number>();
     const newTransactions: typeof enhancedDtos = [];
-    const duplicates: Array<(typeof enhancedDtos)[0] & { reason: string; batchIndex?: number }> = [];
+    const duplicates: Array<
+      (typeof enhancedDtos)[0] & { reason: string; batchIndex?: number }
+    > = [];
 
     for (const d of enhancedDtos) {
       if (d.externalId && existingIds.has(d.externalId)) {
@@ -418,7 +431,9 @@ export class TransactionsService {
       }
     }
 
-    console.log(`[TransactionsService] createMany: ${newTransactions.length} new, ${duplicates.length} duplicates`);
+    console.log(
+      `[TransactionsService] createMany: ${newTransactions.length} new, ${duplicates.length} duplicates`,
+    );
 
     if (!force && duplicates.length > 0) {
       return {

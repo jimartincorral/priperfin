@@ -23,7 +23,9 @@ export class AllExceptionsFilter implements ExceptionFilter {
         : HttpStatus.INTERNAL_SERVER_ERROR;
 
     // Log full details server-side for debugging
-    this.logger.error(`Exception on ${request.method} ${request.url}: ${exception}`);
+    this.logger.error(
+      `Exception on ${request.method} ${request.url}: ${exception}`,
+    );
     if (exception instanceof Error) {
       this.logger.error(exception.stack);
     }

@@ -180,9 +180,9 @@ describe('BackupService', () => {
     it('should throw BadRequestException when file does not exist', async () => {
       (fs.stat as jest.Mock).mockRejectedValue(new Error('ENOENT'));
 
-      await expect(service.getBackupFileStream('nonexistent.tar')).rejects.toThrow(
-        BadRequestException,
-      );
+      await expect(
+        service.getBackupFileStream('nonexistent.tar'),
+      ).rejects.toThrow(BadRequestException);
     });
 
     // ============================================
@@ -190,39 +190,39 @@ describe('BackupService', () => {
     // ============================================
     describe('path traversal protection', () => {
       it('should reject filenames with path traversal sequences (..)', async () => {
-        await expect(service.getBackupFileStream('../../../etc/passwd')).rejects.toThrow(
-          BadRequestException,
-        );
-        await expect(service.getBackupFileStream('../../../etc/passwd')).rejects.toThrow(
-          'Invalid filename format',
-        );
+        await expect(
+          service.getBackupFileStream('../../../etc/passwd'),
+        ).rejects.toThrow(BadRequestException);
+        await expect(
+          service.getBackupFileStream('../../../etc/passwd'),
+        ).rejects.toThrow('Invalid filename format');
       });
 
       it('should reject filenames with forward slashes', async () => {
-        await expect(service.getBackupFileStream('path/to/file.tar')).rejects.toThrow(
-          BadRequestException,
-        );
-        await expect(service.getBackupFileStream('path/to/file.tar')).rejects.toThrow(
-          'Invalid filename format',
-        );
+        await expect(
+          service.getBackupFileStream('path/to/file.tar'),
+        ).rejects.toThrow(BadRequestException);
+        await expect(
+          service.getBackupFileStream('path/to/file.tar'),
+        ).rejects.toThrow('Invalid filename format');
       });
 
       it('should reject filenames with backslashes', async () => {
-        await expect(service.getBackupFileStream('path\\to\\file.tar')).rejects.toThrow(
-          BadRequestException,
-        );
-        await expect(service.getBackupFileStream('path\\to\\file.tar')).rejects.toThrow(
-          'Invalid filename format',
-        );
+        await expect(
+          service.getBackupFileStream('path\\to\\file.tar'),
+        ).rejects.toThrow(BadRequestException);
+        await expect(
+          service.getBackupFileStream('path\\to\\file.tar'),
+        ).rejects.toThrow('Invalid filename format');
       });
 
       it('should reject filenames with invalid characters', async () => {
-        await expect(service.getBackupFileStream('file<script>.tar')).rejects.toThrow(
-          BadRequestException,
-        );
-        await expect(service.getBackupFileStream('file<script>.tar')).rejects.toThrow(
-          'Invalid filename format',
-        );
+        await expect(
+          service.getBackupFileStream('file<script>.tar'),
+        ).rejects.toThrow(BadRequestException);
+        await expect(
+          service.getBackupFileStream('file<script>.tar'),
+        ).rejects.toThrow('Invalid filename format');
       });
 
       it('should reject filenames with invalid extensions', async () => {
@@ -235,9 +235,9 @@ describe('BackupService', () => {
       });
 
       it('should reject filenames trying to escape with encoded sequences', async () => {
-        await expect(service.getBackupFileStream('..%2F..%2Fetc%2Fpasswd.tar')).rejects.toThrow(
-          BadRequestException,
-        );
+        await expect(
+          service.getBackupFileStream('..%2F..%2Fetc%2Fpasswd.tar'),
+        ).rejects.toThrow(BadRequestException);
       });
 
       it('should accept valid .tar filenames', async () => {
@@ -246,7 +246,9 @@ describe('BackupService', () => {
         const createReadStreamMock = jest.requireMock('fs').createReadStream;
         createReadStreamMock.mockReturnValue(mockStream);
 
-        const [stream, mimeType] = await service.getBackupFileStream('backup_2025-01-01.tar');
+        const [stream, mimeType] = await service.getBackupFileStream(
+          'backup_2025-01-01.tar',
+        );
 
         expect(stream).toBe(mockStream);
         expect(mimeType).toBe('application/octet-stream');
@@ -258,7 +260,9 @@ describe('BackupService', () => {
         const createReadStreamMock = jest.requireMock('fs').createReadStream;
         createReadStreamMock.mockReturnValue(mockStream);
 
-        const [stream, mimeType] = await service.getBackupFileStream('backup_2025-01-01.tar.enc');
+        const [stream, mimeType] = await service.getBackupFileStream(
+          'backup_2025-01-01.tar.enc',
+        );
 
         expect(stream).toBe(mockStream);
         expect(mimeType).toBe('application/octet-stream');
@@ -292,7 +296,9 @@ describe('BackupService', () => {
 
       await expect(
         service.restoreBackup('/path/to/backup.tar.enc', true),
-      ).rejects.toThrow('Backup is encrypted, but no decryption key was provided.');
+      ).rejects.toThrow(
+        'Backup is encrypted, but no decryption key was provided.',
+      );
     });
   });
 

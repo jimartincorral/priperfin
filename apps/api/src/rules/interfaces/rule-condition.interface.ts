@@ -1,7 +1,16 @@
 export interface RuleCondition {
   field: 'description' | 'merchant' | 'amount' | 'notes' | 'account' | 'date';
-  operator: 'contains' | 'equals' | 'startsWith' | 'endsWith' | 'regex' | 
-            'greaterThan' | 'lessThan' | 'between' | 'in' | 'notIn';
+  operator:
+    | 'contains'
+    | 'equals'
+    | 'startsWith'
+    | 'endsWith'
+    | 'regex'
+    | 'greaterThan'
+    | 'lessThan'
+    | 'between'
+    | 'in'
+    | 'notIn';
   value: string | number | string[] | { min: number; max: number };
   caseSensitive?: boolean;
 }

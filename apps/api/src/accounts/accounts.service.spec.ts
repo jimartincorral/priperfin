@@ -105,7 +105,10 @@ describe('AccountsService', () => {
   // ============================================
   describe('findOne', () => {
     it('should return account by id', async () => {
-      const mockAccount = createMockAccount({ id: 'acc-1', name: 'Test Account' });
+      const mockAccount = createMockAccount({
+        id: 'acc-1',
+        name: 'Test Account',
+      });
       prismaMock.account.findUnique.mockResolvedValue(mockAccount);
 
       const result = await service.findOne('acc-1');

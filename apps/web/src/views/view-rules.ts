@@ -15,6 +15,7 @@ export class ViewRules extends LitElement {
   @state() showSuggestions = false;
   @state() detecting = false;
   @state() applying = false;
+  @state() applyingAll = false;
 
   static styles = css`
     :host { 
@@ -320,10 +321,10 @@ export class ViewRules extends LitElement {
         await api.post('/rules', ruleData);
       }
       
-      // If this came from a suggestion, mark it as accepted
+      // If this came from a suggestion, reload suggestions to remove it from list
+      // We already created the rule above, so DON'T call /accept endpoint (would create duplicate)
       if (this.editingRule && this.editingRule._suggestionId) {
-        await api.post(`/rules/suggestions/${this.editingRule._suggestionId}/accept`, {});
-        await this.loadSuggestions(); // Reload to remove from list
+        await this.loadSuggestions();
       }
       
       this.showEditor = false;
@@ -426,6 +427,35 @@ export class ViewRules extends LitElement {
     }
   }
 
+  async applyAllRules() {
+    if (!confirm(i18n.t('rules.apply_all_confirm'))) {
+      return;
+    }
+    
+    this.applyingAll = true;
+    try {
+      let totalMatched = 0;
+      const enabledRules = this.rules.filter(r => r.enabled);
+      
+      for (const rule of enabledRules) {
+        try {
+          const result = await api.post(`/rules/${rule.id}/apply`, {});
+          totalMatched += result.matchCount || result.matched || 0;
+        } catch (err) {
+          console.error(`Failed to apply rule ${rule.name}`, err);
+        }
+      }
+      
+      alert(i18n.t('rules.apply_all_success').replace('{count}', totalMatched.toString()));
+      await this.loadRules();
+    } catch (e) {
+      console.error('Failed to apply all rules', e);
+      alert(i18n.t('rules.errors.apply_failed'));
+    } finally {
+      this.applyingAll = false;
+    }
+  }
+
   formatLastMatched(rule: any) {
     if (!rule.lastMatched) return i18n.t('rules.never_matched');
     
@@ -447,14 +477,18 @@ export class ViewRules extends LitElement {
         <h1 class="page-title">${i18n.t('rules.title')}</h1>
         <p class="page-subtitle">
           Define rules to automatically categorize transactions based on patterns.
+          ${i18n.t('rules.priority_explanation')}
         </p>
       </div>
 
       <div class="card">
         <div class="toolbar">
-          <div style="display: flex; gap: 8px;">
+          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
             <button class="btn-secondary" @click="${this.detectPatterns}" ?disabled="${this.detecting}">
               ${this.detecting ? i18n.t('rules.detecting') : i18n.t('rules.detect_patterns')}
+            </button>
+            <button class="btn-secondary" @click="${this.applyAllRules}" ?disabled="${this.applyingAll}">
+              ${this.applyingAll ? i18n.t('rules.applying_all') : i18n.t('rules.apply_all_rules')}
             </button>
           </div>
           <button @click="${this.startCreate}">+ ${i18n.t('rules.add_rule')}</button>
@@ -524,12 +558,17 @@ export class ViewRules extends LitElement {
         <div class="rule-list">
           ${this.rules.map((rule, index) => html`
             <div class="rule-item" style="opacity: ${rule.enabled ? 1 : 0.5}">
+              <div style="display: flex; flex-direction: column; align-items: center; gap: 4px; margin-right: 8px;">
+                <div style="font-size: 0.75rem; color: var(--md-sys-color-on-surface-variant); font-weight: 500;" title="Priority: ${rule.priority} (higher = evaluated first)">
+                  #${index + 1}
+                </div>
+              </div>
               <div class="rule-reorder">
                 <button 
                   class="btn-icon" 
                   @click="${() => this.moveRule(index, 'up')}" 
                   ?disabled="${index === 0}"
-                  title="Move up"
+                  title="Move up (increase priority)"
                 >
                   ▲
                 </button>
@@ -537,7 +576,7 @@ export class ViewRules extends LitElement {
                   class="btn-icon" 
                   @click="${() => this.moveRule(index, 'down')}" 
                   ?disabled="${index === this.rules.length - 1}"
-                  title="Move down"
+                  title="Move down (decrease priority)"
                 >
                   ▼
                 </button>

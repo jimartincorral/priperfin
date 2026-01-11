@@ -153,7 +153,7 @@ export class RuleEditor extends LitElement {
       }
   }
 
-  save() {
+  async save() {
       if (!this.name) return alert('Name is required');
       if (this.conditions.length === 0) return alert('At least one condition is required');
 
@@ -161,6 +161,20 @@ export class RuleEditor extends LitElement {
           operator: 'AND',
           conditions: this.conditions
       });
+
+      // Check for potential matches to give user feedback
+      try {
+          const matches = await api.post('/rules/test', { conditionsJson, limit: 10 });
+          if (matches && matches.length > 0) {
+              // Import i18n
+              const { i18n } = await import('../i18n/i18n');
+              const proceed = confirm(i18n.t('rules.priority_warning').replace('{count}', matches.length.toString()));
+              if (!proceed) return;
+          }
+      } catch (e) {
+          console.error('Failed to test rule', e);
+          // Continue anyway
+      }
 
       this.dispatchEvent(new CustomEvent('save', {
           detail: {

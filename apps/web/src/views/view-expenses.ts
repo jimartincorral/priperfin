@@ -862,7 +862,9 @@ export class ViewExpenses extends LitElement {
          return { 
              ...t, 
              _suggestion: t.suggestedRule.categoryId,
-             _suggestionRuleName: t.suggestedRule.name
+             _suggestionRuleName: t.suggestedRule.name,
+             _suggestionConditionsJson: t.suggestedRule.conditionsJson,
+             _suggestionRuleId: t.suggestedRule.id
          };
       }
       return t;
@@ -1031,12 +1033,18 @@ export class ViewExpenses extends LitElement {
   }
 
   async updateCategory(txId: string, categoryId: string) {
+    console.log('[ViewExpenses] updateCategory called:', txId, categoryId);
     try {
       await api.patch(`/transactions/${txId}`, { categoryId });
+      console.log('[ViewExpenses] Category updated via API');
 
       // Check for potential bulk update
-      const tx = this.transactions.find(t => t.id === txId);
+      let tx = this.transactions.find(t => t.id === txId);
+      console.log('[ViewExpenses] Found transaction:', tx ? 'yes' : 'no', 'categoryId check:', categoryId !== 'uncategorized');
       if (tx && categoryId !== 'uncategorized') {
+        console.log('[ViewExpenses] Inside bulk update check');
+        // Update local transaction object with new category
+        tx = { ...tx, categoryId };
         const others = this.transactions.filter(t =>
           t.description.toLowerCase() === tx.description.toLowerCase() &&
           // Check if category is null (uncategorized) or explicitly 'uncategorized' if that ID exists
@@ -1045,6 +1053,7 @@ export class ViewExpenses extends LitElement {
         );
 
         if (others.length > 0) {
+          console.log('[ViewExpenses] Found similar transactions:', others.length);
           if (confirm(`Found ${others.length} other uncategorized transactions for "${tx.description}".Apply "${this.categories.find(c => c.id === categoryId)?.name}" to them too ? `)) {
             await api.post('/transactions/propagate', { description: tx.description, categoryId });
           }
@@ -1052,24 +1061,56 @@ export class ViewExpenses extends LitElement {
         
         // NEW: Offer to create a rule for this pattern
         // Check if a rule already exists or was rejected for this transaction
-        const suggestions = await api.get(`/rules/suggestions/for-transaction/${txId}`);
-        if (suggestions && suggestions.length > 0) {
-          // There's a pattern and it hasn't been rejected - ask if user wants to create a rule
-          const categoryName = this.categories.find(c => c.id === categoryId)?.name;
-          const shouldCreateRule = confirm(`Create a rule to automatically categorize similar transactions as "${categoryName}"?`);
+        console.log('[ViewExpenses] About to check for suggestions');
+        try {
+          console.log('[ViewExpenses] Calling suggestions API for:', txId);
+          const suggestion = await api.get(`/rules/suggestions/for-transaction/${txId}`);
+          console.log('[ViewExpenses] Suggestion response:', suggestion);
           
-          if (shouldCreateRule) {
-            this.openCreateRuleModal(tx);
-          } else {
-            // User declined - track this rejection so we don't ask again
-            const suggestion = suggestions[0];
-            if (suggestion.conditionsJson) {
+          // Check if suggestion has actual data (not just empty object)
+          if (suggestion && suggestion.conditionsJson && Object.keys(suggestion).length > 0) {
+            // Pattern detected and no existing rule - ask if user wants to create a rule
+            const categoryName = this.categories.find(c => c.id === categoryId)?.name;
+            const shouldCreateRule = confirm(i18n.t('rules.create_rule_prompt').replace('{category}', categoryName || ''));
+            
+            if (shouldCreateRule) {
+              // Pre-fill the rule editor with suggestion data
+              this.ruleTransaction = {
+                ...tx,
+                _suggestionData: suggestion
+              };
+              this.showRuleModal = true;
+            } else {
+              // User declined - persist rejection
               await api.post('/rules/suggestions/reject-prompt', {
                 conditionsJson: suggestion.conditionsJson,
                 categoryId: categoryId
               });
             }
+          } else if (!suggestion) {
+          // No suggestion - either not enough data OR rule already exists
+          // Let's check if a rule exists for this category
+          try {
+            const allRules = await api.get('/rules');
+            const existingRulesForCategory = allRules.filter((r: any) => r.categoryId === categoryId);
+            
+            if (existingRulesForCategory.length > 0) {
+              const categoryName = this.categories.find(c => c.id === categoryId)?.name;
+              const ruleNames = existingRulesForCategory.map((r: any) => r.name).join(', ');
+              
+              if (confirm(i18n.t('rules.rule_exists').replace('{category}', categoryName || '').replace('{rules}', ruleNames))) {
+                // Navigate to rules page
+                window.location.hash = '#/rules';
+              }
+            }
+          } catch (err) {
+            console.error('Failed to check existing rules:', err);
           }
+        } else {
+          console.log('[ViewExpenses] No suggestion and no conditions (not enough similar transactions)');
+        }
+        } catch (err) {
+          console.error('[ViewExpenses] Failed to get suggestion:', err);
         }
       }
 
@@ -1225,6 +1266,41 @@ export class ViewExpenses extends LitElement {
       if (field === 'categoryId' || field === 'amount') {
         this.computeBudgetBalances();
       }
+
+      // If category was changed, check for rule suggestions
+      if (field === 'categoryId' && localValue && localValue !== 'uncategorized') {
+        console.log('[ViewExpenses] saveCell: category changed, checking for suggestions');
+        try {
+          const suggestion = await api.get(`/rules/suggestions/for-transaction/${id}`);
+          console.log('[ViewExpenses] saveCell: suggestion response:', suggestion);
+          console.log('[ViewExpenses] saveCell: has conditionsJson?', !!suggestion?.conditionsJson);
+          console.log('[ViewExpenses] saveCell: keys:', Object.keys(suggestion || {}));
+          
+          // Check if suggestion has conditionsJson (backend returns null as {} when no suggestion)
+          if (suggestion?.conditionsJson) {
+            const categoryName = this.categories.find(c => c.id === localValue)?.name;
+            const shouldCreateRule = confirm(i18n.t('rules.create_rule_prompt').replace('{category}', categoryName || ''));
+            
+            if (shouldCreateRule) {
+              const tx = this.transactions.find(t => t.id === id);
+              this.ruleTransaction = {
+                ...tx,
+                _suggestionData: suggestion
+              };
+              this.showRuleModal = true;
+            } else {
+              await api.post('/rules/suggestions/reject-prompt', {
+                conditionsJson: suggestion.conditionsJson,
+                categoryId: localValue
+              });
+            }
+          } else {
+            console.log('[ViewExpenses] saveCell: No suggestion returned (not enough similar transactions or rule already exists)');
+          }
+        } catch (err) {
+          console.error('[ViewExpenses] saveCell: failed to get suggestion:', err);
+        }
+      }
     } catch (e: any) {
       console.error('Failed to save cell', e);
       alert('Failed to save changes: ' + (e.message || JSON.stringify(e)));
@@ -1269,17 +1345,18 @@ Tables: ${result.tables?.join(', ')}`;
           const rule = await api.post('/rules', e.detail);
           
           // Ask if user wants to apply to historical transactions
-          // We can do a quick check if there are matches?
-          // For now, let's just use the 'propagate' logic or similar.
-          // Requirement: "Offer to apply it to existing uncategorized transactions"
-          
-          if (confirm('Rule created! Would you like to apply this rule to existing matching transactions?')) {
+          if (confirm(i18n.t('rules.rule_created'))) {
               try {
                   const result = await api.post(`/rules/${rule.id}/apply`, {});
-                  alert(`Rule applied! Matched ${result.matched} transactions.`);
+                  const count = result.matchCount || result.matched || 0;
+                  if (count > 0) {
+                      alert(i18n.t('rules.rule_applied_count').replace('{count}', count.toString()));
+                  } else {
+                      alert(i18n.t('rules.no_matches'));
+                  }
               } catch (err) {
                   console.error('Failed to apply rule', err);
-                  alert('Failed to apply rule to existing transactions.');
+                  alert(i18n.t('rules.errors.apply_failed'));
               }
           }
           
@@ -1287,7 +1364,7 @@ Tables: ${result.tables?.join(', ')}`;
           await this.loadData(true);
       } catch (e: any) {
           console.error(e);
-          alert('Failed to create rule: ' + e.message);
+          alert(i18n.t('rules.errors.save_failed') + ': ' + e.message);
       }
   }
 
@@ -1593,14 +1670,13 @@ Tables: ${result.tables?.join(', ')}`;
         ${this.showRuleModal ? html`
             <rule-editor
                 .rule="${this.ruleTransaction ? {
-                    name: `Rule for ${this.ruleTransaction.description}`,
+                    name: this.ruleTransaction._suggestionData?.name || `Rule for ${this.ruleTransaction.description}`,
                     mode: 'SUGGEST',
-                    categoryId: this.ruleTransaction.categoryId,
-                    conditionsJson: JSON.stringify({
+                    categoryId: this.ruleTransaction._suggestionData?.categoryId || this.ruleTransaction.categoryId,
+                    conditionsJson: this.ruleTransaction._suggestionData?.conditionsJson || JSON.stringify({
                         operator: 'AND',
                         conditions: [
-                            { field: 'description', operator: 'contains', value: this.ruleTransaction.description },
-                            // Smart default: If amount is negative (expense) and > 0, maybe don't match exact amount by default
+                            { field: 'description', operator: 'contains', value: this.ruleTransaction.description }
                         ]
                     })
                 } : null}"
@@ -1730,7 +1806,7 @@ Tables: ${result.tables?.join(', ')}`;
                   }
                   const c = this.categories.find(c => c.id === tx.categoryId);
                   if (c) { if (c.parentId) { const p = this.categories.find(cat => cat.id === c.parentId); return html`<small style="opacity: 0.7">${p?.name} ></small> ${c.icon} ${c.name}`; } return html`${c.icon} ${c.name}`; }
-                  if (tx._suggestion) { const sugg = this.categories.find(c => c.id === tx._suggestion); return html`<div style="display: flex; align-items: center; gap: 0.5rem; justify-content: flex-start;"><span style="opacity: 0.6; font-style: italic;">? ${sugg?.name}</span><div style="display: flex; gap: 2px;"><button @click="${(e: Event) => { e.stopPropagation(); this.updateCategory(tx.id, tx._suggestion); }}" title="Accept Suggestion" style="padding: 2px 6px; background: #22c55e; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.8rem;">✔</button><button @click="${(e: Event) => { e.stopPropagation(); tx._suggestion = null; this.requestUpdate(); }}" title="Reject" style="padding: 2px 6px; background: #94a3b8; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.8rem;">✖</button></div></div>`; }
+                  if (tx._suggestion) { const sugg = this.categories.find(c => c.id === tx._suggestion); return html`<div style="display: flex; align-items: center; gap: 0.5rem; justify-content: flex-start;"><span style="opacity: 0.6; font-style: italic;">? ${sugg?.name}</span><div style="display: flex; gap: 2px;"><button @click="${(e: Event) => { e.stopPropagation(); this.updateCategory(tx.id, tx._suggestion); }}" title="Accept Suggestion" style="padding: 2px 6px; background: #22c55e; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.8rem;">✔</button><button @click="${async (e: Event) => { e.stopPropagation(); if (tx._suggestionConditionsJson) { try { await api.post('/rules/suggestions/reject-prompt', { conditionsJson: tx._suggestionConditionsJson, categoryId: tx._suggestion }); } catch (err) { console.error('Failed to reject suggestion:', err); } } tx._suggestion = null; this.requestUpdate(); }}" title="Reject" style="padding: 2px 6px; background: #94a3b8; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.8rem;">✖</button></div></div>`; }
                   return html`<span style="color: #cbd5e1; font-style: italic;">${i18n.t('common.uncategorized')}</span>`;
                 })()}`}
                                         </td>`;

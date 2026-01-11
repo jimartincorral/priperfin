@@ -50,26 +50,28 @@ export class SavingsGoalsService {
 
     return goals.map((goal) => ({
       ...goal,
-      monthlySavingsNeeded: goal.isEvergreen && goal.targetMonths
-        ? this.calculateMonthlySavingsEvergreen(
-            goal.targetAmount.toNumber(),
-            goal.savedAmount.toNumber(),
-            goal.targetMonths,
-          )
-        : goal.targetDate
-        ? this.calculateMonthlySavings(
-            goal.targetAmount.toNumber(),
-            goal.savedAmount.toNumber(),
-            goal.targetDate,
-          )
-        : 0,
-      shouldHaveSaved: goal.isEvergreen || !goal.targetDate
-        ? null
-        : this.calculateShouldHaveSaved(
-            goal.targetAmount.toNumber(),
-            goal.startDate,
-            goal.targetDate,
-          ),
+      monthlySavingsNeeded:
+        goal.isEvergreen && goal.targetMonths
+          ? this.calculateMonthlySavingsEvergreen(
+              goal.targetAmount.toNumber(),
+              goal.savedAmount.toNumber(),
+              goal.targetMonths,
+            )
+          : goal.targetDate
+            ? this.calculateMonthlySavings(
+                goal.targetAmount.toNumber(),
+                goal.savedAmount.toNumber(),
+                goal.targetDate,
+              )
+            : 0,
+      shouldHaveSaved:
+        goal.isEvergreen || !goal.targetDate
+          ? null
+          : this.calculateShouldHaveSaved(
+              goal.targetAmount.toNumber(),
+              goal.startDate,
+              goal.targetDate,
+            ),
     }));
   }
 

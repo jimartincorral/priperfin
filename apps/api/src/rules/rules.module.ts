@@ -7,7 +7,12 @@ import { PatternDetectionService } from './pattern-detection.service';
 
 @Module({
   controllers: [RulesController],
-  providers: [RulesService, PrismaService, RuleEvaluatorService, PatternDetectionService],
+  providers: [
+    RulesService,
+    PrismaService,
+    RuleEvaluatorService,
+    PatternDetectionService,
+  ],
   exports: [RulesService],
 })
 export class RulesModule {}

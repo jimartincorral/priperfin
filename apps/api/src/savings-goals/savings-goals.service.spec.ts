@@ -35,7 +35,11 @@ describe('SavingsGoalsService', () => {
       const end = new Date('2025-01-01'); // End before start
       const target = 1000;
 
-      const result = (service as any).calculateShouldHaveSaved(target, start, end);
+      const result = (service as any).calculateShouldHaveSaved(
+        target,
+        start,
+        end,
+      );
 
       expect(result).toBe(target);
     });
@@ -64,7 +68,11 @@ describe('SavingsGoalsService', () => {
       end.setMonth(end.getMonth() + 6);
 
       const target = 1000;
-      const result = (service as any).calculateShouldHaveSaved(target, start, end);
+      const result = (service as any).calculateShouldHaveSaved(
+        target,
+        start,
+        end,
+      );
 
       // Should be approximately 50% (500), allow some tolerance due to timing
       expect(result).toBeGreaterThan(400);
@@ -77,7 +85,11 @@ describe('SavingsGoalsService', () => {
       const end = new Date('2024-06-01');
       const target = 1000;
 
-      const result = (service as any).calculateShouldHaveSaved(target, start, end);
+      const result = (service as any).calculateShouldHaveSaved(
+        target,
+        start,
+        end,
+      );
 
       expect(result).toBe(target); // Should not exceed target
     });
@@ -92,7 +104,11 @@ describe('SavingsGoalsService', () => {
       const target = 1000;
       const saved = 300;
 
-      const result = (service as any).calculateMonthlySavings(target, saved, pastDate);
+      const result = (service as any).calculateMonthlySavings(
+        target,
+        saved,
+        pastDate,
+      );
 
       expect(result).toBe(700); // target - saved
     });
@@ -105,7 +121,11 @@ describe('SavingsGoalsService', () => {
       const target = 1200;
       const saved = 0;
 
-      const result = (service as any).calculateMonthlySavings(target, saved, futureDate);
+      const result = (service as any).calculateMonthlySavings(
+        target,
+        saved,
+        futureDate,
+      );
 
       // Should be approximately 200/month (1200 / 6)
       expect(result).toBeGreaterThan(150);
@@ -119,7 +139,11 @@ describe('SavingsGoalsService', () => {
       const target = 1000;
       const saved = 1500; // Already exceeded target
 
-      const result = (service as any).calculateMonthlySavings(target, saved, futureDate);
+      const result = (service as any).calculateMonthlySavings(
+        target,
+        saved,
+        futureDate,
+      );
 
       expect(result).toBe(0); // Max ensures non-negative
     });
@@ -132,7 +156,11 @@ describe('SavingsGoalsService', () => {
       const target = 500;
       const saved = 200;
 
-      const result = (service as any).calculateMonthlySavings(target, saved, futureDate);
+      const result = (service as any).calculateMonthlySavings(
+        target,
+        saved,
+        futureDate,
+      );
 
       expect(result).toBe(300); // All remaining in one month
     });

@@ -29,7 +29,10 @@ describe('CategoriesService', () => {
   describe('create', () => {
     it('should create a category', async () => {
       const dto = { name: 'Groceries', icon: '🛒', type: 'EXPENSE' };
-      const mockResult = createMockCategory({ id: 'new-cat', name: 'Groceries' });
+      const mockResult = createMockCategory({
+        id: 'new-cat',
+        name: 'Groceries',
+      });
       prismaMock.category.create.mockResolvedValue(mockResult);
 
       const result = await service.create(dto as any);

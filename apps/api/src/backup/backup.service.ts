@@ -38,8 +38,12 @@ export class BackupService {
       'BACKUP_ENCRYPTION_KEY',
     );
 
-    this.logger.log(`[BackupService] Backup directory configured: ${this.backupDir}`);
-    this.logger.log(`[BackupService] Encryption key configured: ${!!this.encryptionKey}`);
+    this.logger.log(
+      `[BackupService] Backup directory configured: ${this.backupDir}`,
+    );
+    this.logger.log(
+      `[BackupService] Encryption key configured: ${!!this.encryptionKey}`,
+    );
 
     if (!this.encryptionKey) {
       this.logger.warn(
@@ -172,7 +176,7 @@ export class BackupService {
       archive.file(dbDumpFilePath, { name: dbDumpFileName });
       archive.file(metadataFilePath, { name: metadataFileName });
       await archive.finalize();
-      
+
       // Wait for the stream to actually close and file to be written to disk
       await closePromise;
       this.logger.log('Tar archive created.');
@@ -205,14 +209,20 @@ export class BackupService {
         this.logger.log('Archive encrypted.');
 
         await fs.unlink(archiveFilePath); // Delete unencrypted tar
-        
+
         // Verify encrypted file exists before returning
-        const encFileStats = await fs.stat(encryptedArchiveFilePath).catch(() => null);
+        const encFileStats = await fs
+          .stat(encryptedArchiveFilePath)
+          .catch(() => null);
         if (!encFileStats) {
-          throw new InternalServerErrorException('Encrypted backup file was not created');
+          throw new InternalServerErrorException(
+            'Encrypted backup file was not created',
+          );
         }
-        this.logger.log(`[createBackup] Encrypted file created: ${encryptedArchiveFileName}, size: ${encFileStats.size} bytes`);
-        
+        this.logger.log(
+          `[createBackup] Encrypted file created: ${encryptedArchiveFileName}, size: ${encFileStats.size} bytes`,
+        );
+
         return {
           filename: encryptedArchiveFileName,
           filePath: encryptedArchiveFilePath,
@@ -223,8 +233,10 @@ export class BackupService {
         if (!fileStats) {
           throw new InternalServerErrorException('Backup file was not created');
         }
-        this.logger.log(`[createBackup] Unencrypted file created: ${archiveFileName}, size: ${fileStats.size} bytes, path: ${archiveFilePath}`);
-        
+        this.logger.log(
+          `[createBackup] Unencrypted file created: ${archiveFileName}, size: ${fileStats.size} bytes, path: ${archiveFilePath}`,
+        );
+
         return { filename: archiveFileName, filePath: archiveFilePath };
       }
     } catch (error) {
@@ -307,16 +319,18 @@ export class BackupService {
 
         try {
           const stats = await handle.stat();
-          
+
           // Validation: valid encrypted backup must be at least header size (1 + 32 + 16 = 49 bytes) + some data
           if (stats.size < 64) {
             const preview = Buffer.alloc(Math.min(stats.size, 50));
             await handle.read(preview, 0, preview.length, 0);
             const previewStr = preview.toString('utf8').replace(/\n/g, ' ');
-            
-            this.logger.error(`Invalid backup file detected (Size: ${stats.size} bytes). Content preview: "${previewStr}"`);
+
+            this.logger.error(
+              `Invalid backup file detected (Size: ${stats.size} bytes). Content preview: "${previewStr}"`,
+            );
             throw new BadRequestException(
-              `Invalid backup file. The file is too small and appears to be a server response (e.g. download failed): "${previewStr}"`
+              `Invalid backup file. The file is too small and appears to be a server response (e.g. download failed): "${previewStr}"`,
             );
           }
 
@@ -324,38 +338,40 @@ export class BackupService {
           const { bytesRead } = await handle.read(headerPreview, 0, 1, 0);
 
           if (headerPreview[0] === 0x02) {
-             // New format: version byte + salt + IV
-             this.logger.log('Detected new encryption format (v2 with PBKDF2)');
- 
-             const saltBuf = Buffer.alloc(32);
-             await handle.read(saltBuf, 0, 32, 1); // offset 1
- 
-             const ivBuf = Buffer.alloc(this.ivLength);
-             await handle.read(ivBuf, 0, this.ivLength, 1 + 32); // offset 33
- 
-             derivedKey = this.deriveKey(decryptionPassword, saltBuf);
-             ivBuffer = ivBuf;
-             
-             // Stream the rest
-             inputStream = createReadStream(backupFilePath, { start: 1 + 32 + this.ivLength });
+            // New format: version byte + salt + IV
+            this.logger.log('Detected new encryption format (v2 with PBKDF2)');
+
+            const saltBuf = Buffer.alloc(32);
+            await handle.read(saltBuf, 0, 32, 1); // offset 1
+
+            const ivBuf = Buffer.alloc(this.ivLength);
+            await handle.read(ivBuf, 0, this.ivLength, 1 + 32); // offset 33
+
+            derivedKey = this.deriveKey(decryptionPassword, saltBuf);
+            ivBuffer = ivBuf;
+
+            // Stream the rest
+            inputStream = createReadStream(backupFilePath, {
+              start: 1 + 32 + this.ivLength,
+            });
           } else {
-             // Old format: first byte is part of IV, password must be exactly 32 chars
-             this.logger.log('Detected old encryption format (direct key)');
- 
-             if (decryptionPassword.length !== 32) {
-               throw new BadRequestException(
-                 'This backup uses the old encryption format and requires a 32-character key.',
-               );
-             }
- 
-             const ivBuf = Buffer.alloc(16);
-             await handle.read(ivBuf, 0, 16, 0); // Read IV from start
- 
-             derivedKey = Buffer.from(decryptionPassword, 'utf8');
-             ivBuffer = ivBuf;
- 
-             // Stream the rest
-             inputStream = createReadStream(backupFilePath, { start: 16 });
+            // Old format: first byte is part of IV, password must be exactly 32 chars
+            this.logger.log('Detected old encryption format (direct key)');
+
+            if (decryptionPassword.length !== 32) {
+              throw new BadRequestException(
+                'This backup uses the old encryption format and requires a 32-character key.',
+              );
+            }
+
+            const ivBuf = Buffer.alloc(16);
+            await handle.read(ivBuf, 0, 16, 0); // Read IV from start
+
+            derivedKey = Buffer.from(decryptionPassword, 'utf8');
+            ivBuffer = ivBuf;
+
+            // Stream the rest
+            inputStream = createReadStream(backupFilePath, { start: 16 });
           }
         } finally {
           await handle.close();
@@ -371,7 +387,6 @@ export class BackupService {
         await pipeline(inputStream, decipher, output);
         this.logger.log('Backup archive decrypted.');
         archiveToExtractPath = decryptedArchiveFilePath;
-
       }
 
       // 2. Extract archive
@@ -445,7 +460,9 @@ export class BackupService {
             await new Promise((resolve) => setTimeout(resolve, 1000));
             retries--;
           } else {
-            this.logger.error(`Failed to copy database file: ${err.message} (Code: ${err.code})`);
+            this.logger.error(
+              `Failed to copy database file: ${err.message} (Code: ${err.code})`,
+            );
             throw err;
           }
         }
@@ -495,9 +512,7 @@ export class BackupService {
         );
 
         if (!hasCostObject) {
-          this.logger.log(
-            'Adding costObjectId column to Transaction table...',
-          );
+          this.logger.log('Adding costObjectId column to Transaction table...');
           await this.prisma.$executeRawUnsafe(
             'ALTER TABLE "Transaction" ADD COLUMN "costObjectId" TEXT',
           );
@@ -559,7 +574,6 @@ export class BackupService {
         }
 
         this.logger.log('Manual schema patching completed.');
-
       } catch (error) {
         this.logger.error('Failed to patch schema manually:', error.message);
         // Continue, as the DB might be mostly functional
@@ -587,18 +601,28 @@ export class BackupService {
 
   async getBackupFileStream(filename: string): Promise<[ReadStream, string]> {
     this.logger.log(`[getBackupFileStream] Requested filename: ${filename}`);
-    this.logger.log(`[getBackupFileStream] Backup directory: ${this.backupDir}`);
-    
+    this.logger.log(
+      `[getBackupFileStream] Backup directory: ${this.backupDir}`,
+    );
+
     // Validate filename to prevent path traversal attacks
     // Only allow alphanumeric, underscore, hyphen, and dot characters
     if (!/^[a-zA-Z0-9_\-\.]+$/.test(filename)) {
-      this.logger.error(`[getBackupFileStream] Invalid filename format: ${filename}`);
+      this.logger.error(
+        `[getBackupFileStream] Invalid filename format: ${filename}`,
+      );
       throw new BadRequestException('Invalid filename format.');
     }
 
     // Ensure the filename doesn't contain path traversal sequences
-    if (filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
-      this.logger.error(`[getBackupFileStream] Path traversal attempt: ${filename}`);
+    if (
+      filename.includes('..') ||
+      filename.includes('/') ||
+      filename.includes('\\')
+    ) {
+      this.logger.error(
+        `[getBackupFileStream] Path traversal attempt: ${filename}`,
+      );
       throw new BadRequestException('Invalid filename.');
     }
 
@@ -614,8 +638,13 @@ export class BackupService {
     // Verify the resolved path is within the backup directory
     const normalizedFilePath = path.normalize(filePath);
     const normalizedBackupDir = path.normalize(this.backupDir);
-    if (!normalizedFilePath.startsWith(normalizedBackupDir + path.sep) && normalizedFilePath !== normalizedBackupDir) {
-      this.logger.error(`[getBackupFileStream] Path outside backup dir: ${normalizedFilePath}`);
+    if (
+      !normalizedFilePath.startsWith(normalizedBackupDir + path.sep) &&
+      normalizedFilePath !== normalizedBackupDir
+    ) {
+      this.logger.error(
+        `[getBackupFileStream] Path outside backup dir: ${normalizedFilePath}`,
+      );
       throw new BadRequestException('Invalid file path.');
     }
 
@@ -625,14 +654,20 @@ export class BackupService {
       // List files in backup directory for debugging
       try {
         const files = await fs.readdir(this.backupDir);
-        this.logger.log(`[getBackupFileStream] Files in backup dir: ${JSON.stringify(files)}`);
+        this.logger.log(
+          `[getBackupFileStream] Files in backup dir: ${JSON.stringify(files)}`,
+        );
       } catch (e) {
-        this.logger.error(`[getBackupFileStream] Could not list backup dir: ${e.message}`);
+        this.logger.error(
+          `[getBackupFileStream] Could not list backup dir: ${e.message}`,
+        );
       }
       throw new BadRequestException('Backup file not found.');
     }
 
-    this.logger.log(`[getBackupFileStream] File exists, size: ${fileStats.size} bytes`);
+    this.logger.log(
+      `[getBackupFileStream] File exists, size: ${fileStats.size} bytes`,
+    );
     const fileStream = createReadStream(filePath);
     const mimeType = 'application/octet-stream'; // Generic binary
     return [fileStream, mimeType];

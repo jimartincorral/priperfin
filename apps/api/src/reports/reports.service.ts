@@ -1,7 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Prisma } from '../generated/client';
-import { startOfMonth, endOfMonth, parseISO, format, subMonths } from 'date-fns';
+import {
+  startOfMonth,
+  endOfMonth,
+  parseISO,
+  format,
+  subMonths,
+} from 'date-fns';
 import { GetTransactionsDto } from '../transactions/get-transactions.dto';
 
 @Injectable()
@@ -63,7 +69,9 @@ export class ReportsService {
 
     // Create a lookup for categories to find parent names
     const catLookup = new Map<string, { name: string; icon: string }>();
-    categories.forEach(c => catLookup.set(c.id, { name: c.name, icon: c.icon }));
+    categories.forEach((c) =>
+      catLookup.set(c.id, { name: c.name, icon: c.icon }),
+    );
 
     // 1. Group by Family (Parent ID or Self ID if top-level)
     const familyMap = new Map<string, string[]>(); // familyId -> list of categoryIds
@@ -97,7 +105,7 @@ export class ReportsService {
 
     sortedFamilies.forEach((fId) => {
       // Check if this family (parent category) has a saved color
-      const parentCategory = categories.find(c => c.id === fId);
+      const parentCategory = categories.find((c) => c.id === fId);
       if (parentCategory && parentCategory.color) {
         // Use the saved color
         familyBaseColors.set(fId, parentCategory.color);
@@ -112,7 +120,7 @@ export class ReportsService {
     categories.forEach((c) => {
       const familyId = c.parentId || c.id;
       const baseColor = familyBaseColors.get(familyId) || '#cccccc';
-      
+
       // Resolve Family Name
       let familyName = c.name;
       if (c.parentId && catLookup.has(c.parentId)) {
@@ -126,7 +134,7 @@ export class ReportsService {
 
       // Use saved color if available, otherwise calculate shade
       let finalColor = c.color || baseColor;
-      
+
       // If no saved color, calculate variation based on position in family
       if (!c.color) {
         const siblings = familyMap.get(familyId) || [];
@@ -480,8 +488,17 @@ export class ReportsService {
       .sort((a, b) => b.total - a.total);
   }
 
-  private getDateRange(query: GetTransactionsDto): { startDate?: Date; endDate?: Date } {
-    const { filterMode, month, year, startDate: customStart, endDate: customEnd } = query;
+  private getDateRange(query: GetTransactionsDto): {
+    startDate?: Date;
+    endDate?: Date;
+  } {
+    const {
+      filterMode,
+      month,
+      year,
+      startDate: customStart,
+      endDate: customEnd,
+    } = query;
     const now = new Date();
 
     switch (filterMode) {
@@ -490,14 +507,16 @@ export class ReportsService {
         const y = year || now.getFullYear();
         return {
           startDate: new Date(y, 0, 1),
-          endDate: new Date(y + 1, 0, 1)
+          endDate: new Date(y + 1, 0, 1),
         };
 
       case 'custom':
         // Custom date range
         return {
           startDate: customStart ? new Date(customStart) : undefined,
-          endDate: customEnd ? new Date(new Date(customEnd).getTime() + 24 * 60 * 60 * 1000) : undefined
+          endDate: customEnd
+            ? new Date(new Date(customEnd).getTime() + 24 * 60 * 60 * 1000)
+            : undefined,
         };
 
       case 'all_time':
@@ -511,7 +530,7 @@ export class ReportsService {
         const targetMonth = month || now.getMonth() + 1;
         return {
           startDate: new Date(targetYear, targetMonth - 1, 1),
-          endDate: new Date(targetYear, targetMonth, 1)
+          endDate: new Date(targetYear, targetMonth, 1),
         };
     }
   }

@@ -317,6 +317,20 @@ export const en = {
         
         stats_title: 'Statistics',
         
+        apply_all_rules: 'Apply All Rules',
+        apply_all_confirm: 'Apply all enabled rules to existing uncategorized transactions?\n\nThis may take a moment.',
+        apply_all_success: 'Applied all rules! Categorized {count} transaction(s) total.',
+        applying_all: 'Applying All Rules...',
+        
+        rule_exists: 'Similar rules already exist for "{category}":\n{rules}\n\nWould you like to view and edit them?',
+        create_rule_prompt: 'Create a rule to automatically categorize similar transactions as "{category}"?',
+        rule_created: 'Rule created successfully!\n\nWould you like to apply this rule to existing uncategorized transactions?\n\n(This will categorize matching transactions based on your new rule)',
+        rule_applied_count: 'Rule applied! Categorized {count} transaction(s).',
+        no_matches: 'Rule saved but no existing transactions match this pattern.',
+        
+        priority_warning: 'This rule would match approximately {count}+ recent transactions.\n\nNote: Rules are evaluated in priority order (top to bottom). Higher-priority rules may match first.\n\nContinue?',
+        priority_explanation: 'Rules are evaluated in order from top to bottom - the first matching rule wins.',
+        
         errors: {
             load_failed: 'Failed to load rules',
             save_failed: 'Failed to save rule',

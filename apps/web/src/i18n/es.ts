@@ -317,6 +317,20 @@ export const es = {
         
         stats_title: 'Estadísticas',
         
+        apply_all_rules: 'Aplicar Todas las Reglas',
+        apply_all_confirm: '¿Aplicar todas las reglas habilitadas a transacciones sin categoría existentes?\n\nEsto puede tomar un momento.',
+        apply_all_success: '¡Todas las reglas aplicadas! Se categorizaron {count} transacción(es) en total.',
+        applying_all: 'Aplicando Todas las Reglas...',
+        
+        rule_exists: 'Ya existen reglas similares para "{category}":\n{rules}\n\n¿Desea verlas y editarlas?',
+        create_rule_prompt: '¿Crear una regla para categorizar automáticamente transacciones similares como "{category}"?',
+        rule_created: '¡Regla creada exitosamente!\n\n¿Desea aplicar esta regla a transacciones sin categoría existentes?\n\n(Esto categorizará las transacciones coincidentes según su nueva regla)',
+        rule_applied_count: '¡Regla aplicada! Se categorizaron {count} transacción(es).',
+        no_matches: 'Regla guardada pero ninguna transacción existente coincide con este patrón.',
+        
+        priority_warning: 'Esta regla coincidiría con aproximadamente {count}+ transacciones recientes.\n\nNota: Las reglas se evalúan en orden de prioridad (de arriba a abajo). Las reglas de mayor prioridad pueden coincidir primero.\n\n¿Continuar?',
+        priority_explanation: 'Las reglas se evalúan en orden de arriba a abajo - la primera regla que coincida gana.',
+        
         errors: {
             load_failed: 'Error al cargar reglas',
             save_failed: 'Error al guardar regla',

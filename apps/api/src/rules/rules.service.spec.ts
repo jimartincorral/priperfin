@@ -3,7 +3,12 @@ import { RulesService } from './rules.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { RuleEvaluatorService } from './rule-evaluator.service';
 import { PatternDetectionService } from './pattern-detection.service';
-import { Transaction, CategorizationRule, RuleMode, Category } from '../generated/client';
+import {
+  Transaction,
+  CategorizationRule,
+  RuleMode,
+  Category,
+} from '../generated/client';
 
 describe('RulesService', () => {
   let service: RulesService;
@@ -70,7 +75,9 @@ describe('RulesService', () => {
         mode: RuleMode.AUTO_APPLY,
         conditionsJson: JSON.stringify({
           operator: 'AND',
-          conditions: [{ field: 'description', operator: 'contains', value: 'test' }]
+          conditions: [
+            { field: 'description', operator: 'contains', value: 'test' },
+          ],
         }),
         matchCount: 0,
         lastMatched: null,
@@ -93,8 +100,12 @@ describe('RulesService', () => {
         },
       ];
 
-      mockPrismaService.categorizationRule.findUnique.mockResolvedValue(mockRule);
-      mockPrismaService.transaction.findMany.mockResolvedValue(mockTransactions);
+      mockPrismaService.categorizationRule.findUnique.mockResolvedValue(
+        mockRule,
+      );
+      mockPrismaService.transaction.findMany.mockResolvedValue(
+        mockTransactions,
+      );
       mockPrismaService.transaction.update.mockResolvedValue({});
       mockPrismaService.categorizationRule.update.mockResolvedValue({});
       mockRuleEvaluator.matches.mockReturnValue(true);
@@ -130,7 +141,9 @@ describe('RulesService', () => {
         amount: 100 as any,
       };
 
-      mockPrismaService.transaction.findUnique.mockResolvedValue(mockTransaction);
+      mockPrismaService.transaction.findUnique.mockResolvedValue(
+        mockTransaction,
+      );
 
       const result = await service.suggestRuleForTransaction('tx-1');
 
@@ -154,9 +167,16 @@ describe('RulesService', () => {
         category: mockCategory as Category,
       };
 
-      mockPrismaService.transaction.findUnique.mockResolvedValue(mockTransaction);
+      mockPrismaService.transaction.findUnique.mockResolvedValue(
+        mockTransaction,
+      );
       mockPrismaService.transaction.findMany.mockResolvedValue([
-        { id: 'tx-2', description: 'Amazon', categoryId: 'cat-1', amount: 50 as any },
+        {
+          id: 'tx-2',
+          description: 'Amazon',
+          categoryId: 'cat-1',
+          amount: 50 as any,
+        },
       ]); // Only 1 similar transaction (< 3)
 
       const result = await service.suggestRuleForTransaction('tx-1');
@@ -191,8 +211,12 @@ describe('RulesService', () => {
         notes: null,
       }));
 
-      mockPrismaService.transaction.findUnique.mockResolvedValue(mockTransaction);
-      mockPrismaService.transaction.findMany.mockResolvedValue(similarTransactions);
+      mockPrismaService.transaction.findUnique.mockResolvedValue(
+        mockTransaction,
+      );
+      mockPrismaService.transaction.findMany.mockResolvedValue(
+        similarTransactions,
+      );
 
       const result = await service.suggestRuleForTransaction('tx-1');
 
@@ -210,7 +234,7 @@ describe('RulesService', () => {
         id: 'tx-1',
         description: 'Starbucks Store #1234',
         categoryId: 'cat-1',
-        amount: 5.50 as any,
+        amount: 5.5 as any,
         merchant: 'starbucks',
         notes: 'Morning coffee',
         category: mockCategory as Category,
@@ -221,13 +245,17 @@ describe('RulesService', () => {
         id: `tx-similar-${i}`,
         description: `Starbucks Store #${i}`,
         categoryId: 'cat-1',
-        amount: 5.50 as any, // Same amount
+        amount: 5.5 as any, // Same amount
         merchant: 'starbucks', // Same merchant
         notes: i < 7 ? 'Morning coffee' : 'Afternoon coffee',
       }));
 
-      mockPrismaService.transaction.findUnique.mockResolvedValue(mockTransaction);
-      mockPrismaService.transaction.findMany.mockResolvedValue(similarTransactions);
+      mockPrismaService.transaction.findUnique.mockResolvedValue(
+        mockTransaction,
+      );
+      mockPrismaService.transaction.findMany.mockResolvedValue(
+        similarTransactions,
+      );
 
       const result = await service.suggestRuleForTransaction('tx-1');
 
@@ -235,15 +263,15 @@ describe('RulesService', () => {
       expect(result?.confidence).toBeGreaterThanOrEqual(90);
       expect(result?.categoryId).toBe('cat-1');
       expect(result?.category).toEqual(mockCategory);
-      
+
       // Should have conditions
       const conditions = JSON.parse(result!.conditionsJson);
       expect(conditions.operator).toBe('AND');
       expect(conditions.conditions.length).toBeGreaterThan(0);
-      
+
       // Should include description or merchant condition
       const hasDescOrMerchant = conditions.conditions.some(
-        (c: any) => c.field === 'description' || c.field === 'merchant'
+        (c: any) => c.field === 'description' || c.field === 'merchant',
       );
       expect(hasDescOrMerchant).toBe(true);
     });
@@ -275,16 +303,21 @@ describe('RulesService', () => {
         notes: 'Entertainment subscription',
       }));
 
-      mockPrismaService.transaction.findUnique.mockResolvedValue(mockTransaction);
-      mockPrismaService.transaction.findMany.mockResolvedValue(similarTransactions);
+      mockPrismaService.transaction.findUnique.mockResolvedValue(
+        mockTransaction,
+      );
+      mockPrismaService.transaction.findMany.mockResolvedValue(
+        similarTransactions,
+      );
 
       const result = await service.suggestRuleForTransaction('tx-1');
 
       expect(result).not.toBeNull();
-      
+
       const conditions = JSON.parse(result!.conditionsJson);
       const hasAmountCondition = conditions.conditions.some(
-        (c: any) => c.field === 'amount' && c.operator === 'equals' && c.value === 15.99
+        (c: any) =>
+          c.field === 'amount' && c.operator === 'equals' && c.value === 15.99,
       );
       expect(hasAmountCondition).toBe(true);
     });
@@ -316,17 +349,24 @@ describe('RulesService', () => {
         notes: 'Weekly shopping trip',
       }));
 
-      mockPrismaService.transaction.findUnique.mockResolvedValue(mockTransaction);
-      mockPrismaService.transaction.findMany.mockResolvedValue(similarTransactions);
+      mockPrismaService.transaction.findUnique.mockResolvedValue(
+        mockTransaction,
+      );
+      mockPrismaService.transaction.findMany.mockResolvedValue(
+        similarTransactions,
+      );
 
       const result = await service.suggestRuleForTransaction('tx-1');
 
       expect(result).not.toBeNull();
       expect(result?.confidence).toBeGreaterThanOrEqual(90);
-      
+
       const conditions = JSON.parse(result!.conditionsJson);
       const hasMerchantCondition = conditions.conditions.some(
-        (c: any) => c.field === 'merchant' && c.operator === 'equals' && c.value === 'wholefoods'
+        (c: any) =>
+          c.field === 'merchant' &&
+          c.operator === 'equals' &&
+          c.value === 'wholefoods',
       );
       expect(hasMerchantCondition).toBe(true);
     });
@@ -342,7 +382,9 @@ describe('RulesService', () => {
         category: null, // Category is null even though categoryId exists
       };
 
-      mockPrismaService.transaction.findUnique.mockResolvedValue(mockTransaction);
+      mockPrismaService.transaction.findUnique.mockResolvedValue(
+        mockTransaction,
+      );
 
       const result = await service.suggestRuleForTransaction('tx-1');
 
@@ -378,7 +420,9 @@ describe('RulesService', () => {
     it('should return matching transactions', async () => {
       const conditionsJson = JSON.stringify({
         operator: 'AND',
-        conditions: [{ field: 'description', operator: 'contains', value: 'test' }]
+        conditions: [
+          { field: 'description', operator: 'contains', value: 'test' },
+        ],
       });
 
       const mockTransactions = [
@@ -387,7 +431,9 @@ describe('RulesService', () => {
         { id: 'tx-3', description: 'no match' },
       ];
 
-      mockPrismaService.transaction.findMany.mockResolvedValue(mockTransactions);
+      mockPrismaService.transaction.findMany.mockResolvedValue(
+        mockTransactions,
+      );
       mockRuleEvaluator.matchesConditions
         .mockReturnValueOnce(true)
         .mockReturnValueOnce(true)

@@ -24,7 +24,8 @@ export class BackupController {
     @Body('encryptionKey') encryptionKey: string | undefined,
     @Res() res: Response,
   ) {
-    const { filename, filePath } = await this.backupService.createBackup(encryptionKey);
+    const { filename, filePath } =
+      await this.backupService.createBackup(encryptionKey);
     console.log('[BackupController] Backup created:', { filename, filePath });
     // For direct download after creation, or just return metadata
     res.status(201).json({

@@ -9,7 +9,7 @@ import path from 'path';
 describe('AccountsController (e2e)', () => {
   let app: INestApplication;
   const dbPath = path.join(__dirname, '../test-accounts.db');
-  
+
   // Set env vars before any imports that might use them (though imports are cached, so purely mainly for AppModule init)
   process.env.DATABASE_URL = `file:${dbPath}`;
 
@@ -18,13 +18,16 @@ describe('AccountsController (e2e)', () => {
     if (fs.existsSync(dbPath)) {
       fs.unlinkSync(dbPath);
     }
-    
+
     // Setup DB schema
     try {
-      execSync('npx prisma db push --schema=prisma/schema.prisma --accept-data-loss', { 
-        stdio: 'inherit',
-        env: { ...process.env, DATABASE_URL: `file:${dbPath}` }
-      });
+      execSync(
+        'npx prisma db push --schema=prisma/schema.prisma --accept-data-loss',
+        {
+          stdio: 'inherit',
+          env: { ...process.env, DATABASE_URL: `file:${dbPath}` },
+        },
+      );
     } catch (e) {
       console.error('Failed to push schema', e);
       throw e;
@@ -65,7 +68,9 @@ describe('AccountsController (e2e)', () => {
 
     expect(response.body).toHaveProperty('id');
     expect(response.body.name).toBe(createAccountDto.name);
-    expect(Number(response.body.initialBalance)).toBe(createAccountDto.initialBalance);
+    expect(Number(response.body.initialBalance)).toBe(
+      createAccountDto.initialBalance,
+    );
     expect(response.body.type).toBe(createAccountDto.type);
   });
 

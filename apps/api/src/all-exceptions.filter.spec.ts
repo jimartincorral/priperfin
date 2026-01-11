@@ -39,7 +39,9 @@ describe('AllExceptionsFilter', () => {
 
       filter.catch(error, mockHost);
 
-      expect(mockResponse.status).toHaveBeenCalledWith(HttpStatus.INTERNAL_SERVER_ERROR);
+      expect(mockResponse.status).toHaveBeenCalledWith(
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
       expect(mockResponse.json).toHaveBeenCalledWith(
         expect.objectContaining({
           statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
@@ -49,7 +51,10 @@ describe('AllExceptionsFilter', () => {
     });
 
     it('should pass through HttpException responses', () => {
-      const exception = new HttpException({ message: 'Not Found', details: 'Resource missing' }, HttpStatus.NOT_FOUND);
+      const exception = new HttpException(
+        { message: 'Not Found', details: 'Resource missing' },
+        HttpStatus.NOT_FOUND,
+      );
 
       filter.catch(exception, mockHost);
 
@@ -78,7 +83,9 @@ describe('AllExceptionsFilter', () => {
 
       filter.catch(error, mockHost);
 
-      expect(mockResponse.status).toHaveBeenCalledWith(HttpStatus.INTERNAL_SERVER_ERROR);
+      expect(mockResponse.status).toHaveBeenCalledWith(
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
       expect(mockResponse.json).toHaveBeenCalledWith(
         expect.objectContaining({
           statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
@@ -88,7 +95,9 @@ describe('AllExceptionsFilter', () => {
     });
 
     it('should not leak sensitive path information in production', () => {
-      const error = new Error('ENOENT: no such file or directory, open \'/etc/passwd\'');
+      const error = new Error(
+        "ENOENT: no such file or directory, open '/etc/passwd'",
+      );
 
       filter.catch(error, mockHost);
 
@@ -98,7 +107,9 @@ describe('AllExceptionsFilter', () => {
     });
 
     it('should not leak database connection strings in production', () => {
-      const error = new Error('Connection failed: postgresql://user:password@localhost:5432/db');
+      const error = new Error(
+        'Connection failed: postgresql://user:password@localhost:5432/db',
+      );
 
       filter.catch(error, mockHost);
 
@@ -109,7 +120,10 @@ describe('AllExceptionsFilter', () => {
     });
 
     it('should still pass through HttpException responses in production', () => {
-      const exception = new HttpException('Resource not found', HttpStatus.NOT_FOUND);
+      const exception = new HttpException(
+        'Resource not found',
+        HttpStatus.NOT_FOUND,
+      );
 
       filter.catch(exception, mockHost);
 
@@ -134,7 +148,10 @@ describe('AllExceptionsFilter', () => {
       expect(mockResponse.json).toHaveBeenCalledWith(
         expect.objectContaining({
           statusCode: HttpStatus.BAD_REQUEST,
-          error: { message: 'Validation failed', errors: ['email is required'] },
+          error: {
+            message: 'Validation failed',
+            errors: ['email is required'],
+          },
         }),
       );
     });
@@ -195,7 +212,9 @@ describe('AllExceptionsFilter', () => {
 
       filter.catch(strangeException, mockHost);
 
-      expect(mockResponse.status).toHaveBeenCalledWith(HttpStatus.INTERNAL_SERVER_ERROR);
+      expect(mockResponse.status).toHaveBeenCalledWith(
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
       expect(mockResponse.json).toHaveBeenCalledWith(
         expect.objectContaining({
           statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
@@ -209,7 +228,9 @@ describe('AllExceptionsFilter', () => {
 
       filter.catch(stringException, mockHost);
 
-      expect(mockResponse.status).toHaveBeenCalledWith(HttpStatus.INTERNAL_SERVER_ERROR);
+      expect(mockResponse.status).toHaveBeenCalledWith(
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
       expect(mockResponse.json).toHaveBeenCalledWith(
         expect.objectContaining({
           error: 'Internal server error',
@@ -220,7 +241,9 @@ describe('AllExceptionsFilter', () => {
     it('should handle null/undefined exceptions', () => {
       filter.catch(null, mockHost);
 
-      expect(mockResponse.status).toHaveBeenCalledWith(HttpStatus.INTERNAL_SERVER_ERROR);
+      expect(mockResponse.status).toHaveBeenCalledWith(
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
       expect(mockResponse.json).toHaveBeenCalledWith(
         expect.objectContaining({
           error: 'Internal server error',

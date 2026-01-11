@@ -4,10 +4,7 @@ import { RulesService } from '../rules/rules.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotFoundException, BadRequestException } from '@nestjs/common';
 import { createPrismaMock, PrismaMock } from '../test/prisma-mock.factory';
-import {
-  createMockTransaction,
-  createMockAccount,
-} from '../test/fixtures';
+import { createMockTransaction, createMockAccount } from '../test/fixtures';
 import { Decimal, RuleMode } from '../generated/client';
 
 describe('TransactionsService', () => {
@@ -43,11 +40,11 @@ describe('TransactionsService', () => {
     it('should create transaction and apply rule suggestion (AUTO_APPLY)', async () => {
       const tx = createMockTransaction({ id: 'new-tx', categoryId: null });
       prismaMock.transaction.create.mockResolvedValue(tx);
-      
+
       rulesServiceMock.evaluateTransaction.mockResolvedValue({
         rule: { id: 'rule-1' },
         categoryId: 'cat-1',
-        mode: RuleMode.AUTO_APPLY
+        mode: RuleMode.AUTO_APPLY,
       });
 
       const dto = {
@@ -62,38 +59,38 @@ describe('TransactionsService', () => {
       expect(prismaMock.transaction.update).toHaveBeenCalledWith({
         where: { id: 'new-tx' },
         data: {
-            suggestedByRuleId: 'rule-1',
-            categoryId: 'cat-1'
-        }
+          suggestedByRuleId: 'rule-1',
+          categoryId: 'cat-1',
+        },
       });
     });
 
     it('should create transaction and link suggestion (SUGGEST)', async () => {
-        const tx = createMockTransaction({ id: 'new-tx', categoryId: null });
-        prismaMock.transaction.create.mockResolvedValue(tx);
-        
-        rulesServiceMock.evaluateTransaction.mockResolvedValue({
-          rule: { id: 'rule-1' },
-          categoryId: 'cat-1',
-          mode: RuleMode.SUGGEST
-        });
-  
-        const dto = {
-          date: '2025-01-15',
-          amount: -50,
-          description: 'Test Create',
-        };
-  
-        await service.create(dto as any);
-  
-        expect(prismaMock.transaction.create).toHaveBeenCalled();
-        expect(prismaMock.transaction.update).toHaveBeenCalledWith({
-          where: { id: 'new-tx' },
-          data: {
-              suggestedByRuleId: 'rule-1'
-          }
-        });
+      const tx = createMockTransaction({ id: 'new-tx', categoryId: null });
+      prismaMock.transaction.create.mockResolvedValue(tx);
+
+      rulesServiceMock.evaluateTransaction.mockResolvedValue({
+        rule: { id: 'rule-1' },
+        categoryId: 'cat-1',
+        mode: RuleMode.SUGGEST,
       });
+
+      const dto = {
+        date: '2025-01-15',
+        amount: -50,
+        description: 'Test Create',
+      };
+
+      await service.create(dto as any);
+
+      expect(prismaMock.transaction.create).toHaveBeenCalled();
+      expect(prismaMock.transaction.update).toHaveBeenCalledWith({
+        where: { id: 'new-tx' },
+        data: {
+          suggestedByRuleId: 'rule-1',
+        },
+      });
+    });
   });
 
   // ============================================
@@ -506,7 +503,10 @@ describe('TransactionsService', () => {
     it('should update uncategorized transactions with matching description', async () => {
       prismaMock.transaction.updateMany.mockResolvedValue({ count: 5 });
 
-      const result = await service.propagateCategory('Walmart', 'cat-groceries');
+      const result = await service.propagateCategory(
+        'Walmart',
+        'cat-groceries',
+      );
 
       expect(result.count).toBe(5);
       expect(prismaMock.transaction.updateMany).toHaveBeenCalledWith({

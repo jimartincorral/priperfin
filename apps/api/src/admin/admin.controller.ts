@@ -11,10 +11,16 @@ export class AdminController {
       const transactionCount = await this.prisma.transaction.count();
       const accountCount = await this.prisma.account.count();
       const categoryCount = await this.prisma.category.count();
-      const costObjectCount = await this.prisma.costObject.count().catch(() => 'Error (Table missing?)');
-      const splitCount = await this.prisma.transactionSplit.count().catch(() => 'Error (Table missing?)');
-      
-      const tables = await this.prisma.$queryRawUnsafe<any[]>("SELECT name FROM sqlite_master WHERE type='table';");
+      const costObjectCount = await this.prisma.costObject
+        .count()
+        .catch(() => 'Error (Table missing?)');
+      const splitCount = await this.prisma.transactionSplit
+        .count()
+        .catch(() => 'Error (Table missing?)');
+
+      const tables = await this.prisma.$queryRawUnsafe<any[]>(
+        "SELECT name FROM sqlite_master WHERE type='table';",
+      );
 
       return {
         counts: {
@@ -22,10 +28,10 @@ export class AdminController {
           accounts: accountCount,
           categories: categoryCount,
           costObjects: costObjectCount,
-          splits: splitCount
+          splits: splitCount,
         },
-        tables: tables.map(t => t.name),
-        databaseUrl: process.env.DATABASE_URL
+        tables: tables.map((t) => t.name),
+        databaseUrl: process.env.DATABASE_URL,
       };
     } catch (e) {
       return { error: e.message };

@@ -1,4 +1,13 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  Query,
+} from '@nestjs/common';
 import { RulesService } from './rules.service';
 import { CreateRuleDto } from './dto/create-rule.dto';
 import { UpdateRuleDto } from './dto/update-rule.dto';
@@ -16,7 +25,8 @@ export class RulesController {
 
   @Get()
   findAll(@Query('enabled') enabled?: string) {
-    const isEnabled = enabled === 'true' ? true : enabled === 'false' ? false : undefined;
+    const isEnabled =
+      enabled === 'true' ? true : enabled === 'false' ? false : undefined;
     return this.rulesService.findAll(isEnabled);
   }
 
@@ -36,8 +46,13 @@ export class RulesController {
   }
 
   @Post('suggestions/reject-prompt')
-  rejectRulePrompt(@Body() body: { conditionsJson: string, categoryId: string }) {
-    return this.rulesService.rejectRulePrompt(body.conditionsJson, body.categoryId);
+  rejectRulePrompt(
+    @Body() body: { conditionsJson: string; categoryId: string },
+  ) {
+    return this.rulesService.rejectRulePrompt(
+      body.conditionsJson,
+      body.categoryId,
+    );
   }
 
   @Post('suggestions/:id/accept')
@@ -52,7 +67,10 @@ export class RulesController {
 
   @Post('test')
   testRule(@Body() testRuleDto: TestRuleDto) {
-    return this.rulesService.testRule(testRuleDto.conditionsJson, testRuleDto.limit);
+    return this.rulesService.testRule(
+      testRuleDto.conditionsJson,
+      testRuleDto.limit,
+    );
   }
 
   @Post('reorder')

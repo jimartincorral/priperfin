@@ -6,8 +6,12 @@ import path from 'path';
 async function main() {
   const rawUrl = process.env.DATABASE_URL || 'file:./dev.db';
   let dbPath = rawUrl.replace('file:', '');
-  if (!dbPath.includes(':') && !dbPath.startsWith('/') && !dbPath.startsWith('\\')) {
-      dbPath = path.join(process.cwd(), dbPath);
+  if (
+    !dbPath.includes(':') &&
+    !dbPath.startsWith('/') &&
+    !dbPath.startsWith('\\')
+  ) {
+    dbPath = path.join(process.cwd(), dbPath);
   }
   console.log('Opening DB at:', dbPath);
 
@@ -16,7 +20,9 @@ async function main() {
 
   try {
     console.log('Checking database schema...');
-    const result = await prisma.$queryRawUnsafe("PRAGMA table_info('Transaction');");
+    const result = await prisma.$queryRawUnsafe(
+      "PRAGMA table_info('Transaction');",
+    );
     console.log(JSON.stringify(result, null, 2));
   } catch (e) {
     console.error(e);

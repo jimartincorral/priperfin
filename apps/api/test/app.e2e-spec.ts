@@ -10,7 +10,7 @@ import path from 'path';
 describe('AppController (e2e)', () => {
   let app: INestApplication<App>;
   const dbPath = path.join(__dirname, '../test-app.db');
-  
+
   // Set env vars before any imports
   process.env.DATABASE_URL = `file:${dbPath}`;
 
@@ -19,13 +19,16 @@ describe('AppController (e2e)', () => {
     if (fs.existsSync(dbPath)) {
       fs.unlinkSync(dbPath);
     }
-    
+
     // Setup DB schema
     try {
-      execSync('npx prisma db push --schema=prisma/schema.prisma --accept-data-loss', { 
-        stdio: 'inherit',
-        env: { ...process.env, DATABASE_URL: `file:${dbPath}` }
-      });
+      execSync(
+        'npx prisma db push --schema=prisma/schema.prisma --accept-data-loss',
+        {
+          stdio: 'inherit',
+          env: { ...process.env, DATABASE_URL: `file:${dbPath}` },
+        },
+      );
     } catch (e) {
       console.error('Failed to push schema', e);
       throw e;
@@ -52,9 +55,7 @@ describe('AppController (e2e)', () => {
   });
 
   it('/ (GET)', async () => {
-    const response = await request(app.getHttpServer())
-      .get('/')
-      .expect(200);
+    const response = await request(app.getHttpServer()).get('/').expect(200);
 
     expect(response.body).toHaveProperty('message', 'Hello from API');
     expect(response.body).toHaveProperty('timestamp');

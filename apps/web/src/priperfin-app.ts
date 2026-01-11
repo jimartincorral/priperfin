@@ -290,6 +290,13 @@ export class PriPerFinApp extends LitElement {
     super.connectedCallback();
     this.applyTheme(localStorage.getItem('priperfin_theme') || 'auto');
     window.addEventListener('theme-change', (e: any) => this.applyTheme(e.detail.theme));
+    
+    // Listen for URL changes (including replaceState) to update navigation links
+    const originalReplaceState = window.history.replaceState;
+    window.history.replaceState = (...args) => {
+      originalReplaceState.apply(window.history, args);
+      this.requestUpdate(); // Re-render navigation links with new query params
+    };
   }
 
   applyTheme(theme: string) {
@@ -300,6 +307,25 @@ export class PriPerFinApp extends LitElement {
     } else {
       this.removeAttribute('data-theme'); // Auto (system)
     }
+  }
+
+  // Get current query params to preserve time and account filters across navigation
+  private getCurrentQueryParams(): string {
+    const params = new URLSearchParams(window.location.search);
+    const preservedParams = new URLSearchParams();
+    
+    // Preserve time-related filters
+    if (params.has('mode')) preservedParams.set('mode', params.get('mode')!);
+    if (params.has('month')) preservedParams.set('month', params.get('month')!);
+    if (params.has('year')) preservedParams.set('year', params.get('year')!);
+    if (params.has('startDate')) preservedParams.set('startDate', params.get('startDate')!);
+    if (params.has('endDate')) preservedParams.set('endDate', params.get('endDate')!);
+    
+    // Preserve account filter
+    if (params.has('accountId')) preservedParams.set('accountId', params.get('accountId')!);
+    
+    const queryString = preservedParams.toString();
+    return queryString ? `?${queryString}` : '';
   }
 
   firstUpdated() {
@@ -313,17 +339,17 @@ export class PriPerFinApp extends LitElement {
       { path: '/settings', component: 'view-settings' },
     ]);
 
-    // Listen to route changes to update active state
+    // Listen to route changes to update active state and query params
     window.addEventListener('vaadin-router-location-changed', (e: any) => {
       this.currentPath = e.detail.location.pathname;
-      this.requestUpdate();
+      this.requestUpdate(); // This will cause links to rebuild with new query params
     });
   }
 
   render() {
     return html`
       <nav>
-        <a href="/" class="nav-item ${this.currentPath === '/' ? 'active' : ''}">
+        <a href="/${this.getCurrentQueryParams()}" class="nav-item ${this.currentPath === '/' ? 'active' : ''}">
             <div class="icon-container"><span class="material-symbols-outlined">receipt_long</span></div>
             <span class="nav-label">${i18n.t('nav.expenses')}</span>
         </a>
@@ -331,7 +357,7 @@ export class PriPerFinApp extends LitElement {
             <div class="icon-container"><span class="material-symbols-outlined">savings</span></div>
             <span class="nav-label">${i18n.t('nav.goals')}</span>
         </a>
-        <a href="/reports" class="nav-item ${this.currentPath === '/reports' ? 'active' : ''}">
+        <a href="/reports${this.getCurrentQueryParams()}" class="nav-item ${this.currentPath === '/reports' ? 'active' : ''}">
              <div class="icon-container"><span class="material-symbols-outlined">bar_chart</span></div>
              <span class="nav-label">${i18n.t('nav.reports')}</span>
         </a>

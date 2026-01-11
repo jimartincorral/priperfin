@@ -129,9 +129,11 @@ export function createPrismaMock() {
     $disconnect: jest.fn(),
     $executeRawUnsafe: jest.fn(),
     $queryRawUnsafe: jest.fn(),
-    $transaction: jest.fn((callback: (tx: typeof prismaMock) => Promise<unknown>) => {
-      return callback(prismaMock);
-    }),
+    $transaction: jest.fn(
+      (callback: (tx: typeof prismaMock) => Promise<unknown>) => {
+        return callback(prismaMock);
+      },
+    ),
   };
 
   return prismaMock;
