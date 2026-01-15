@@ -8,7 +8,6 @@ import { join, extname } from 'path';
 @Controller()
 export class AppController {
   private readonly logger = new Logger(AppController.name);
-  private indexHtmlCache: string | null = null;
   private staticPath: string;
 
   constructor(private readonly appService: AppService) {
@@ -151,30 +150,23 @@ export class AppController {
       this.logger.log(`Path: ${req.path}`);
       this.logger.log(`Ingress path detected: ${ingressPath || 'none (standalone mode)'}`);
 
-      // Read index.html
-      if (!this.indexHtmlCache) {
-        const indexPath = join(this.staticPath, 'index.html');
-        this.logger.log(`Reading index.html from: ${indexPath}`);
-        
-        if (!existsSync(indexPath)) {
-          this.logger.error(`index.html not found at: ${indexPath}`);
-          return res.status(404).send('index.html not found');
-        }
-        
-        this.indexHtmlCache = readFileSync(indexPath, 'utf-8');
+      // Read index.html (fresh read each time to support both Ingress and non-Ingress)
+      const indexPath = join(this.staticPath, 'index.html');
+      this.logger.log(`Reading index.html from: ${indexPath}`);
+      
+      if (!existsSync(indexPath)) {
+        this.logger.error(`index.html not found at: ${indexPath}`);
+        return res.status(404).send('index.html not found');
       }
-
-      let html = this.indexHtmlCache;
+      
+      let html = readFileSync(indexPath, 'utf-8');
 
       // Inject <base> tag if in Ingress mode
       if (ingressPath) {
-        // Check if <base> tag already exists
-        if (!html.includes('<base')) {
-          // Inject <base href="{ingressPath}/"> after <head>
-          const baseTag = `<base href="${ingressPath}/">`;
-          html = html.replace('<head>', `<head>\n  ${baseTag}`);
-          this.logger.log(`✓ Injected base tag: ${baseTag}`);
-        }
+        // Inject <base href="{ingressPath}/"> after <head>
+        const baseTag = `<base href="${ingressPath}/">`;
+        html = html.replace('<head>', `<head>\n  ${baseTag}`);
+        this.logger.log(`✓ Injected base tag: ${baseTag}`);
       } else {
         this.logger.log('Standalone mode - no base tag needed');
       }
