@@ -9,20 +9,15 @@ import helmet from 'helmet';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   // Set global prefix for API routes, but exclude AppController which serves static files
+  // NOTE: The exclude list is for routes WITHOUT the /api prefix
+  // These routes are handled by AppController to serve the SPA HTML
+  // API controllers (categories, rules, settings, etc.) still use /api prefix
   app.setGlobalPrefix('api', {
     exclude: [
       '', // Root path (/)
       '/', // Also explicitly exclude /
       'health', // Health check
       'assets/*', // Static assets (JS, CSS, etc.)
-      // SPA routes that should serve index.html
-      'login',
-      'setup',
-      'goals',
-      'reports',
-      'categories',
-      'rules',
-      'settings',
     ],
   });
 
