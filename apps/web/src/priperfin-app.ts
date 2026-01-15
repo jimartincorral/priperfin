@@ -296,11 +296,29 @@ export class PriPerFinApp extends LitElement {
 
   connectedCallback() {
     super.connectedCallback();
+    
+    console.log('[PriPerFin] App initialization started');
+    console.log('[PriPerFin] Current location:', window.location.href);
+    console.log('[PriPerFin] Base URI:', document.baseURI);
+    
+    // Global error handler
+    window.addEventListener('error', (e) => {
+      console.error('[PriPerFin] Global error:', e.error);
+      console.error('[PriPerFin] Error message:', e.message);
+      console.error('[PriPerFin] Error at:', e.filename, e.lineno, e.colno);
+    });
+    
+    // Unhandled promise rejection handler
+    window.addEventListener('unhandledrejection', (e) => {
+      console.error('[PriPerFin] Unhandled promise rejection:', e.reason);
+    });
+    
     this.applyTheme(localStorage.getItem('priperfin_theme') || 'auto');
     window.addEventListener('theme-change', (e: any) => this.applyTheme(e.detail.theme));
     
     // Listen for session expiry
     window.addEventListener('session-expired', () => {
+      console.log('[PriPerFin] Session expired, redirecting to login');
       window.location.href = '/login';
     });
     
@@ -310,6 +328,8 @@ export class PriPerFinApp extends LitElement {
       originalReplaceState.apply(window.history, args);
       this.requestUpdate(); // Re-render navigation links with new query params
     };
+    
+    console.log('[PriPerFin] App initialization complete');
   }
 
   applyTheme(theme: string) {
@@ -349,7 +369,16 @@ export class PriPerFinApp extends LitElement {
   }
 
   async firstUpdated() {
-    const router = new Router(this.shadowRoot?.querySelector('#outlet'));
+    console.log('[PriPerFin] Setting up router');
+    const outlet = this.shadowRoot?.querySelector('#outlet');
+    console.log('[PriPerFin] Router outlet:', outlet);
+    
+    if (!outlet) {
+      console.error('[PriPerFin] FATAL: Router outlet not found!');
+      return;
+    }
+    
+    const router = new Router(outlet);
     router.setRoutes([
       // Public routes (no auth required)
       { path: '/setup', component: 'view-setup' },
@@ -363,8 +392,11 @@ export class PriPerFinApp extends LitElement {
       { path: '/settings', action: this.authGuard.bind(this), component: 'view-settings' },
     ]);
 
+    console.log('[PriPerFin] Router configured successfully');
+
     // Listen to route changes to update active state and query params
     window.addEventListener('vaadin-router-location-changed', (e: any) => {
+      console.log('[PriPerFin] Route changed to:', e.detail.location.pathname);
       this.currentPath = e.detail.location.pathname;
       this.requestUpdate(); // This will cause links to rebuild with new query params
     });

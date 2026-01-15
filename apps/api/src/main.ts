@@ -17,9 +17,9 @@ async function bootstrap() {
         directives: {
           defaultSrc: ["'self'"],
           scriptSrc: ["'self'"],
-          styleSrc: ["'self'", "'unsafe-inline'"], // Lit requires inline styles
+          styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'], // Lit requires inline styles, Google Fonts
           imgSrc: ["'self'", 'data:', 'blob:'],
-          fontSrc: ["'self'", 'data:'],
+          fontSrc: ["'self'", 'data:', 'https://fonts.gstatic.com'], // Google Fonts
           connectSrc: ["'self'"],
           frameSrc: ["'none'"],
           objectSrc: ["'none'"],

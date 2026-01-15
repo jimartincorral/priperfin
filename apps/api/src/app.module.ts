@@ -26,16 +26,28 @@ const logger = new Logger('AppModule');
 
 // Determine static files path: Docker container uses /app/client, dev uses relative path
 function getStaticPath(): string {
+  logger.log('=== Static Path Detection ===');
   logger.log(`process.env.STATIC_PATH: ${process.env.STATIC_PATH}`);
   logger.log(`__dirname: ${__dirname}`);
+  logger.log(`process.cwd(): ${process.cwd()}`);
+  logger.log(`NODE_ENV: ${process.env.NODE_ENV}`);
 
   if (process.env.STATIC_PATH) {
-    logger.log(`Using STATIC_PATH: ${process.env.STATIC_PATH}`);
+    const pathExists = existsSync(process.env.STATIC_PATH);
+    logger.log(`Using STATIC_PATH: ${process.env.STATIC_PATH} (exists: ${pathExists})`);
     return process.env.STATIC_PATH;
   }
+  
   const dockerPath = '/app/client';
   if (existsSync(dockerPath)) {
-    logger.log(`Using Docker path: ${dockerPath}`);
+    logger.log(`✓ Found static files at Docker path: ${dockerPath}`);
+    // Verify index.html exists
+    const indexPath = join(dockerPath, 'index.html');
+    if (existsSync(indexPath)) {
+      logger.log(`✓ Verified index.html exists at: ${indexPath}`);
+    } else {
+      logger.error(`✗ WARNING: index.html NOT found at: ${indexPath}`);
+    }
     return dockerPath;
   }
 
@@ -51,14 +63,18 @@ function getStaticPath(): string {
     join(process.cwd(), '../web/dist'), // CWD if in apps/api
   ];
 
+  logger.log('Searching for static files in possible paths:');
   for (const p of possiblePaths) {
-    if (existsSync(p)) {
-      logger.log(`Found static files at: ${p}`);
+    const exists = existsSync(p);
+    logger.log(`  ${exists ? '✓' : '✗'} ${p}`);
+    if (exists) {
+      logger.log(`✓ Using static files at: ${p}`);
       return p;
     }
   }
 
-  logger.warn('Could not find static files!');
+  logger.error('✗ Could not find static files in any expected location!');
+  logger.error('The application may not serve the frontend correctly.');
   return join(__dirname, '../..', 'web/dist'); // Default
 }
 
