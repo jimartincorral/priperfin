@@ -113,15 +113,26 @@ export class AppController {
     }
   }
 
+  // Serve root HTML (explicit root path)
+  @Get()
+  getRootPath(@Req() req: Request, @Res() res: Response) {
+    return this.serveHtml(req, res);
+  }
+
   // Serve root HTML and catch-all for SPA routes
   @Get('*')
-  getRoot(@Req() req: Request, @Res() res: Response, @Next() next: NextFunction) {
+  getWildcard(@Req() req: Request, @Res() res: Response, @Next() next: NextFunction) {
     // IMPORTANT: Skip API routes - let NestJS handle them
     if (req.path.startsWith('/api/') || req.path.startsWith('/api')) {
       this.logger.log(`Skipping API route: ${req.path}`);
       return next();
     }
 
+    return this.serveHtml(req, res);
+  }
+
+  // Shared method to serve HTML with Ingress base tag injection
+  private serveHtml(req: Request, res: Response) {
     // Check if this is an API request (has Accept: application/json)
     const acceptHeader = req.headers.accept || '';
     if (acceptHeader.includes('application/json') && req.path === '/') {
