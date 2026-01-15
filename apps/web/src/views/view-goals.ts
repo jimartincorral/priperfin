@@ -1,6 +1,8 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import { api } from '../api/client';
+import '../components/filterable-select';
+import type { SelectOption } from '../components/filterable-select';
 
 import { i18n } from '../i18n/i18n';
 
@@ -34,7 +36,9 @@ export class ViewGoals extends LitElement {
   @state() filterValue: string = '';
 
   @state() showDistributeMenu: 'unassigned' | 'all' | null = null;
-
+  
+  @state() showAddRow = false;
+  @state() newGoal: any = { name: '', categoryId: '', startDate: '', targetDate: '', targetAmount: 0, isEvergreen: false, targetMonths: null };
 
   get sortedGoals() {
     let goalsArray = Array.isArray(this.goals) ? [...this.goals] : [];
@@ -168,9 +172,24 @@ export class ViewGoals extends LitElement {
     }
   }
 
-  // New Goal State
-  @state() showAddRow = false; // Toggle to show the 'new line'
-  @state() newGoal = { name: '', targetAmount: 0, startDate: new Date().toISOString().split('T')[0], targetDate: '', savedAmount: 0, categoryId: '', isEvergreen: false, targetMonths: 12 };
+  getCategoryOptions(): SelectOption[] {
+    const options: SelectOption[] = [
+      { value: '', label: i18n.t('common.uncategorized') }
+    ];
+    
+    // Goals use simple category list (no hierarchy)
+    const goalCategories = this.categories.filter(c => c.type === 'GOAL').sort((a, b) => a.name.localeCompare(b.name));
+    
+    goalCategories.forEach(cat => {
+      options.push({
+        value: cat.id,
+        label: cat.name,
+        icon: cat.icon
+      });
+    });
+    
+    return options;
+  }
 
   static styles = css`
     :host { display: block; }
@@ -968,10 +987,12 @@ export class ViewGoals extends LitElement {
             
             <div>
               <label style="display: block; margin-bottom: 4px; font-size: 0.875rem; color: var(--md-sys-color-on-surface-variant);">${i18n.t('common.category')}</label>
-              <select .value="${this.newGoal.categoryId}" @change="${(e: any) => this.newGoal = { ...this.newGoal, categoryId: e.target.value }}" style="width: 100%; padding: 8px; border: 1px solid var(--md-sys-color-outline); border-radius: 4px; background: var(--md-sys-color-surface); color: var(--md-sys-color-on-surface); box-sizing: border-box;">
-                <option value="">${i18n.t('common.uncategorized')}</option>
-                ${this.categories.map(c => html`<option value="${c.id}">${c.name}</option>`)}
-              </select>
+              <filterable-select
+                .value="${this.newGoal.categoryId || ''}"
+                .options="${this.getCategoryOptions()}"
+                .placeholder="${i18n.t('common.category')}"
+                @change="${(e: CustomEvent) => this.newGoal = { ...this.newGoal, categoryId: e.detail.value }}">
+              </filterable-select>
             </div>
             
             <div>

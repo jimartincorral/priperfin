@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.11.0] - 2026-01-15
+
+### Added
+- **Filterable Dropdown Component** - New `<filterable-select>` web component with type-to-filter functionality, keyboard navigation, and support for icons and nested options. Deployed to 13 locations across the app (categories, accounts, cost objects, profiles).
+- **Compact Mode for Inline Editing** - Filterable dropdowns now support compact mode for inline table editing in expenses and split transactions.
+- **Collapsible Category Groups** - Parent categories can now be collapsed/expanded in the category management view to improve organization.
+- **"Between" Operator for Rules** - Amount conditions in categorization rules now support a "between" operator with separate min/max inputs.
+
+### Fixed
+- **CRITICAL: Reports Profile Isolation** - Fixed critical security/privacy bug where all report endpoints (`category-breakdown`, `sankey`, `cost-object-breakdown`) were pulling data from ALL profiles instead of just the authenticated user's profile. All reports now properly filter by `profileId`.
+- **Amount Conditions in Rules** - Fixed rule editor storing amount values as strings instead of numbers. Amount inputs now properly parse to `float` values.
+- **Rule Operator UX** - Improved operator selection with context-sensitive options (different for amount vs text fields). Added helpful tip about expense/income sign conventions.
+
+### Changed
+- **Alphabetical Category Sorting** - Categories are now sorted alphabetically throughout the application (parent categories first, then children within each parent).
+- **Category Dropdown Improvements** - All category dropdowns now use the new filterable component with consistent formatting and nested display using indentation.
+
 ## [1.2.3] - 2026-01-03
 
 ### Fixed

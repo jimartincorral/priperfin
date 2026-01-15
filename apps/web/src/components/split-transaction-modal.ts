@@ -1,6 +1,8 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { api } from '../api/client';
+import './filterable-select';
+import type { SelectOption } from './filterable-select';
 
 interface SplitItem {
   amount: number;
@@ -279,6 +281,52 @@ export class SplitTransactionModal extends LitElement {
     return Math.abs(this.getRemainingAmount()) < 0.01;
   }
 
+  getCategoryOptions(): SelectOption[] {
+    const options: SelectOption[] = [
+      { value: '', label: '-- Uncategorized --' }
+    ];
+    
+    const expenseCategories = this.categories.filter(c => c.type === 'EXPENSE' || !c.type);
+    const parents = expenseCategories.filter(c => !c.parentId).sort((a, b) => a.name.localeCompare(b.name));
+    
+    parents.forEach(parent => {
+      options.push({
+        value: parent.id,
+        label: parent.name,
+        icon: parent.icon,
+        indent: 0
+      });
+      
+      const children = expenseCategories.filter(c => c.parentId === parent.id).sort((a, b) => a.name.localeCompare(b.name));
+      children.forEach(child => {
+        options.push({
+          value: child.id,
+          label: child.name,
+          icon: child.icon,
+          indent: 1
+        });
+      });
+    });
+    
+    return options;
+  }
+
+  getCostObjectOptions(): SelectOption[] {
+    const options: SelectOption[] = [
+      { value: '', label: '-- Unassigned --' }
+    ];
+    
+    this.costObjects.forEach(co => {
+      options.push({
+        value: co.id,
+        label: co.name,
+        icon: co.icon
+      });
+    });
+    
+    return options;
+  }
+
   addSplit() {
     this.splits = [...this.splits, {
       amount: this.getRemainingAmount(),
@@ -408,29 +456,24 @@ export class SplitTransactionModal extends LitElement {
                     />
                   </td>
                   <td>
-                    <select
+                    <filterable-select
                       .value="${split.categoryId || ''}"
-                      @change="${(e: any) => this.updateSplit(index, 'categoryId', e.target.value || null)}"
-                    >
-                      <option value="">-- Uncategorized --</option>
-                      ${this.categories.filter(c => !c.parentId && (c.type === 'EXPENSE' || !c.type)).map(parent => html`
-                        <option value="${parent.id}">${parent.icon} ${parent.name}</option>
-                        ${this.categories.filter(c => c.parentId === parent.id).map(child => html`
-                          <option value="${child.id}">&nbsp;&nbsp;&nbsp;&nbsp;${child.icon} ${child.name}</option>
-                        `)}
-                      `)}
-                    </select>
+                      .options="${this.getCategoryOptions()}"
+                      .placeholder="Category"
+                      .compact="${true}"
+                      @change="${(e: CustomEvent) => this.updateSplit(index, 'categoryId', e.detail.value || null)}"
+                      width="100%">
+                    </filterable-select>
                   </td>
                   <td>
-                    <select
+                    <filterable-select
                       .value="${split.costObjectId || ''}"
-                      @change="${(e: any) => this.updateSplit(index, 'costObjectId', e.target.value || null)}"
-                    >
-                      <option value="">-- Unassigned --</option>
-                      ${this.costObjects.map(co => html`
-                        <option value="${co.id}">${co.icon} ${co.name}</option>
-                      `)}
-                    </select>
+                      .options="${this.getCostObjectOptions()}"
+                      .placeholder="Cost Object"
+                      .compact="${true}"
+                      @change="${(e: CustomEvent) => this.updateSplit(index, 'costObjectId', e.detail.value || null)}"
+                      width="100%">
+                    </filterable-select>
                   </td>
                   <td>
                     <input

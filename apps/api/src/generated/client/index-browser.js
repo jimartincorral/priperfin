@@ -125,6 +125,7 @@ exports.Prisma.CategoryScalarFieldEnum = {
   budget: 'budget',
   type: 'type',
   parentId: 'parentId',
+  profileId: 'profileId',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 };
@@ -134,6 +135,7 @@ exports.Prisma.AccountScalarFieldEnum = {
   name: 'name',
   initialBalance: 'initialBalance',
   type: 'type',
+  profileId: 'profileId',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 };
@@ -143,6 +145,7 @@ exports.Prisma.CostObjectScalarFieldEnum = {
   name: 'name',
   color: 'color',
   icon: 'icon',
+  profileId: 'profileId',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 };
@@ -155,6 +158,7 @@ exports.Prisma.TransactionScalarFieldEnum = {
   categoryId: 'categoryId',
   accountId: 'accountId',
   costObjectId: 'costObjectId',
+  profileId: 'profileId',
   notes: 'notes',
   suggestedCategoryId: 'suggestedCategoryId',
   merchant: 'merchant',
@@ -172,6 +176,7 @@ exports.Prisma.CategorizationRuleScalarFieldEnum = {
   priority: 'priority',
   categoryId: 'categoryId',
   mode: 'mode',
+  profileId: 'profileId',
   conditionsJson: 'conditionsJson',
   matchCount: 'matchCount',
   lastMatched: 'lastMatched',
@@ -185,6 +190,7 @@ exports.Prisma.RuleSuggestionScalarFieldEnum = {
   description: 'description',
   conditionsJson: 'conditionsJson',
   categoryId: 'categoryId',
+  profileId: 'profileId',
   confidence: 'confidence',
   matchCount: 'matchCount',
   similarityType: 'similarityType',
@@ -215,6 +221,7 @@ exports.Prisma.SavingsGoalScalarFieldEnum = {
   isEvergreen: 'isEvergreen',
   targetMonths: 'targetMonths',
   categoryId: 'categoryId',
+  profileId: 'profileId',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 };
@@ -222,6 +229,25 @@ exports.Prisma.SavingsGoalScalarFieldEnum = {
 exports.Prisma.SettingScalarFieldEnum = {
   key: 'key',
   value: 'value'
+};
+
+exports.Prisma.ProfileScalarFieldEnum = {
+  id: 'id',
+  name: 'name',
+  pinHash: 'pinHash',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.SessionScalarFieldEnum = {
+  id: 'id',
+  profileId: 'profileId',
+  token: 'token',
+  expiresAt: 'expiresAt',
+  ipAddress: 'ipAddress',
+  userAgent: 'userAgent',
+  createdAt: 'createdAt',
+  lastUsedAt: 'lastUsedAt'
 };
 
 exports.Prisma.MonthlyBalanceScalarFieldEnum = {
@@ -284,6 +310,8 @@ exports.Prisma.ModelName = {
   TransactionSplit: 'TransactionSplit',
   SavingsGoal: 'SavingsGoal',
   Setting: 'Setting',
+  Profile: 'Profile',
+  Session: 'Session',
   MonthlyBalance: 'MonthlyBalance',
   AccountBalance: 'AccountBalance'
 };

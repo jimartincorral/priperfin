@@ -14,12 +14,13 @@ import { GetTransactionsDto } from '../transactions/get-transactions.dto';
 export class ReportsService {
   constructor(private prisma: PrismaService) {}
 
-  async getCategoryBreakdown(query: GetTransactionsDto) {
+  async getCategoryBreakdown(query: GetTransactionsDto, profileId: string) {
     const { accountId } = query;
     const { startDate, endDate } = this.getDateRange(query);
 
     // Build where clause
     const where: any = {
+      profileId,
       amount: { lt: 0 }, // Expenses
     };
 
@@ -63,7 +64,7 @@ export class ReportsService {
 
     // Initialize with ALL Expense categories
     const categories = await this.prisma.category.findMany({
-      where: { type: 'EXPENSE' },
+      where: { type: 'EXPENSE', profileId },
       orderBy: { name: 'asc' },
     });
 
@@ -247,12 +248,12 @@ export class ReportsService {
     return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
   }
 
-  async getSankeyData(query: GetTransactionsDto) {
+  async getSankeyData(query: GetTransactionsDto, profileId: string) {
     const { accountId } = query;
     const { startDate, endDate } = this.getDateRange(query);
 
     // Build where clause
-    const where: any = {};
+    const where: any = { profileId };
 
     // Only add date filter if dates are provided (not all_time mode)
     if (startDate && endDate) {
@@ -369,7 +370,7 @@ export class ReportsService {
     return { nodes: uniqueNodes, links };
   }
 
-  async getCostObjectBreakdown(query: GetTransactionsDto) {
+  async getCostObjectBreakdown(query: GetTransactionsDto, profileId: string) {
     const { accountId } = query;
 
     if (!accountId) {
@@ -377,7 +378,7 @@ export class ReportsService {
     }
 
     // Build where clause for credit account transactions
-    const where: any = { accountId };
+    const where: any = { profileId, accountId };
 
     const { startDate, endDate } = this.getDateRange(query);
     if (startDate && endDate) {

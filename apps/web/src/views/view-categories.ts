@@ -2,6 +2,8 @@ import { LitElement, html, css } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import { api } from '../api/client';
 import { i18n } from '../i18n/i18n';
+import '../components/filterable-select';
+import type { SelectOption } from '../components/filterable-select';
 
 // Load emoji picker  
 import 'emoji-picker-element';
@@ -24,6 +26,8 @@ export class ViewCategories extends LitElement {
     type: 'EXPENSE',
     parentId: ''
   };
+
+  @state() collapsedParents: Set<string> = new Set();
 
   static styles = css`
     :host {
@@ -220,6 +224,35 @@ export class ViewCategories extends LitElement {
       margin-top: 24px;
     }
     
+    .collapse-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 24px;
+      height: 24px;
+      cursor: pointer;
+      user-select: none;
+      margin-right: 8px;
+      transition: transform 0.2s;
+      color: var(--md-sys-color-on-surface-variant);
+    }
+    
+    .collapse-icon:hover {
+      color: var(--md-sys-color-on-surface);
+    }
+    
+    .collapse-icon.collapsed {
+      transform: rotate(-90deg);
+    }
+    
+    tr.parent-row {
+      cursor: pointer;
+    }
+    
+    tr.parent-row:hover .collapse-icon {
+      color: var(--md-sys-color-primary);
+    }
+    
     @media (max-width: 600px) {
       .section-header {
         flex-direction: column;
@@ -236,6 +269,28 @@ export class ViewCategories extends LitElement {
   async connectedCallback() {
     super.connectedCallback();
     await this.loadData();
+  }
+
+  getParentCategoryOptions(): SelectOption[] {
+    const options: SelectOption[] = [
+      { value: '', label: 'None (Top Level)' }
+    ];
+    
+    const filtered = this.categories.filter(c => 
+      !c.parentId && 
+      c.id !== this.editModeId &&
+      c.type === this.categoryForm.type
+    ).sort((a, b) => a.name.localeCompare(b.name));
+    
+    filtered.forEach(cat => {
+      options.push({
+        value: cat.id,
+        label: cat.name,
+        icon: cat.icon
+      });
+    });
+    
+    return options;
   }
 
   async loadData() {
@@ -354,18 +409,33 @@ export class ViewCategories extends LitElement {
     }
   }
 
+  toggleParentCollapse(parentId: string) {
+    const newSet = new Set(this.collapsedParents);
+    if (newSet.has(parentId)) {
+      newSet.delete(parentId);
+    } else {
+      newSet.add(parentId);
+    }
+    this.collapsedParents = newSet;
+  }
+
   renderCategoryTable(categories: any[], showParentChild = false, showBudget = true) {
     const symbol = this.currency === 'EUR' ? '€' : '$';
 
     let rows = categories;
     if (showParentChild) {
       rows = [];
-      const parents = categories.filter(c => !c.parentId);
+      const parents = categories.filter(c => !c.parentId).sort((a, b) => a.name.localeCompare(b.name));
       parents.forEach(p => {
-        rows.push({ ...p, level: 0 });
-        const children = categories.filter(c => c.parentId === p.id);
-        children.forEach(c => rows.push({ ...c, level: 1 }));
+        rows.push({ ...p, level: 0, isParent: true });
+        // Only add children if parent is not collapsed
+        if (!this.collapsedParents.has(p.id)) {
+          const children = categories.filter(c => c.parentId === p.id).sort((a, b) => a.name.localeCompare(b.name));
+          children.forEach(c => rows.push({ ...c, level: 1, isParent: false }));
+        }
       });
+    } else {
+      rows = categories.sort((a, b) => a.name.localeCompare(b.name));
     }
 
     if (rows.length === 0) {
@@ -388,10 +458,24 @@ export class ViewCategories extends LitElement {
             </tr>
           </thead>
           <tbody>
-            ${rows.map((cat: any) => html`
-              <tr>
+            ${rows.map((cat: any) => {
+              const isCollapsed = this.collapsedParents.has(cat.id);
+              const hasChildren = showParentChild && cat.level === 0 && categories.some(c => c.parentId === cat.id);
+              
+              return html`
+              <tr class="${cat.isParent && hasChildren ? 'parent-row' : ''}">
                 <td>
                   <div style="display: flex; align-items: center; padding-left: ${cat.level ? cat.level * 2 : 0}rem;">
+                    ${cat.isParent && hasChildren ? html`
+                      <span 
+                        class="collapse-icon ${isCollapsed ? 'collapsed' : ''}" 
+                        @click="${(e: Event) => { e.stopPropagation(); this.toggleParentCollapse(cat.id); }}"
+                        title="${isCollapsed ? 'Expand' : 'Collapse'}">
+                        ▼
+                      </span>
+                    ` : html`
+                      <span style="width: 32px; display: inline-block;"></span>
+                    `}
                     <span class="category-icon" style="color: ${cat.color}; background: ${cat.color}20;">
                       ${cat.icon}
                     </span>
@@ -412,7 +496,7 @@ export class ViewCategories extends LitElement {
                   </div>
                 </td>
               </tr>
-            `)}
+            `})}
           </tbody>
         </table>
       </div>
@@ -468,19 +552,12 @@ export class ViewCategories extends LitElement {
 
           <div class="form-group">
             <label>${i18n.t('settings.parent_group')}</label>
-            <select 
-              .value="${this.categoryForm.parentId}" 
-              @change="${(e: any) => this.categoryForm = { ...this.categoryForm, parentId: e.target.value }}"
-            >
-              <option value="">None (Top Level)</option>
-              ${this.categories.filter(c => 
-                !c.parentId && 
-                c.id !== this.editModeId && 
-                c.type === this.categoryForm.type
-              ).map(c => html`
-                <option value="${c.id}">${c.icon} ${c.name}</option>
-              `)}
-            </select>
+            <filterable-select
+              .value="${this.categoryForm.parentId}"
+              .options="${this.getParentCategoryOptions()}"
+              .placeholder="None (Top Level)"
+              @change="${(e: CustomEvent) => this.categoryForm = { ...this.categoryForm, parentId: e.detail.value }}">
+            </filterable-select>
           </div>
 
           <div style="display: flex; gap: 16px;">

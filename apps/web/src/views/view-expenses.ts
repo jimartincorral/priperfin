@@ -4,7 +4,9 @@ import { api } from '../api/client';
 import '../components/csv-wizard';
 import '../components/split-transaction-modal';
 import '../components/rule-editor';
+import '../components/filterable-select';
 import 'emoji-picker-element';
+import type { SelectOption } from '../components/filterable-select';
 
 import { i18n } from '../i18n/i18n';
 
@@ -55,6 +57,76 @@ export class ViewExpenses extends LitElement {
       years.push(y);
     }
     return years;
+  }
+
+  getCategoryOptions(includeAddNew = false): SelectOption[] {
+    const options: SelectOption[] = [
+      { value: 'uncategorized', label: i18n.t('common.uncategorized') }
+    ];
+    
+    const expenseCategories = this.categories.filter(c => c.type === 'EXPENSE' || !c.type);
+    const parents = expenseCategories.filter(c => !c.parentId).sort((a, b) => a.name.localeCompare(b.name));
+    
+    parents.forEach(parent => {
+      options.push({
+        value: parent.id,
+        label: parent.name,
+        icon: parent.icon,
+        indent: 0
+      });
+      
+      const children = expenseCategories.filter(c => c.parentId === parent.id).sort((a, b) => a.name.localeCompare(b.name));
+      children.forEach(child => {
+        options.push({
+          value: child.id,
+          label: child.name,
+          icon: child.icon,
+          indent: 1
+        });
+      });
+    });
+    
+    if (includeAddNew) {
+      options.push({
+        value: 'new_category_inline',
+        label: `+ ${i18n.t('settings.add_category')}`,
+        indent: 0
+      });
+    }
+    
+    return options;
+  }
+
+  getAccountOptions(): SelectOption[] {
+    const options: SelectOption[] = [
+      { value: '', label: '🏦 All Accounts' }
+    ];
+    
+    this.accounts.forEach(account => {
+      options.push({
+        value: account.id,
+        label: account.name,
+        icon: account.type === 'CREDIT' ? '💳' : '🏦'
+      });
+    });
+    
+    return options;
+  }
+
+  getCostObjectOptions(): SelectOption[] {
+    const options: SelectOption[] = [
+      { value: '', label: `-- ${i18n.t('cost_objects.unassigned')} --` }
+    ];
+    
+    this.costObjects.forEach(co => {
+      options.push({
+        value: co.id,
+        label: co.name,
+        icon: co.icon
+      });
+    });
+    
+    return options;
   }
 
   @state() currency = 'USD';
@@ -623,6 +695,7 @@ export class ViewExpenses extends LitElement {
     td.editable:hover { background-color: var(--md-sys-color-surface-container-highest); }
     td.editable input, td.editable select { width: 100%; height: 100%; box-sizing: border-box; background: transparent; border: none; padding: 0; font: inherit; }
     td.editable input:focus, td.editable select:focus { outline: none; border-bottom: 2px solid var(--md-sys-color-primary); border-radius: 0; }
+    td.editable filterable-select { display: block; }
 
     .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; }
     .modal { background: var(--md-sys-color-surface-container-high); padding: 24px; border-radius: 28px; box-shadow: 0 4px 8px rgba(0,0,0,0.2); max-width: 400px; width: 100%; color: var(--md-sys-color-on-surface); }
@@ -1376,10 +1449,13 @@ Tables: ${result.tables?.join(', ')}`;
         <div class="header">
             <h1>${i18n.t('nav.expenses')}</h1>
             <div class="filters">
-                <select @change="${(e: any) => { this.selectedAccountId = e.target.value; this.loadData(true); }}" .value="${this.selectedAccountId}" style="min-width: 150px;">
-                    <option value="">🏦 All Accounts</option>
-                    ${this.accounts.map(a => html`<option value="${a.id}">${a.type === 'CREDIT' ? '💳' : '🏦'} ${a.name}</option>`)}
-                </select>
+                <filterable-select
+                    .value="${this.selectedAccountId}"
+                    .options="${this.getAccountOptions()}"
+                    .placeholder="Select Account"
+                    @change="${(e: CustomEvent) => { this.selectedAccountId = e.detail.value; this.loadData(true); }}"
+                    width="200px">
+                </filterable-select>
                 <select @change="${(e: any) => { this.dateFilterMode = e.target.value as DateFilterMode; this.loadData(true); }}" .value="${this.dateFilterMode}">
                     <option value="month">${i18n.t('filters.mode_month')}</option>
                     <option value="year">${i18n.t('filters.mode_year')}</option>
@@ -1536,40 +1612,30 @@ Tables: ${result.tables?.join(', ')}`;
                 </label>
                 <label>
                     ${i18n.t('common.category')}
-                    <select 
-                        .value="${this.newTransaction.categoryId}"
-                        @change="${(e: any) => {
-          if (e.target.value === 'new_category_inline') {
+                    <filterable-select
+                        .value="${this.newTransaction.categoryId || 'uncategorized'}"
+                        .options="${this.getCategoryOptions(true)}"
+                        .placeholder="${i18n.t('common.category')}"
+                        @change="${(e: CustomEvent) => {
+          if (e.detail.value === 'new_category_inline') {
             this.showAddCategoryModal = true;
-            e.target.value = '';
             return;
           }
-          this.newTransaction = { ...this.newTransaction, categoryId: e.target.value };
+          this.newTransaction = { ...this.newTransaction, categoryId: e.detail.value === 'uncategorized' ? '' : e.detail.value };
         }}"
-                        style="display: block; padding: 0.5rem; border: 1px solid var(--md-sys-color-outline); border-radius: 4px; background: var(--md-sys-color-surface-container); color: var(--md-sys-color-on-surface);">
-                        <option value="">-- ${i18n.t('common.category')} --</option>
-                        ${this.categories.filter(c => !c.parentId && (c.type === 'EXPENSE' || !c.type)).map(parent => html`
-                            <option value="${parent.id}">${parent.icon} ${parent.name}</option>
-                            ${this.categories.filter(c => c.parentId === parent.id).map(child => html`
-                                <option value="${child.id}">&nbsp;&nbsp;&nbsp;&nbsp;${child.icon} ${child.name}</option>
-                            `)}
-                        `)}
-                        <option disabled>──────────</option>
-                        <option value="new_category_inline">+ ${i18n.t('settings.add_category')}</option>
-                    </select>
+                        style="display: block;">
+                    </filterable-select>
                 </label>
                 ${this.isCredit && this.costObjects.length > 0 ? html`
                 <label>
                     ${i18n.t('cost_objects.funding_source')}
-                    <select
-                        .value="${this.newTransaction.costObjectId}"
-                        @change="${(e: any) => this.newTransaction = { ...this.newTransaction, costObjectId: e.target.value }}"
-                        style="display: block; padding: 0.5rem; border: 1px solid var(--md-sys-color-outline); border-radius: 4px; background: var(--md-sys-color-surface-container); color: var(--md-sys-color-on-surface);">
-                        <option value="">-- ${i18n.t('cost_objects.funding_source')} --</option>
-                        ${this.costObjects.map(co => html`
-                            <option value="${co.id}">${co.icon} ${co.name}</option>
-                        `)}
-                    </select>
+                    <filterable-select
+                        .value="${this.newTransaction.costObjectId || ''}"
+                        .options="${this.getCostObjectOptions()}"
+                        .placeholder="${i18n.t('cost_objects.funding_source')}"
+                        @change="${(e: CustomEvent) => this.newTransaction = { ...this.newTransaction, costObjectId: e.detail.value }}"
+                        style="display: block;">
+                    </filterable-select>
                 </label>
                 ` : ''}
                 <label style="flex-grow: 1;">
@@ -1633,15 +1699,16 @@ Tables: ${result.tables?.join(', ')}`;
 
                 <div style="display: flex; align-items: center; gap: 8px; margin-left: auto;">
                     <span style="font-size: 0.875rem;">${i18n.t('bulk_actions.move_to')}:</span>
-                    <select @change="${(e: any) => this.bulkUpdateCategory(e.target.value)}" style="width: 150px; background: var(--md-sys-color-surface); color: var(--md-sys-color-on-surface);">
-                        <option value="">${i18n.t('bulk_actions.select_category')}</option>
-                        ${this.categories.filter(c => !c.parentId).map(parent => html`
-                            <option value="${parent.id}">${parent.name}</option>
-                            ${this.categories.filter(c => c.parentId === parent.id).map(child => html`
-                                <option value="${child.id}">&nbsp;&nbsp;${child.name}</option>
-                            `)}
-                        `)}
-                    </select>
+                    <filterable-select
+                        .value=""
+                        .options="${[
+                          { value: '', label: i18n.t('bulk_actions.select_category') },
+                          ...this.getCategoryOptions(false).filter(opt => opt.value !== 'uncategorized')
+                        ]}"
+                        .placeholder="${i18n.t('bulk_actions.select_category')}"
+                        @change="${(e: CustomEvent) => this.bulkUpdateCategory(e.detail.value)}"
+                        width="200px">
+                    </filterable-select>
                 </div>
             </div>
           ` : ''
@@ -1785,20 +1852,23 @@ Tables: ${result.tables?.join(', ')}`;
               return html`
                                         <td class="editable" @click="${() => !isEditingCat && this.startEditing(tx.id, 'categoryId', tx.categoryId)}">
                                             ${isEditingCat ? html`
-                                                <select id="edit-${tx.id}-categoryId" .value="${this.editValue}" @change="${async (e: any) => {
-                    if (e.target.value === 'new_category_inline') {
+                                                <filterable-select
+                                                  id="edit-${tx.id}-categoryId"
+                                                  .value="${this.editValue || 'uncategorized'}"
+                                                  .options="${this.getCategoryOptions(true)}"
+                                                  .placeholder="${i18n.t('common.category')}"
+                                                  .compact="${true}"
+                                                  @change="${async (e: CustomEvent) => {
+                    if (e.detail.value === 'new_category_inline') {
                       this.cancelEditing();
                       this.showAddCategoryModal = true;
                       return;
                     }
-                    this.editValue = e.target.value;
+                    this.editValue = e.detail.value === 'uncategorized' ? null : e.detail.value;
                     await this.saveCell(tx.id, 'categoryId');
-                  }}" @blur="${() => { if (this.editValue !== 'new_category_inline') this.cancelEditing(); }}">
-                                                    <option value="uncategorized">${i18n.t('common.uncategorized')}</option>
-                                                    ${this.categories.filter(c => !c.parentId && (c.type === 'EXPENSE' || !c.type)).map(parent => html`<option value="${parent.id}" ?selected="${this.editValue === parent.id}">${parent.icon} ${parent.name}</option>${this.categories.filter(c => c.parentId === parent.id).map(child => html`<option value="${child.id}" ?selected="${this.editValue === child.id}">&nbsp;&nbsp;&nbsp;&nbsp;${child.icon} ${child.name}</option>`)}`)}
-                                                    <option disabled>──────────</option>
-                                                    <option value="new_category_inline">+ ${i18n.t('settings.add_category')}</option>
-                                                </select>
+                  }}"
+                                                  width="100%">
+                                                </filterable-select>
                                             ` : html`${(() => {
                   // Show split indicator if transaction has splits
                   if (tx.splits && tx.splits.length > 0) {
@@ -1815,13 +1885,18 @@ Tables: ${result.tables?.join(', ')}`;
               return html`
                                         <td class="editable" @click="${() => !isEditingCostObj && this.startEditing(tx.id, 'costObjectId', tx.costObjectId)}">
                                             ${isEditingCostObj ? html`
-                                                <select id="edit-${tx.id}-costObjectId" .value="${this.editValue || ''}" @change="${async (e: any) => {
-                    this.editValue = e.target.value;
+                                                <filterable-select
+                                                  id="edit-${tx.id}-costObjectId"
+                                                  .value="${this.editValue || ''}"
+                                                  .options="${this.getCostObjectOptions()}"
+                                                  .placeholder="${i18n.t('cost_objects.funding_source')}"
+                                                  .compact="${true}"
+                                                  @change="${async (e: CustomEvent) => {
+                    this.editValue = e.detail.value;
                     await this.saveCell(tx.id, 'costObjectId');
-                  }}" @blur="${() => this.cancelEditing()}">
-                                                    <option value="">-- ${i18n.t('cost_objects.unassigned')} --</option>
-                                                    ${this.costObjects.map(co => html`<option value="${co.id}" ?selected="${this.editValue === co.id}">${co.icon} ${co.name}</option>`)}
-                                                </select>
+                  }}"
+                                                  width="100%">
+                                                </filterable-select>
                                             ` : html`${(() => {
                   const co = this.costObjects.find(c => c.id === tx.costObjectId);
                   if (co) return html`${co.icon} ${co.name}`;

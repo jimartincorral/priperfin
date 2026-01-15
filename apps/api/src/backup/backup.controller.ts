@@ -7,26 +7,34 @@ import {
   UseInterceptors,
   UploadedFile,
   Body,
+  Logger,
+  UseGuards,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { BackupService } from './backup.service';
 import { Response } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { promises as fs } from 'fs';
 import * as path from 'path';
+import { SessionAuthGuard } from '../auth/guards/session-auth.guard';
 
 @Controller('backup')
+@UseGuards(SessionAuthGuard)
 export class BackupController {
+  private readonly logger = new Logger(BackupController.name);
+
   constructor(private readonly backupService: BackupService) {}
 
   @Post('create')
+  @Throttle({ backup: { limit: 25, ttl: 3600000 } })
   async createBackup(
     @Body('encryptionKey') encryptionKey: string | undefined,
     @Res() res: Response,
   ) {
     const { filename, filePath } =
       await this.backupService.createBackup(encryptionKey);
-    console.log('[BackupController] Backup created:', { filename, filePath });
+    this.logger.log(`Backup created: ${filename} at ${filePath}`);
     // For direct download after creation, or just return metadata
     res.status(201).json({
       message: 'Backup created successfully',
@@ -45,24 +53,25 @@ export class BackupController {
     @Param('filename') filename: string,
     @Res() res: Response,
   ) {
-    console.log('[BackupController] Download requested for:', filename);
+    this.logger.log(`Download requested for: ${filename}`);
     try {
       const [fileStream, mimeType] =
         await this.backupService.getBackupFileStream(filename);
 
-      console.log('[BackupController] File stream obtained, sending response');
+      this.logger.log('File stream obtained, sending response');
       res.set({
         'Content-Type': mimeType,
         'Content-Disposition': `attachment; filename="${filename}"`,
       });
       fileStream.pipe(res);
     } catch (error) {
-      console.error('[BackupController] Download failed:', error.message);
+      this.logger.error(`Download failed: ${error.message}`, error.stack);
       throw error;
     }
   }
 
   @Post('restore')
+  @Throttle({ backup: { limit: 25, ttl: 3600000 } })
   @UseInterceptors(
     FileInterceptor('file', {
       storage: diskStorage({
@@ -105,7 +114,7 @@ export class BackupController {
       await fs
         .unlink(file.path)
         .catch((err) =>
-          console.error(`Failed to delete uploaded file: ${err.message}`),
+          this.logger.error(`Failed to delete uploaded file: ${err.message}`),
         );
     }
   }

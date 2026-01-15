@@ -7,8 +7,11 @@ import './views/view-reports';
 import './views/view-categories';
 import './views/view-rules';
 import './views/view-settings';
+import './views/view-login';
+import './views/view-setup';
 
 import { i18n } from './i18n/i18n';
+import { api } from './api/client';
 
 @customElement('priperfin-app')
 export class PriPerFinApp extends LitElement {
@@ -246,6 +249,11 @@ export class PriPerFinApp extends LitElement {
       border-top-left-radius: 28px; /* Optional: distinctive M3 shape for content area if nav is side */
     }
 
+    /* Full width when nav is hidden (login/setup pages) */
+    :host(:not([data-show-nav])) main {
+      border-radius: 0;
+    }
+
     /* Mobile: Bottom Navigation Bar */
     @media (max-width: 600px) {
       :host {
@@ -291,6 +299,11 @@ export class PriPerFinApp extends LitElement {
     this.applyTheme(localStorage.getItem('priperfin_theme') || 'auto');
     window.addEventListener('theme-change', (e: any) => this.applyTheme(e.detail.theme));
     
+    // Listen for session expiry
+    window.addEventListener('session-expired', () => {
+      window.location.href = '/login';
+    });
+    
     // Listen for URL changes (including replaceState) to update navigation links
     const originalReplaceState = window.history.replaceState;
     window.history.replaceState = (...args) => {
@@ -328,15 +341,26 @@ export class PriPerFinApp extends LitElement {
     return queryString ? `?${queryString}` : '';
   }
 
-  firstUpdated() {
+  // Auth guard helper
+  private authGuard(_context: any, commands: any) {
+    if (!api.hasSession()) {
+      return commands.redirect('/login');
+    }
+  }
+
+  async firstUpdated() {
     const router = new Router(this.shadowRoot?.querySelector('#outlet'));
     router.setRoutes([
-      { path: '/', component: 'view-expenses' },
-      { path: '/goals', component: 'view-goals' },
-      { path: '/reports', component: 'view-reports' },
-      { path: '/categories', component: 'view-categories' },
-      { path: '/rules', component: 'view-rules' },
-      { path: '/settings', component: 'view-settings' },
+      // Public routes (no auth required)
+      { path: '/setup', component: 'view-setup' },
+      { path: '/login', component: 'view-login' },
+      // Protected routes (auth required)
+      { path: '/', action: this.authGuard.bind(this), component: 'view-expenses' },
+      { path: '/goals', action: this.authGuard.bind(this), component: 'view-goals' },
+      { path: '/reports', action: this.authGuard.bind(this), component: 'view-reports' },
+      { path: '/categories', action: this.authGuard.bind(this), component: 'view-categories' },
+      { path: '/rules', action: this.authGuard.bind(this), component: 'view-rules' },
+      { path: '/settings', action: this.authGuard.bind(this), component: 'view-settings' },
     ]);
 
     // Listen to route changes to update active state and query params
@@ -347,33 +371,38 @@ export class PriPerFinApp extends LitElement {
   }
 
   render() {
+    // Hide navigation on login and setup pages
+    const showNav = this.currentPath !== '/login' && this.currentPath !== '/setup';
+    
     return html`
-      <nav>
-        <a href="/${this.getCurrentQueryParams()}" class="nav-item ${this.currentPath === '/' ? 'active' : ''}">
-            <div class="icon-container"><span class="material-symbols-outlined">receipt_long</span></div>
-            <span class="nav-label">${i18n.t('nav.expenses')}</span>
-        </a>
-        <a href="/goals" class="nav-item ${this.currentPath === '/goals' ? 'active' : ''}">
-            <div class="icon-container"><span class="material-symbols-outlined">savings</span></div>
-            <span class="nav-label">${i18n.t('nav.goals')}</span>
-        </a>
-        <a href="/reports${this.getCurrentQueryParams()}" class="nav-item ${this.currentPath === '/reports' ? 'active' : ''}">
-             <div class="icon-container"><span class="material-symbols-outlined">bar_chart</span></div>
-             <span class="nav-label">${i18n.t('nav.reports')}</span>
-        </a>
-        <a href="/categories" class="nav-item ${this.currentPath === '/categories' ? 'active' : ''}">
-             <div class="icon-container"><span class="material-symbols-outlined">category</span></div>
-             <span class="nav-label">${i18n.t('nav.categories')}</span>
-        </a>
-        <a href="/rules" class="nav-item ${this.currentPath === '/rules' ? 'active' : ''}">
-             <div class="icon-container"><span class="material-symbols-outlined">rule</span></div>
-             <span class="nav-label">${i18n.t('nav.rules')}</span>
-        </a>
-        <a href="/settings" class="nav-item ${this.currentPath === '/settings' ? 'active' : ''}">
-             <div class="icon-container"><span class="material-symbols-outlined">settings</span></div>
-             <span class="nav-label">${i18n.t('nav.settings')}</span>
-        </a>
-      </nav>
+      ${showNav ? html`
+        <nav>
+          <a href="/${this.getCurrentQueryParams()}" class="nav-item ${this.currentPath === '/' ? 'active' : ''}">
+              <div class="icon-container"><span class="material-symbols-outlined">receipt_long</span></div>
+              <span class="nav-label">${i18n.t('nav.expenses')}</span>
+          </a>
+          <a href="/goals" class="nav-item ${this.currentPath === '/goals' ? 'active' : ''}">
+              <div class="icon-container"><span class="material-symbols-outlined">savings</span></div>
+              <span class="nav-label">${i18n.t('nav.goals')}</span>
+          </a>
+          <a href="/reports${this.getCurrentQueryParams()}" class="nav-item ${this.currentPath === '/reports' ? 'active' : ''}">
+               <div class="icon-container"><span class="material-symbols-outlined">bar_chart</span></div>
+               <span class="nav-label">${i18n.t('nav.reports')}</span>
+          </a>
+          <a href="/categories" class="nav-item ${this.currentPath === '/categories' ? 'active' : ''}">
+               <div class="icon-container"><span class="material-symbols-outlined">category</span></div>
+               <span class="nav-label">${i18n.t('nav.categories')}</span>
+          </a>
+          <a href="/rules" class="nav-item ${this.currentPath === '/rules' ? 'active' : ''}">
+               <div class="icon-container"><span class="material-symbols-outlined">rule</span></div>
+               <span class="nav-label">${i18n.t('nav.rules')}</span>
+          </a>
+          <a href="/settings" class="nav-item ${this.currentPath === '/settings' ? 'active' : ''}">
+               <div class="icon-container"><span class="material-symbols-outlined">settings</span></div>
+               <span class="nav-label">${i18n.t('nav.settings')}</span>
+          </a>
+        </nav>
+      ` : ''}
       <main id="outlet"></main>
     `;
   }

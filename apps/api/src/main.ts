@@ -4,10 +4,36 @@ import { AllExceptionsFilter } from './all-exceptions.filter';
 import { json, urlencoded } from 'express'; // Import express body parsers
 import { join } from 'path';
 import * as multer from 'multer'; // Import multer
+import helmet from 'helmet';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   app.setGlobalPrefix('api');
+
+  // Apply Helmet security headers
+  app.use(
+    helmet({
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          scriptSrc: ["'self'"],
+          styleSrc: ["'self'", "'unsafe-inline'"], // Lit requires inline styles
+          imgSrc: ["'self'", 'data:', 'blob:'],
+          fontSrc: ["'self'", 'data:'],
+          connectSrc: ["'self'"],
+          frameSrc: ["'none'"],
+          objectSrc: ["'none'"],
+          baseUri: ["'self'"],
+          formAction: ["'self'"],
+        },
+      },
+      crossOriginEmbedderPolicy: false, // Home Assistant compatibility
+      hsts: false, // Disabled (supports both HTTP and HTTPS)
+      noSniff: true,
+      xssFilter: true,
+      frameguard: { action: 'deny' },
+    }),
+  );
 
   // Configure CORS with restricted origins
   // In development, allow common local dev server ports
@@ -54,9 +80,9 @@ async function bootstrap() {
 
   app.useGlobalFilters(new AllExceptionsFilter());
 
-  // Configure express to handle JSON and URL-encoded bodies
-  app.use(json({ limit: '50mb' }));
-  app.use(urlencoded({ extended: true, limit: '50mb' }));
+  // Configure express to handle JSON and URL-encoded bodies (reduced from 50mb for security)
+  app.use(json({ limit: '10mb' }));
+  app.use(urlencoded({ extended: true, limit: '10mb' }));
 
   // Register Multer for handling multipart/form-data, if not already handled by platform-express
   // Note: @nestjs/platform-express typically handles this, but explicitly calling `multer` can prevent issues

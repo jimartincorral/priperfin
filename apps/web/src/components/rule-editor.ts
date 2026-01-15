@@ -1,6 +1,8 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, state, property } from 'lit/decorators.js';
 import { api } from '../api/client';
+import './filterable-select';
+import type { SelectOption } from './filterable-select';
 
 @customElement('rule-editor')
 export class RuleEditor extends LitElement {
@@ -63,6 +65,13 @@ export class RuleEditor extends LitElement {
         gap: 8px;
         margin-bottom: 8px;
         align-items: center;
+        flex-wrap: wrap;
+    }
+    
+    .between-inputs {
+        display: flex;
+        align-items: center;
+        gap: 4px;
     }
     
     .btn-icon {
@@ -122,6 +131,36 @@ export class RuleEditor extends LitElement {
     }
   }
 
+  getCategoryOptions(): SelectOption[] {
+    const options: SelectOption[] = [
+      { value: '', label: 'Select Category...' }
+    ];
+    
+    const expenseCategories = this.categories.filter(c => c.type === 'EXPENSE' || !c.type);
+    const parents = expenseCategories.filter(c => !c.parentId).sort((a, b) => a.name.localeCompare(b.name));
+    
+    parents.forEach(parent => {
+      options.push({
+        value: parent.id,
+        label: parent.name,
+        icon: parent.icon,
+        indent: 0
+      });
+      
+      const children = expenseCategories.filter(c => c.parentId === parent.id).sort((a, b) => a.name.localeCompare(b.name));
+      children.forEach(child => {
+        options.push({
+          value: child.id,
+          label: child.name,
+          icon: child.icon,
+          indent: 1
+        });
+      });
+    });
+    
+    return options;
+  }
+
   addCondition() {
       this.conditions = [...this.conditions, { field: 'description', operator: 'contains', value: '' }];
   }
@@ -132,6 +171,69 @@ export class RuleEditor extends LitElement {
 
   updateCondition(index: number, field: string, value: any) {
       const newConditions = [...this.conditions];
+      
+      // If changing the field type, reset the value and adjust operator
+      if (field === 'field') {
+        const newField = value;
+        const currentCond = newConditions[index];
+        
+        // If switching TO amount field
+        if (newField === 'amount' && currentCond.field !== 'amount') {
+          // Parse existing value as number or use 0
+          newConditions[index] = { 
+            ...currentCond, 
+            field: newField, 
+            value: parseFloat(currentCond.value) || 0,
+            operator: 'greaterThan' // Default to greaterThan for amount
+          };
+          this.conditions = newConditions;
+          return;
+        } else if (newField !== 'amount' && currentCond.field === 'amount') {
+          // Switching FROM amount - convert to string
+          const currentValue = currentCond.value;
+          newConditions[index] = { 
+            ...currentCond, 
+            field: newField, 
+            value: typeof currentValue === 'object' ? '' : String(currentValue || ''),
+            operator: 'contains' // Default to contains for text
+          };
+          this.conditions = newConditions;
+          return;
+        }
+      }
+      
+      // If changing operator to/from 'between', adjust value structure
+      if (field === 'operator') {
+        const currentCond = newConditions[index];
+        if (value === 'between' && currentCond.operator !== 'between') {
+          // Switching TO between - create object with min/max
+          const currentValue = typeof currentCond.value === 'number' ? currentCond.value : 0;
+          newConditions[index] = { 
+            ...currentCond, 
+            operator: value,
+            value: { min: currentValue, max: currentValue }
+          };
+          this.conditions = newConditions;
+          return;
+        } else if (value !== 'between' && currentCond.operator === 'between') {
+          // Switching FROM between - use min value as single value
+          const min = typeof currentCond.value === 'object' ? currentCond.value?.min || 0 : 0;
+          newConditions[index] = { 
+            ...currentCond, 
+            operator: value,
+            value: min
+          };
+          this.conditions = newConditions;
+          return;
+        }
+      }
+      
+      // Parse number values when updating value for amount field (non-between)
+      if (field === 'value' && newConditions[index].field === 'amount' && newConditions[index].operator !== 'between') {
+        value = parseFloat(value);
+        if (isNaN(value)) value = 0;
+      }
+      
       newConditions[index] = { ...newConditions[index], [field]: value };
       this.conditions = newConditions;
   }
@@ -199,6 +301,9 @@ export class RuleEditor extends LitElement {
 
             <div class="form-group">
                 <label>Conditions (All must match)</label>
+                <div style="font-size: 0.75rem; color: var(--md-sys-color-on-surface-variant); margin-bottom: 8px;">
+                    💡 Tip: Expenses are negative (e.g., -10.50), income is positive (e.g., +100.00)
+                </div>
                 <div class="conditions-list">
                     ${this.conditions.map((cond, index) => html`
                         <div class="condition-row">
@@ -209,20 +314,54 @@ export class RuleEditor extends LitElement {
                                 <option value="notes">Notes</option>
                             </select>
                             
-                            <select .value="${cond.operator}" @change="${(e: any) => this.updateCondition(index, 'operator', e.target.value)}" style="width: 120px;">
-                                <option value="contains">contains</option>
-                                <option value="equals">equals</option>
-                                <option value="startsWith">starts with</option>
-                                <option value="endsWith">ends with</option>
-                                <option value="greaterThan">greater than</option>
-                                <option value="lessThan">less than</option>
+                            <select .value="${cond.operator}" @change="${(e: any) => this.updateCondition(index, 'operator', e.target.value)}" style="width: 150px;">
+                                ${cond.field === 'amount' ? html`
+                                    <option value="equals">equals</option>
+                                    <option value="greaterThan">greater than (&gt;)</option>
+                                    <option value="lessThan">less than (&lt;)</option>
+                                    <option value="between">between</option>
+                                ` : html`
+                                    <option value="contains">contains</option>
+                                    <option value="equals">equals</option>
+                                    <option value="startsWith">starts with</option>
+                                    <option value="endsWith">ends with</option>
+                                `}
                             </select>
                             
-                            <input type="${cond.field === 'amount' ? 'number' : 'text'}" 
-                                .value="${cond.value}" 
-                                @input="${(e: any) => this.updateCondition(index, 'value', e.target.value)}" 
-                                placeholder="Value"
-                            />
+                            ${cond.operator === 'between' ? html`
+                                <div class="between-inputs">
+                                    <input type="number" 
+                                        step="0.01"
+                                        .value="${typeof cond.value === 'object' ? cond.value?.min || '' : ''}" 
+                                        @input="${(e: any) => {
+                                            const min = parseFloat(e.target.value) || 0;
+                                            const max = typeof cond.value === 'object' ? cond.value?.max || 0 : 0;
+                                            this.updateCondition(index, 'value', { min, max });
+                                        }}" 
+                                        placeholder="Min"
+                                        style="width: 70px;"
+                                    />
+                                    <span style="color: var(--md-sys-color-on-surface-variant);">to</span>
+                                    <input type="number" 
+                                        step="0.01"
+                                        .value="${typeof cond.value === 'object' ? cond.value?.max || '' : ''}" 
+                                        @input="${(e: any) => {
+                                            const min = typeof cond.value === 'object' ? cond.value?.min || 0 : 0;
+                                            const max = parseFloat(e.target.value) || 0;
+                                            this.updateCondition(index, 'value', { min, max });
+                                        }}" 
+                                        placeholder="Max"
+                                        style="width: 70px;"
+                                    />
+                                </div>
+                            ` : html`
+                                <input type="${cond.field === 'amount' ? 'number' : 'text'}" 
+                                    step="${cond.field === 'amount' ? '0.01' : 'any'}"
+                                    .value="${cond.value}" 
+                                    @input="${(e: any) => this.updateCondition(index, 'value', cond.field === 'amount' ? parseFloat(e.target.value) || 0 : e.target.value)}" 
+                                    placeholder="Value"
+                                />
+                            `}
                             
                             <button class="btn-icon" @click="${() => this.removeCondition(index)}">×</button>
                         </div>
@@ -233,15 +372,12 @@ export class RuleEditor extends LitElement {
 
             <div class="form-group">
                 <label>Action: Set Category</label>
-                <select @change="${(e: any) => this.categoryId = e.target.value}">
-                    <option value="" ?selected="${this.categoryId === ''}">Select Category...</option>
-                    ${this.categories.filter(c => !c.parentId).map(parent => html`
-                        <option value="${parent.id}" ?selected="${this.categoryId === parent.id}">${parent.icon} ${parent.name}</option>
-                        ${this.categories.filter(c => c.parentId === parent.id).map(child => html`
-                            <option value="${child.id}" ?selected="${this.categoryId === child.id}">&nbsp;&nbsp;&nbsp;&nbsp;${child.icon} ${child.name}</option>
-                        `)}
-                    `)}
-                </select>
+                <filterable-select
+                  .value="${this.categoryId}"
+                  .options="${this.getCategoryOptions()}"
+                  .placeholder="Select Category..."
+                  @change="${(e: CustomEvent) => this.categoryId = e.detail.value}">
+                </filterable-select>
             </div>
 
             <div class="form-group">

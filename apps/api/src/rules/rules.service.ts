@@ -26,12 +26,12 @@ export class RulesService {
     private patternDetection: PatternDetectionService,
   ) {}
 
-  async create(createRuleDto: CreateRuleDto) {
+  async create(createRuleDto: CreateRuleDto, profileId: string) {
     this.logger.log(`[create] Creating rule "${createRuleDto.name}" for category ${createRuleDto.categoryId}`);
     
     // Check if a similar rule already exists
     const existingRules = await this.prisma.categorizationRule.findMany({
-      where: { categoryId: createRuleDto.categoryId },
+      where: { profileId, categoryId: createRuleDto.categoryId },
       select: { id: true, name: true, conditionsJson: true },
     });
 
@@ -60,38 +60,46 @@ export class RulesService {
 
     this.logger.log(`[create] No duplicates found, creating rule`);
     return this.prisma.categorizationRule.create({
-      data: createRuleDto,
+      data: { ...createRuleDto, profileId },
     });
   }
 
-  async findAll(enabled?: boolean) {
+  async findAll(profileId: string, enabled?: boolean) {
     return this.prisma.categorizationRule.findMany({
-      where: enabled !== undefined ? { enabled } : undefined,
+      where: { 
+        profileId,
+        ...(enabled !== undefined ? { enabled } : {})
+      },
       orderBy: { priority: 'desc' },
       include: { category: true },
     });
   }
 
-  async findOne(id: string) {
-    const rule = await this.prisma.categorizationRule.findUnique({
-      where: { id },
+  async findOne(id: string, profileId: string) {
+    const rule = await this.prisma.categorizationRule.findFirst({
+      where: { id, profileId },
       include: { category: true },
     });
-    if (!rule) throw new NotFoundException(`Rule with ID ${id} not found`);
+    if (!rule) throw new NotFoundException(`Rule with ID ${id} not found or access denied`);
     return rule;
   }
 
-  async update(id: string, updateRuleDto: UpdateRuleDto) {
+  async update(id: string, profileId: string, updateRuleDto: UpdateRuleDto) {
+    await this.findOne(id, profileId); // Verify ownership
     return this.prisma.categorizationRule.update({
       where: { id },
       data: updateRuleDto,
     });
   }
 
-  async remove(id: string) {
-    return this.prisma.categorizationRule.delete({
-      where: { id },
+  async remove(id: string, profileId: string) {
+    const result = await this.prisma.categorizationRule.deleteMany({
+      where: { id, profileId },
     });
+    if (result.count === 0) {
+      throw new NotFoundException('Rule not found or access denied');
+    }
+    return { success: true };
   }
 
   async reorder(ruleIds: string[]) {
@@ -109,7 +117,7 @@ export class RulesService {
     return this.prisma.$transaction(updates);
   }
 
-  async evaluateTransaction(transaction: Transaction) {
+  async evaluateTransaction(transaction: Transaction, profileId: string) {
     // Disabled: too verbose during imports
     // this.logger.log(
     //   `Evaluating rules for transaction: ${transaction.description} (${transaction.amount})`,
@@ -125,9 +133,9 @@ export class RulesService {
         })) || transaction;
     }
 
-    // Get all enabled rules ordered by priority
+    // Get all enabled rules ordered by priority FOR THIS PROFILE
     const rules = await this.prisma.categorizationRule.findMany({
-      where: { enabled: true },
+      where: { profileId, enabled: true },
       orderBy: { priority: 'desc' },
     });
 
@@ -196,22 +204,23 @@ export class RulesService {
     return matches;
   }
 
-  async detectAndStoreSuggestions() {
+  async detectAndStoreSuggestions(profileId: string) {
     // Delete old PENDING suggestions to avoid duplicates piling up
     await this.prisma.ruleSuggestion.deleteMany({
-      where: { status: SuggestionStatus.PENDING },
+      where: { profileId, status: SuggestionStatus.PENDING },
     });
 
-    const suggestions = await this.patternDetection.detectPatterns();
+    const suggestions = await this.patternDetection.detectPatterns(profileId);
 
     // Get all existing rules to avoid suggesting duplicates
     const existingRules = await this.prisma.categorizationRule.findMany({
+      where: { profileId },
       select: { conditionsJson: true, categoryId: true },
     });
 
     // Get all REJECTED suggestions to avoid re-suggesting
     const rejectedSuggestions = await this.prisma.ruleSuggestion.findMany({
-      where: { status: SuggestionStatus.REJECTED },
+      where: { profileId, status: SuggestionStatus.REJECTED },
       select: { conditionsJson: true, categoryId: true },
     });
 
@@ -262,6 +271,7 @@ export class RulesService {
       if (!similarRuleExists && !wasRejected) {
         const created = await this.prisma.ruleSuggestion.create({
           data: {
+            profileId,
             name: `${s.patternType === 'merchant' ? 'Merchant' : 'Description'} matches "${s.conditions.conditions[0].value}"`,
             conditionsJson: JSON.stringify(s.conditions),
             categoryId: s.categoryId,
@@ -303,9 +313,12 @@ export class RulesService {
     return values;
   }
 
-  async getSuggestions(status?: SuggestionStatus) {
+  async getSuggestions(profileId: string, status?: SuggestionStatus) {
     return this.prisma.ruleSuggestion.findMany({
-      where: status ? { status } : undefined,
+      where: { 
+        profileId,
+        ...(status ? { status } : {}) 
+      },
       orderBy: { confidence: 'desc' },
       include: { category: true },
     });
@@ -320,6 +333,7 @@ export class RulesService {
     // Create rule
     const rule = await this.prisma.categorizationRule.create({
       data: {
+        profileId: suggestion.profileId,
         name: suggestion.name,
         conditionsJson: suggestion.conditionsJson,
         categoryId: suggestion.categoryId,
@@ -344,7 +358,7 @@ export class RulesService {
     });
   }
 
-  async rejectRulePrompt(conditionsJson: string, categoryId: string) {
+  async rejectRulePrompt(conditionsJson: string, categoryId: string, profileId: string) {
     // Create a REJECTED suggestion to track that user declined creating this rule
     // This prevents us from asking again for the same pattern
     const conditions = JSON.parse(conditionsJson);
@@ -352,6 +366,7 @@ export class RulesService {
 
     return this.prisma.ruleSuggestion.create({
       data: {
+        profileId,
         name: `User declined: ${patternValue}`,
         conditionsJson,
         categoryId,

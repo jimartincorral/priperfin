@@ -1,6 +1,6 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
-import { api, getApiBaseUrl } from '../api/client';
+import { api, getApiBaseUrl, authApi } from '../api/client';
 import { i18n } from '../i18n/i18n';
 
 import 'emoji-picker-element';
@@ -21,6 +21,18 @@ export class ViewSettings extends LitElement {
     @state() restoreLoading = false;
     @state() encryptionKey = '';
     @state() decryptionKey = '';
+
+    // Profile management
+    @state() currentProfile: any = null;
+    @state() profiles: any[] = [];
+    @state() showChangePinModal = false;
+    @state() showCreateProfileModal = false;
+    @state() showDeleteProfileModal = false;
+    @state() showDeleteAllDataModal = false;
+    @state() changePinForm = { oldPin: '', newPin: '', confirmPin: '' };
+    @state() createProfileForm = { name: '', pin: '', confirmPin: '' };
+    @state() deleteProfilePin = '';
+    @state() deleteAllDataConfirmText = '';
 
     // Account management
     @state() showAccountForm = false;
@@ -200,14 +212,18 @@ export class ViewSettings extends LitElement {
     async loadData() {
         this.loading = true;
         try {
-            const [cats, accts, costObjs] = await Promise.all([
+            const [cats, accts, costObjs, profile, allProfiles] = await Promise.all([
                 api.get('/categories'),
                 api.get('/accounts'),
-                api.get('/cost-objects')
+                api.get('/cost-objects'),
+                authApi.getCurrentProfile().catch(() => null),
+                authApi.getProfiles().catch(() => [])
             ]);
             this.categories = cats;
             this.accounts = accts;
             this.costObjects = costObjs;
+            this.currentProfile = profile?.profile || null;
+            this.profiles = allProfiles;
         } catch (e: any) {
             console.error(e);
         } finally {
@@ -232,17 +248,117 @@ export class ViewSettings extends LitElement {
         window.dispatchEvent(new CustomEvent('theme-change', { detail: { theme } }));
     }
 
-    async clearAllData() {
-        if (!confirm('WARNING: This will delete ALL transactions and savings goals. This action cannot be undone. Are you sure?')) return;
+    // ============= Delete Operations =============
+    async deleteProfileData() {
+        if (!confirm('⚠️ WARNING: This will delete ALL data in your current profile (transactions, accounts, categories, etc.). This action cannot be undone. Are you sure?')) return;
 
         try {
             await api.delete('/admin/reset');
             localStorage.removeItem('priperfin_total_savings');
-            // alert('All data has been reset.');
+            alert('Profile data has been reset.');
             window.location.href = '/';
         } catch (e: any) {
-            console.error('Failed to reset data', e);
-            alert('Failed to reset data');
+            console.error('Failed to reset profile data', e);
+            alert('Failed to reset profile data: ' + (e.message || 'Unknown error'));
+        }
+    }
+
+    async handleDeleteProfile() {
+        if (!this.deleteProfilePin) {
+            alert('Please enter your PIN to confirm profile deletion');
+            return;
+        }
+
+        try {
+            await api.delete('/auth/profile', { pin: this.deleteProfilePin });
+            alert('Profile deleted successfully.');
+            this.showDeleteProfileModal = false;
+            this.deleteProfilePin = '';
+            // Redirect to login
+            window.location.href = '/login';
+        } catch (e: any) {
+            alert('Failed to delete profile: ' + (e.message || 'Unknown error'));
+        }
+    }
+
+    async handleDeleteAllData() {
+        if (this.deleteAllDataConfirmText !== 'DELETE ALL') {
+            alert('Please type "DELETE ALL" to confirm');
+            return;
+        }
+
+        try {
+            await api.delete('/admin/reset-all');
+            localStorage.clear();
+            alert('All data from all profiles has been deleted.');
+            this.showDeleteAllDataModal = false;
+            this.deleteAllDataConfirmText = '';
+            window.location.href = '/setup';
+        } catch (e: any) {
+            alert('Failed to delete all data: ' + (e.message || 'Unknown error'));
+        }
+    }
+
+    // ============= Profile Management =============
+    async handleChangePin() {
+        if (this.changePinForm.newPin !== this.changePinForm.confirmPin) {
+            alert(i18n.t('auth.setup.pinMismatch'));
+            return;
+        }
+
+        if (this.changePinForm.newPin.length < 4 || this.changePinForm.newPin.length > 6) {
+            alert('PIN must be 4-6 digits');
+            return;
+        }
+
+        try {
+            await authApi.changePin(this.changePinForm.oldPin, this.changePinForm.newPin);
+            alert('PIN changed successfully. Please log in again.');
+            this.showChangePinModal = false;
+            this.changePinForm = { oldPin: '', newPin: '', confirmPin: '' };
+            // User will be logged out automatically by the backend
+            window.location.href = '/login';
+        } catch (e: any) {
+            alert('Failed to change PIN: ' + (e.message || 'Unknown error'));
+        }
+    }
+
+    async handleCreateProfile() {
+        if (!this.createProfileForm.name || this.createProfileForm.name.length < 3) {
+            alert('Profile name must be at least 3 characters');
+            return;
+        }
+
+        if (this.createProfileForm.pin !== this.createProfileForm.confirmPin) {
+            alert(i18n.t('auth.setup.pinMismatch'));
+            return;
+        }
+
+        if (this.createProfileForm.pin.length < 4 || this.createProfileForm.pin.length > 6) {
+            alert('PIN must be 4-6 digits');
+            return;
+        }
+
+        try {
+            await authApi.createProfile(this.createProfileForm.name, this.createProfileForm.pin);
+            alert(`Profile "${this.createProfileForm.name}" created successfully!`);
+            this.showCreateProfileModal = false;
+            this.createProfileForm = { name: '', pin: '', confirmPin: '' };
+            await this.loadData(); // Reload profiles list
+        } catch (e: any) {
+            alert('Failed to create profile: ' + (e.message || 'Unknown error'));
+        }
+    }
+
+    async handleLogout() {
+        try {
+            await authApi.logout();
+            window.location.href = '/login';
+        } catch (e: any) {
+            console.error('Logout failed:', e);
+            // Clear session anyway and redirect
+            api.clearSession();
+            window.location.href = '/login';
         }
     }
 
@@ -688,11 +804,185 @@ export class ViewSettings extends LitElement {
           </div>
           
           <div style="border-top: 1px solid var(--md-sys-color-outline-variant); padding-top: 1.5rem; margin-top: 1.5rem;">
-            <label style="color: var(--md-sys-color-error); margin-bottom: 0.5rem;">${i18n.t('settings.danger_zone')}</label>
-            <button class="btn-danger" @click="${this.clearAllData}">${i18n.t('settings.clear_all_data')}</button>
-            <p style="font-size: 0.8rem; color: #666; margin-top: 0.5rem;">${i18n.t('settings.clear_all_warning')}</p>
+            <label style="color: var(--md-sys-color-error); margin-bottom: 0.5rem;">⚠️ Danger Zone</label>
+            
+            <div style="display: flex; flex-direction: column; gap: 12px;">
+              <div>
+                <button class="btn-danger" @click="${() => this.deleteProfileData()}">Delete Profile Data</button>
+                <p style="font-size: 0.8rem; color: var(--md-sys-color-on-surface-variant); margin-top: 0.5rem;">
+                  Delete all data in your current profile (transactions, accounts, categories, rules). The profile itself remains.
+                </p>
+              </div>
+
+              <div>
+                <button class="btn-danger" @click="${() => this.showDeleteProfileModal = true}">Delete This Profile</button>
+                <p style="font-size: 0.8rem; color: var(--md-sys-color-on-surface-variant); margin-top: 0.5rem;">
+                  Delete the current profile and all its data. You will be logged out.
+                </p>
+              </div>
+
+              <div>
+                <button class="btn-danger" @click="${() => this.showDeleteAllDataModal = true}">Delete ALL Data (All Profiles)</button>
+                <p style="font-size: 0.8rem; color: var(--md-sys-color-on-surface-variant); margin-top: 0.5rem;">
+                  ⚠️ EXTREME DANGER: Delete ALL profiles and ALL data from the entire application. This resets everything.
+                </p>
+              </div>
+            </div>
           </div>
       </div>
+
+      <div class="section-title">👤 ${i18n.t('auth.settings.title')}</div>
+      <div class="settings-group">
+          ${this.currentProfile ? html`
+            <div class="form-group">
+              <label>${i18n.t('auth.settings.currentProfile')}</label>
+              <div style="
+                display: flex;
+                align-items: center;
+                padding: 12px 16px;
+                background: var(--md-sys-color-primary-container);
+                color: var(--md-sys-color-on-primary-container);
+                border-radius: 8px;
+                font-weight: 500;
+              ">
+                👤 ${this.currentProfile.name}
+              </div>
+            </div>
+          ` : ''}
+
+          <div class="form-group" style="margin-top: 16px;">
+            <label>Profile Actions</label>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+              <button class="btn-primary" @click="${() => this.showChangePinModal = true}">
+                🔒 ${i18n.t('auth.settings.changePin')}
+              </button>
+              <button @click="${() => this.showCreateProfileModal = true}">
+                ➕ ${i18n.t('auth.settings.createProfile')}
+              </button>
+              <button class="btn-danger" @click="${this.handleLogout}">
+                🚪 ${i18n.t('auth.settings.logout')}
+              </button>
+            </div>
+          </div>
+
+          ${this.profiles.length > 1 ? html`
+            <div class="form-group" style="margin-top: 24px;">
+              <label>All Profiles (${this.profiles.length})</label>
+              <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px;">
+                ${this.profiles.map(p => html`
+                  <div style="
+                    padding: 8px 12px;
+                    background: ${p.name === this.currentProfile?.name ? 'var(--md-sys-color-primary-container)' : 'var(--md-sys-color-surface-container-high)'};
+                    color: ${p.name === this.currentProfile?.name ? 'var(--md-sys-color-on-primary-container)' : 'var(--md-sys-color-on-surface)'};
+                    border-radius: 16px;
+                    font-size: 0.875rem;
+                  ">
+                    ${p.name === this.currentProfile?.name ? '✓ ' : ''}${p.name}
+                  </div>
+                `)}
+              </div>
+              <p style="font-size: 0.75rem; color: var(--md-sys-color-on-surface-variant); margin-top: 8px;">
+                To switch profiles, log out and select a different profile on the login screen.
+              </p>
+            </div>
+          ` : ''}
+      </div>
+
+      ${this.showChangePinModal ? html`
+        <div class="modal-overlay" @click="${() => this.showChangePinModal = false}">
+          <div class="modal" @click="${(e: Event) => e.stopPropagation()}">
+            <h3>${i18n.t('auth.settings.changePin')}</h3>
+            <div class="form-group">
+              <label>Current PIN</label>
+              <input 
+                type="password" 
+                inputmode="numeric"
+                maxlength="6"
+                .value="${this.changePinForm.oldPin}"
+                @input="${(e: any) => this.changePinForm = { ...this.changePinForm, oldPin: e.target.value }}"
+                placeholder="Enter current PIN"
+              />
+            </div>
+            <div class="form-group">
+              <label>New PIN (4-6 digits)</label>
+              <input 
+                type="password" 
+                inputmode="numeric"
+                maxlength="6"
+                .value="${this.changePinForm.newPin}"
+                @input="${(e: any) => this.changePinForm = { ...this.changePinForm, newPin: e.target.value }}"
+                placeholder="Enter new PIN"
+              />
+            </div>
+            <div class="form-group">
+              <label>Confirm New PIN</label>
+              <input 
+                type="password" 
+                inputmode="numeric"
+                maxlength="6"
+                .value="${this.changePinForm.confirmPin}"
+                @input="${(e: any) => this.changePinForm = { ...this.changePinForm, confirmPin: e.target.value }}"
+                placeholder="Confirm new PIN"
+              />
+            </div>
+            <div class="modal-actions">
+              <button @click="${() => { this.showChangePinModal = false; this.changePinForm = { oldPin: '', newPin: '', confirmPin: '' }; }}">
+                ${i18n.t('common.cancel')}
+              </button>
+              <button class="btn-primary" @click="${this.handleChangePin}">
+                ${i18n.t('common.save')}
+              </button>
+            </div>
+          </div>
+        </div>
+      ` : ''}
+
+      ${this.showCreateProfileModal ? html`
+        <div class="modal-overlay" @click="${() => this.showCreateProfileModal = false}">
+          <div class="modal" @click="${(e: Event) => e.stopPropagation()}">
+            <h3>${i18n.t('auth.settings.createProfile')}</h3>
+            <div class="form-group">
+              <label>Profile Name</label>
+              <input 
+                type="text"
+                .value="${this.createProfileForm.name}"
+                @input="${(e: any) => this.createProfileForm = { ...this.createProfileForm, name: e.target.value }}"
+                placeholder="e.g., Personal, Spouse, Shared"
+              />
+            </div>
+            <div class="form-group">
+              <label>PIN (4-6 digits)</label>
+              <input 
+                type="password" 
+                inputmode="numeric"
+                maxlength="6"
+                .value="${this.createProfileForm.pin}"
+                @input="${(e: any) => this.createProfileForm = { ...this.createProfileForm, pin: e.target.value }}"
+                placeholder="Enter PIN"
+              />
+            </div>
+            <div class="form-group">
+              <label>Confirm PIN</label>
+              <input 
+                type="password" 
+                inputmode="numeric"
+                maxlength="6"
+                .value="${this.createProfileForm.confirmPin}"
+                @input="${(e: any) => this.createProfileForm = { ...this.createProfileForm, confirmPin: e.target.value }}"
+                placeholder="Confirm PIN"
+              />
+            </div>
+            <div class="modal-actions">
+              <button @click="${() => { this.showCreateProfileModal = false; this.createProfileForm = { name: '', pin: '', confirmPin: '' }; }}">
+                ${i18n.t('common.cancel')}
+              </button>
+              <button class="btn-primary" @click="${this.handleCreateProfile}">
+                ${i18n.t('common.save')}
+              </button>
+            </div>
+          </div>
+        </div>
+      ` : ''}
 
       <div class="section-title">🏦 ${i18n.t('accounts.title')}</div>
       <div class="settings-group">
@@ -857,7 +1147,74 @@ export class ViewSettings extends LitElement {
                         this.showCostObjectEmojiPicker = false;
                       }}"></emoji-picker>
                     </div>
-                  ` : ''}
+      ` : ''}
+
+      ${this.showDeleteProfileModal ? html`
+        <div class="modal-overlay" @click="${() => this.showDeleteProfileModal = false}">
+          <div class="modal" @click="${(e: Event) => e.stopPropagation()}">
+            <h3 style="color: var(--md-sys-color-error);">⚠️ Delete Profile</h3>
+            <p style="margin-bottom: 16px; color: var(--md-sys-color-on-surface);">
+              This will permanently delete your profile "<strong>${this.currentProfile?.name}</strong>" and ALL its data 
+              (transactions, accounts, categories, rules, etc.). This action cannot be undone.
+            </p>
+            <div class="form-group">
+              <label>Enter your PIN to confirm</label>
+              <input 
+                type="password" 
+                inputmode="numeric"
+                maxlength="6"
+                .value="${this.deleteProfilePin}"
+                @input="${(e: any) => this.deleteProfilePin = e.target.value}"
+                placeholder="Enter PIN"
+              />
+            </div>
+            <div class="modal-actions">
+              <button @click="${() => { this.showDeleteProfileModal = false; this.deleteProfilePin = ''; }}">
+                Cancel
+              </button>
+              <button class="btn-danger" @click="${this.handleDeleteProfile}">
+                Delete Profile
+              </button>
+            </div>
+          </div>
+        </div>
+      ` : ''}
+
+      ${this.showDeleteAllDataModal ? html`
+        <div class="modal-overlay" @click="${() => this.showDeleteAllDataModal = false}">
+          <div class="modal" @click="${(e: Event) => e.stopPropagation()}">
+            <h3 style="color: var(--md-sys-color-error);">🚨 DELETE ALL DATA FROM ALL PROFILES</h3>
+            <p style="margin-bottom: 16px; color: var(--md-sys-color-error); font-weight: bold;">
+              ⚠️ EXTREME DANGER ZONE ⚠️
+            </p>
+            <p style="margin-bottom: 16px; color: var(--md-sys-color-on-surface);">
+              This will permanently delete:<br/>
+              • ALL profiles<br/>
+              • ALL transactions, accounts, and categories from ALL profiles<br/>
+              • ALL settings and rules<br/>
+              <br/>
+              The application will be reset to initial setup state. This action CANNOT be undone.
+            </p>
+            <div class="form-group">
+              <label>Type "DELETE ALL" to confirm</label>
+              <input 
+                type="text"
+                .value="${this.deleteAllDataConfirmText}"
+                @input="${(e: any) => this.deleteAllDataConfirmText = e.target.value}"
+                placeholder="Type DELETE ALL"
+              />
+            </div>
+            <div class="modal-actions">
+              <button @click="${() => { this.showDeleteAllDataModal = false; this.deleteAllDataConfirmText = ''; }}">
+                Cancel
+              </button>
+              <button class="btn-danger" @click="${this.handleDeleteAllData}">
+                Delete Everything
+              </button>
+            </div>
+          </div>
+        </div>
+      ` : ''}
                 </div>
               </div>
               <div style="display: flex; gap: 8px;">

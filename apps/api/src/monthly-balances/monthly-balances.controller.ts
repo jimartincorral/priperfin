@@ -1,7 +1,9 @@
-import { Controller, Get, Post, Body, Param } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, UseGuards } from '@nestjs/common';
 import { MonthlyBalancesService } from './monthly-balances.service';
+import { SessionAuthGuard } from '../auth/guards/session-auth.guard';
 
 @Controller('monthly-balances')
+@UseGuards(SessionAuthGuard)
 export class MonthlyBalancesController {
   constructor(private readonly service: MonthlyBalancesService) {}
 

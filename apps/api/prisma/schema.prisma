@@ -24,6 +24,8 @@ model Category {
   parentId          String?
   parent            Category?           @relation("CategoryToCategory", fields: [parentId], references: [id], onDelete: SetNull)
   children          Category[]          @relation("CategoryToCategory")
+  profileId         String
+  profile           Profile             @relation(fields: [profileId], references: [id], onDelete: Cascade)
   transactions      Transaction[]
   transactionSplits TransactionSplit[]
   savingsGoals      SavingsGoal[]
@@ -31,6 +33,8 @@ model Category {
   ruleSuggestions     RuleSuggestion[]
   createdAt         DateTime            @default(now())
   updatedAt         DateTime            @updatedAt
+  
+  @@index([profileId])
 }
 
 model Account {
@@ -38,11 +42,15 @@ model Account {
   name            String
   initialBalance  Decimal          @default(0)
   type            AccountType      @default(DEBIT)
+  profileId       String
+  profile         Profile          @relation(fields: [profileId], references: [id], onDelete: Cascade)
   transactions    Transaction[]
   monthlyBalances MonthlyBalance[]
   accountBalances AccountBalance[]
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
+  
+  @@index([profileId])
 }
 
 enum AccountType {
@@ -55,10 +63,14 @@ model CostObject {
   name              String
   color             String?
   icon              String
+  profileId         String
+  profile           Profile             @relation(fields: [profileId], references: [id], onDelete: Cascade)
   transactions      Transaction[]
   transactionSplits TransactionSplit[]
   createdAt         DateTime            @default(now())
   updatedAt         DateTime            @updatedAt
+  
+  @@index([profileId])
 }
 
 model Transaction {
@@ -72,6 +84,8 @@ model Transaction {
   account      Account?           @relation(fields: [accountId], references: [id], onDelete: SetNull)
   costObjectId String?
   costObject   CostObject?        @relation(fields: [costObjectId], references: [id], onDelete: SetNull)
+  profileId    String
+  profile      Profile            @relation(fields: [profileId], references: [id], onDelete: Cascade)
   notes        String?
   suggestedCategoryId String?     // ML suggestions - TO BE DEPRECATED
   merchant     String?            // Normalized merchant name for matching
@@ -85,6 +99,7 @@ model Transaction {
   createdAt    DateTime           @default(now())
   updatedAt    DateTime           @updatedAt
 
+  @@index([profileId])
   @@index([merchant])
   @@index([categoryId, date]) // For pattern detection
 }
@@ -101,6 +116,9 @@ model CategorizationRule {
   category    Category?          @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   mode        RuleMode           @default(SUGGEST)
   
+  profileId   String
+  profile     Profile            @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  
   // Conditions (JSON string for flexibility)
   conditionsJson String
   
@@ -114,6 +132,7 @@ model CategorizationRule {
   createdAt   DateTime           @default(now())
   updatedAt   DateTime           @updatedAt
   
+  @@index([profileId])
   @@index([enabled, priority])
 }
 
@@ -132,6 +151,9 @@ model RuleSuggestion {
   categoryId     String?
   category       Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   
+  profileId      String
+  profile        Profile   @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  
   // Confidence metrics
   confidence     Decimal   // 0-100 score
   matchCount     Int       // Number of matching transactions
@@ -146,6 +168,7 @@ model RuleSuggestion {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
   
+  @@index([profileId])
   @@index([status, confidence])
 }
 
@@ -180,13 +203,51 @@ model SavingsGoal {
   targetMonths Int?      // For evergreen goals: target months to fully fund
   categoryId   String?
   category     Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  profileId    String
+  profile      Profile   @relation(fields: [profileId], references: [id], onDelete: Cascade)
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
+  
+  @@index([profileId])
 }
 
 model Setting {
   key   String @id
   value String
+}
+
+model Profile {
+  id                   String                @id @default(uuid())
+  name                 String                @unique
+  pinHash              String
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  sessions             Session[]
+  categories           Category[]
+  accounts             Account[]
+  costObjects          CostObject[]
+  transactions         Transaction[]
+  categorizationRules  CategorizationRule[]
+  ruleSuggestions      RuleSuggestion[]
+  savingsGoals         SavingsGoal[]
+  
+  @@index([name])
+}
+
+model Session {
+  id         String   @id @default(uuid())
+  profileId  String
+  profile    Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  token      String   @unique
+  expiresAt  DateTime
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+  lastUsedAt DateTime @default(now())
+  
+  @@index([token])
+  @@index([expiresAt])
+  @@index([profileId])
 }
 
 enum CategoryType {

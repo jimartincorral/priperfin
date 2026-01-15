@@ -7,12 +7,13 @@ import { UpdateSavingsGoalDto } from './update-savings-goal.dto';
 export class SavingsGoalsService {
   constructor(private prisma: PrismaService) {}
 
-  async create(dto: CreateSavingsGoalDto) {
+  async create(dto: CreateSavingsGoalDto, profileId: string) {
     console.log('Creating savings goal:', dto);
     try {
       return await this.prisma.savingsGoal.create({
         data: {
           ...dto,
+          profileId,
           targetDate: dto.targetDate ? new Date(dto.targetDate) : null,
           startDate: dto.startDate ? new Date(dto.startDate) : undefined,
           targetAmount: dto.targetAmount,
@@ -25,9 +26,18 @@ export class SavingsGoalsService {
     }
   }
 
-  async update(id: string, dto: UpdateSavingsGoalDto) {
+  async update(id: string, profileId: string, dto: UpdateSavingsGoalDto) {
     console.log('Updating savings goal:', id, dto);
     try {
+      // Verify ownership
+      const goal = await this.prisma.savingsGoal.findFirst({
+        where: { id, profileId },
+      });
+      
+      if (!goal) {
+        throw new Error('Savings goal not found or access denied');
+      }
+
       return await this.prisma.savingsGoal.update({
         where: { id },
         data: {
@@ -42,8 +52,9 @@ export class SavingsGoalsService {
     }
   }
 
-  async findAll() {
+  async findAll(profileId: string) {
     const goals = await this.prisma.savingsGoal.findMany({
+      where: { profileId },
       include: { category: true },
       orderBy: { targetDate: 'asc' },
     });
@@ -114,9 +125,15 @@ export class SavingsGoalsService {
     const needed = (target - saved) / targetMonths;
     return Math.max(0, parseFloat(needed.toFixed(2)));
   }
-  async remove(id: string) {
-    return this.prisma.savingsGoal.delete({
-      where: { id },
+  async remove(id: string, profileId: string) {
+    const result = await this.prisma.savingsGoal.deleteMany({
+      where: { id, profileId },
     });
+    
+    if (result.count === 0) {
+      throw new Error('Savings goal not found or access denied');
+    }
+    
+    return { success: true };
   }
 }

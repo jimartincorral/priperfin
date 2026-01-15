@@ -58,9 +58,9 @@ export class PatternDetectionService {
     return unique.join(' ');
   }
 
-  async detectPatterns(): Promise<RuleSuggestionResult[]> {
+  async detectPatterns(profileId: string): Promise<RuleSuggestionResult[]> {
     const transactions = await this.prisma.transaction.findMany({
-      where: { categoryId: { not: null } },
+      where: { profileId, categoryId: { not: null } },
       take: 2000, // Analyze last 2000 transactions
       orderBy: { date: 'desc' },
     });

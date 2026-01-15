@@ -57,6 +57,14 @@ export class BackupService {
       throw new InternalServerErrorException(
         'Invalid backup encryption key length.',
       );
+    } else {
+      // Validate key strength
+      this.validateEncryptionKeyStrength(this.encryptionKey);
+      this.logger.warn(
+        '⚠️  ENCRYPTION KEY WARNING: Store your encryption key securely. ' +
+          'If lost, encrypted backups CANNOT be recovered. ' +
+          'Consider using Home Assistant secrets management.',
+      );
     }
 
     // Ensure backup directory exists
@@ -68,6 +76,30 @@ export class BackupService {
         'Failed to initialize backup directory.',
       );
     });
+  }
+
+  private validateEncryptionKeyStrength(key: string): void {
+    // Check for weak/predictable keys
+    const weakPatterns = [
+      /^(.)\1+$/, // All same character
+      /^(01)+$|^(10)+$/, // Repeating binary
+      /^(12345|password|qwerty)/i, // Common passwords
+    ];
+
+    if (weakPatterns.some((pattern) => pattern.test(key))) {
+      this.logger.warn(
+        'Encryption key appears weak. Consider using a stronger, more random key.',
+      );
+    }
+
+    // Check entropy
+    const uniqueChars = new Set(key.split('')).size;
+    if (uniqueChars < 10) {
+      this.logger.warn(
+        `Encryption key has low entropy (${uniqueChars} unique characters). ` +
+          'Consider using a more random key for better security.',
+      );
+    }
   }
 
   private async getDatabaseUrl(): Promise<string> {

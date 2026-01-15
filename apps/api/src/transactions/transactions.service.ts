@@ -22,32 +22,37 @@ export class TransactionsService {
     private rulesService: RulesService,
   ) {}
 
-  async create(dto: CreateTransactionDto) {
+  async create(dto: CreateTransactionDto, profileId: string) {
     // Disabled: too verbose during imports
     // this.logger.log(`Creating transaction: ${dto.description} (${dto.amount})`);
     const transaction = await this.prisma.transaction.create({
       data: {
         ...dto,
+        profileId,
         merchant: null, // Deprecated
       },
     });
 
     // Evaluate rules
-    const match = await this.rulesService.evaluateTransaction(transaction);
+    const match = await this.rulesService.evaluateTransaction(transaction, profileId);
 
-    if (match) {
+      if (match) {
       // Disabled: too verbose during imports
       // this.logger.log(
       //   `Rule match found: ${match.rule.name}, mode: ${match.mode}`,
       // );
-      const updateData: any = {
-        suggestedByRuleId: match.rule.id,
+      const updateData: Prisma.TransactionUpdateInput = {
+        suggestedRule: {
+          connect: { id: match.rule.id },
+        },
       };
 
       if (match.mode === RuleMode.AUTO_APPLY && match.categoryId) {
         // Disabled: too verbose during imports
         // this.logger.log(`Auto-applying category: ${match.categoryId}`);
-        updateData.categoryId = match.categoryId;
+        updateData.category = {
+          connect: { id: match.categoryId },
+        };
       }
 
       return this.prisma.transaction.update({
@@ -59,14 +64,15 @@ export class TransactionsService {
     return transaction;
   }
 
-  async getBalance() {
+  async getBalance(profileId: string) {
     const result = await this.prisma.transaction.aggregate({
+      where: { profileId },
       _sum: { amount: true },
     });
     return { total: result._sum.amount ? result._sum.amount.toNumber() : 0 };
   }
 
-  async suggestCategory(description: string, notes?: string) {
+  async suggestCategory(description: string, profileId: string, notes?: string) {
     if (!description) return null;
 
     // Create a minimal mock transaction for rule evaluation
@@ -80,15 +86,16 @@ export class TransactionsService {
       categoryId: null,
       accountId: null,
       costObjectId: null,
+      profileId,
       suggestedCategoryId: null,
       suggestedByRuleId: null,
       externalId: null,
       createdAt: new Date(),
       updatedAt: new Date(),
       splits: [],
-    } as any;
+    } as any; // Mock transaction for rule evaluation
 
-    const match = await this.rulesService.evaluateTransaction(mockTx);
+    const match = await this.rulesService.evaluateTransaction(mockTx, profileId);
     if (match && match.categoryId) {
       return {
         categoryId: match.categoryId,
@@ -100,9 +107,9 @@ export class TransactionsService {
     return { categoryId: null, source: null };
   }
 
-  async getAccountBalance(accountId: string) {
-    const account = await this.prisma.account.findUnique({
-      where: { id: accountId },
+  async getAccountBalance(accountId: string, profileId: string) {
+    const account = await this.prisma.account.findFirst({
+      where: { id: accountId, profileId },
     });
 
     if (!account) {
@@ -110,7 +117,7 @@ export class TransactionsService {
     }
 
     const result = await this.prisma.transaction.aggregate({
-      where: { accountId },
+      where: { accountId, profileId },
       _sum: { amount: true },
     });
 
@@ -132,9 +139,9 @@ export class TransactionsService {
     };
   }
 
-  async findAll(query: GetTransactionsDto) {
+  async findAll(query: GetTransactionsDto, profileId: string) {
     const { filterMode, month, year, startDate, endDate, accountId } = query;
-    const where: any = {};
+    const where: Prisma.TransactionWhereInput = { profileId };
 
     switch (filterMode) {
       case DateFilterMode.MONTH:
@@ -203,9 +210,18 @@ export class TransactionsService {
     });
   }
 
-  async update(id: string, dto: any) {
-    console.log(`[TransactionsService] Updating ${id} with:`, dto);
+  async update(id: string, profileId: string, dto: Prisma.TransactionUpdateInput) {
+    this.logger.log(`Updating ${id} with: ${JSON.stringify(dto)}`);
     try {
+      // Verify ownership
+      const transaction = await this.prisma.transaction.findFirst({
+        where: { id, profileId },
+      });
+      
+      if (!transaction) {
+        throw new NotFoundException('Transaction not found or access denied');
+      }
+
       const updated = await this.prisma.transaction.update({
         where: { id },
         data: dto,
@@ -213,31 +229,32 @@ export class TransactionsService {
 
       return updated;
     } catch (e) {
-      console.error(`[TransactionsService] Update failed for ${id}:`, e);
+      this.logger.error(`Update failed for ${id}:`, e);
       throw e;
     }
   }
 
-  async propagateCategory(description: string, categoryId: string) {
+  async propagateCategory(description: string, categoryId: string, profileId: string) {
     try {
       const result = await this.prisma.transaction.updateMany({
         where: {
+          profileId,
           description: { equals: description },
           categoryId: null,
         },
         data: { categoryId },
       });
-      console.log(
+      this.logger.log(
         `[Ripple Effect] Updated ${result.count} transactions for "${description}"`,
       );
       return { count: result.count };
     } catch (e) {
-      console.error('[Ripple Effect] Failed to propagate', e);
+      this.logger.error('[Ripple Effect] Failed to propagate', e);
       throw e;
     }
   }
 
-  async import(fileBuffer: Buffer) {
+  async import(fileBuffer: Buffer, profileId: string) {
     try {
       const { parse } = await import('csv-parse/sync');
       const records = parse(fileBuffer, {
@@ -248,7 +265,7 @@ export class TransactionsService {
         bom: true,
       });
 
-      console.log(`[CSV Import] Parsed ${records.length} records`);
+      this.logger.log(`[CSV Import] Parsed ${records.length} records`);
 
       const transactionsToCreate = records
         .map((record: any, index: number) => {
@@ -260,9 +277,8 @@ export class TransactionsService {
             record.notes || record.note || record.comment || record.narrative;
 
           if (!amountRaw || !dateRaw) {
-            console.warn(
-              `[CSV Import] Skipping row ${index + 1}: Missing amount or date`,
-              record,
+            this.logger.warn(
+              `[CSV Import] Skipping row ${index + 1}: Missing amount or date: ${JSON.stringify(record)}`,
             );
             return null;
           }
@@ -272,9 +288,8 @@ export class TransactionsService {
           const date = new Date(dateRaw);
 
           if (isNaN(amount) || isNaN(date.getTime())) {
-            console.warn(
-              `[CSV Import] Skipping row ${index + 1}: Invalid data`,
-              { amount, date: dateRaw },
+            this.logger.warn(
+              `[CSV Import] Skipping row ${index + 1}: Invalid data - amount: ${amount}, date: ${dateRaw}`,
             );
             return null;
           }
@@ -292,7 +307,7 @@ export class TransactionsService {
         .filter((t) => t !== null);
 
       if (transactionsToCreate.length === 0) {
-        console.warn('[CSV Import] No valid transactions found to import');
+        this.logger.warn('[CSV Import] No valid transactions found to import');
         return { count: 0, message: 'No valid records found' };
       }
 
@@ -300,7 +315,7 @@ export class TransactionsService {
         .map((t) => t.externalId)
         .filter((id) => !!id) as string[];
       const existingTransactions = await this.prisma.transaction.findMany({
-        where: { externalId: { in: externalIds } },
+        where: { profileId, externalId: { in: externalIds } },
         select: { externalId: true },
       });
       const existingIds = new Set(
@@ -315,10 +330,14 @@ export class TransactionsService {
       }
 
       const result = await this.prisma.transaction.createMany({
-        data: newTransactions as any,
+        data: newTransactions.map((t) => ({
+          ...t,
+          profileId,
+          merchant: null,
+        })),
       });
 
-      console.log(
+      this.logger.log(
         `[CSV Import] Successfully imported ${result.count} transactions`,
       );
       return {
@@ -326,7 +345,7 @@ export class TransactionsService {
         skipped: transactionsToCreate.length - result.count,
       };
     } catch (error) {
-      console.error('[CSV Import] Failed to parse CSV:', error);
+      this.logger.error('[CSV Import] Failed to parse CSV:', error);
       throw new Error(`CSV Import Failed: ${error.message}`);
     }
   }
@@ -334,16 +353,19 @@ export class TransactionsService {
   async createMany(
     dtos: CreateTransactionDto[],
     force: boolean = false,
-    mergeInstructions: any[] = [],
+    mergeInstructions: Array<{
+      manualId: string;
+      importedTempId: string;
+    }> = [],
+    profileId: string,
   ) {
-    console.log(
-      `[TransactionsService] createMany called with ${dtos?.length} transactions, force=${force}`,
+    this.logger.log(
+      `createMany called with ${dtos?.length} transactions, force=${force}`,
     );
 
     if (!dtos || !Array.isArray(dtos)) {
-      console.warn(
-        '[TransactionsService] createMany called with invalid dtos:',
-        dtos,
+      this.logger.warn(
+        `createMany called with invalid dtos: ${JSON.stringify(dtos)}`,
       );
       return {
         newCount: 0,
@@ -365,6 +387,7 @@ export class TransactionsService {
           amount: new Prisma.Decimal(dto.amount),
           date: new Date(dto.date),
           merchant: null,
+          profileId,
           id: 'temp',
           accountId: null,
           costObjectId: null,
@@ -374,10 +397,10 @@ export class TransactionsService {
           createdAt: new Date(),
           updatedAt: new Date(),
           splits: [],
-        } as any;
+        } as any; // Mock transaction for rule evaluation
 
         // Evaluate rules
-        const match = await this.rulesService.evaluateTransaction(mockTx);
+        const match = await this.rulesService.evaluateTransaction(mockTx, profileId);
         if (match) {
           if (match.mode === RuleMode.AUTO_APPLY && match.categoryId) {
             categoryId = match.categoryId;
@@ -403,6 +426,7 @@ export class TransactionsService {
 
     const existingTransactions = await this.prisma.transaction.findMany({
       where: {
+        profileId,
         externalId: { in: externalIds },
       },
       select: { externalId: true, date: true, amount: true, description: true },
@@ -431,8 +455,8 @@ export class TransactionsService {
       }
     }
 
-    console.log(
-      `[TransactionsService] createMany: ${newTransactions.length} new, ${duplicates.length} duplicates`,
+    this.logger.log(
+      `createMany: ${newTransactions.length} new, ${duplicates.length} duplicates`,
     );
 
     if (!force && duplicates.length > 0) {
@@ -455,6 +479,7 @@ export class TransactionsService {
     const manualMatches = await this.findManualMatches(
       enhancedDtos,
       newTransactions,
+      profileId,
     );
 
     if (!force && manualMatches.length > 0) {
@@ -485,10 +510,11 @@ export class TransactionsService {
       : newTransactions;
 
     if (force && mergeInstructions && mergeInstructions.length > 0) {
-      transactionsToImport = await this.executeMerges(
+      transactionsToImport = (await this.executeMerges(
         mergeInstructions,
-        transactionsToImport,
-      );
+        transactionsToImport as any,
+        profileId,
+      )) as any;
     }
 
     if (transactionsToImport.length === 0) {
@@ -502,7 +528,7 @@ export class TransactionsService {
     }
 
     const result = await this.prisma.transaction.createMany({
-      data: transactionsToImport,
+      data: transactionsToImport.map(t => ({ ...t, profileId })),
     });
 
     const response = {
@@ -512,24 +538,30 @@ export class TransactionsService {
       manualMatchCount: 0,
       manualMatches: [],
     };
-    console.log('[TransactionsService] createMany returning:', response);
+    this.logger.log(`createMany returning: ${JSON.stringify(response)}`);
     return response;
   }
 
   generateHash(dto: CreateTransactionDto): string {
     const data = `${dto.date}_${dto.amount}_${dto.description}`;
-    return crypto.createHash('md5').update(data).digest('hex');
+    return crypto.createHash('sha256').update(data).digest('hex');
   }
 
-  async remove(id: string) {
-    return this.prisma.transaction.delete({
-      where: { id },
+  async remove(id: string, profileId: string) {
+    const result = await this.prisma.transaction.deleteMany({
+      where: { id, profileId },
     });
+    
+    if (result.count === 0) {
+      throw new NotFoundException('Transaction not found or access denied');
+    }
+    
+    return { success: true };
   }
 
-  async findOne(id: string) {
-    const transaction = await this.prisma.transaction.findUnique({
-      where: { id },
+  async findOne(id: string, profileId: string) {
+    const transaction = await this.prisma.transaction.findFirst({
+      where: { id, profileId },
       include: {
         category: true,
         costObject: true,
@@ -550,9 +582,9 @@ export class TransactionsService {
     return transaction;
   }
 
-  async createSplits(transactionId: string, dto: CreateSplitsDto) {
-    const transaction = await this.prisma.transaction.findUnique({
-      where: { id: transactionId },
+  async createSplits(transactionId: string, dto: CreateSplitsDto, profileId: string) {
+    const transaction = await this.prisma.transaction.findFirst({
+      where: { id: transactionId, profileId },
       include: { splits: true },
     });
 
@@ -606,9 +638,9 @@ export class TransactionsService {
     });
   }
 
-  async updateSplits(transactionId: string, dto: CreateSplitsDto) {
-    const transaction = await this.prisma.transaction.findUnique({
-      where: { id: transactionId },
+  async updateSplits(transactionId: string, dto: CreateSplitsDto, profileId: string) {
+    const transaction = await this.prisma.transaction.findFirst({
+      where: { id: transactionId, profileId },
     });
 
     if (!transaction) {
@@ -659,9 +691,9 @@ export class TransactionsService {
     });
   }
 
-  async deleteSplits(transactionId: string) {
-    const transaction = await this.prisma.transaction.findUnique({
-      where: { id: transactionId },
+  async deleteSplits(transactionId: string, profileId: string) {
+    const transaction = await this.prisma.transaction.findFirst({
+      where: { id: transactionId, profileId },
       include: { splits: true },
     });
 
@@ -739,7 +771,24 @@ export class TransactionsService {
   private async findManualMatches(
     allDtos: CreateTransactionDto[],
     newDtos: CreateTransactionDto[],
-  ): Promise<any[]> {
+    profileId: string,
+  ): Promise<
+    Array<{
+      manualId: string;
+      importedTempId: string;
+      manualDate: string;
+      importedDate: string;
+      manualAmount: number;
+      importedAmount: number;
+      manualDescription: string;
+      importedDescription: string;
+      manualCategoryId: string | null;
+      importedCategoryId: string | null;
+      manualNotes: string | null;
+      importedNotes: string | null;
+      matchScore: number;
+    }>
+  > {
     if (newDtos.length === 0) return [];
 
     const dates = newDtos.map((d) => new Date(d.date));
@@ -752,6 +801,7 @@ export class TransactionsService {
 
     const manualTransactions = await this.prisma.transaction.findMany({
       where: {
+        profileId,
         externalId: null,
         date: { gte: minDate, lte: maxDate },
       },
@@ -766,7 +816,21 @@ export class TransactionsService {
       },
     });
 
-    const matches: any[] = [];
+    const matches: Array<{
+      manualId: string;
+      importedTempId: string;
+      manualDate: string;
+      importedDate: string;
+      manualAmount: number;
+      importedAmount: number;
+      manualDescription: string;
+      importedDescription: string;
+      manualCategoryId: string | null;
+      importedCategoryId: string | null;
+      manualNotes: string | null;
+      importedNotes: string | null;
+      matchScore: number;
+    }> = [];
 
     newDtos.forEach((imported, importedIndex) => {
       const importedDate = new Date(imported.date);
@@ -820,9 +884,29 @@ export class TransactionsService {
   }
 
   private async executeMerges(
-    mergeInstructions: any[],
-    importedDtos: any[],
-  ): Promise<any[]> {
+    mergeInstructions: Array<{
+      manualId: string;
+      importedTempId: string;
+    }>,
+    importedDtos: Array<
+      CreateTransactionDto & {
+        categoryId?: string | null;
+        merchant: null;
+        suggestedByRuleId?: string | null;
+        externalId?: string;
+      }
+    >,
+    profileId: string,
+  ): Promise<
+    Array<
+      CreateTransactionDto & {
+        categoryId?: string | null;
+        merchant: null;
+        suggestedByRuleId?: string | null;
+        externalId?: string;
+      }
+    >
+  > {
     const processedIndices = new Set<number>();
 
     for (const instruction of mergeInstructions) {
@@ -838,7 +922,7 @@ export class TransactionsService {
       });
 
       if (!manual) {
-        console.warn(
+        this.logger.warn(
           `Manual transaction ${manualId} not found, skipping merge`,
         );
         continue;
@@ -846,6 +930,7 @@ export class TransactionsService {
 
       const mergedData = {
         ...importedDto,
+        profileId,
         categoryId: manual.categoryId || importedDto.categoryId || null,
         costObjectId: manual.costObjectId || importedDto.costObjectId || null,
         notes: this.mergeNotes(manual.notes, importedDto.notes || null),

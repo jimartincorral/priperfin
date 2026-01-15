@@ -2,6 +2,8 @@ import { LitElement, html, css } from 'lit';
 import { customElement, state, query } from 'lit/decorators.js';
 import { Chart, registerables } from 'chart.js';
 import { api } from '../api/client';
+import '../components/filterable-select';
+import type { SelectOption } from '../components/filterable-select';
 
 import { i18n } from '../i18n/i18n';
 
@@ -348,6 +350,22 @@ export class ViewReports extends LitElement {
       years.push(y);
     }
     return years;
+  }
+
+  getAccountOptions(): SelectOption[] {
+    const options: SelectOption[] = [
+      { value: '', label: '🏦 All Accounts' }
+    ];
+    
+    this.accounts.forEach(account => {
+      options.push({
+        value: account.id,
+        label: account.name,
+        icon: account.type === 'CREDIT' ? '💳' : '🏦'
+      });
+    });
+    
+    return options;
   }
 
   async loadData() {
@@ -720,10 +738,13 @@ export class ViewReports extends LitElement {
       <div class="header">
         <h1>${i18n.t('reports.title')}</h1>
         <div class="controls">
-            <select @change="${(e: any) => { this.selectedAccountId = e.target.value; this.loadData(); }}" .value="${this.selectedAccountId}" style="min-width: 150px;">
-                <option value="">🏦 ${i18n.t('reports.all_accounts')}</option>
-                ${this.accounts.map(a => html`<option value="${a.id}">${a.type === 'CREDIT' ? '💳' : '🏦'} ${a.name}</option>`)}
-            </select>
+            <filterable-select
+              .value="${this.selectedAccountId}"
+              .options="${this.getAccountOptions()}"
+              .placeholder="${i18n.t('reports.all_accounts')}"
+              @change="${(e: CustomEvent) => { this.selectedAccountId = e.detail.value; this.loadData(); }}"
+              width="200px">
+            </filterable-select>
             <select @change="${(e: any) => { this.dateFilterMode = e.target.value as DateFilterMode; this.loadData(); }}" .value="${this.dateFilterMode}">
                 <option value="month">${i18n.t('filters.mode_month')}</option>
                 <option value="year">${i18n.t('filters.mode_year')}</option>

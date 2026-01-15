@@ -7,37 +7,50 @@ import {
   Param,
   Delete,
   Query,
+  UseGuards,
 } from '@nestjs/common';
 import { RulesService } from './rules.service';
 import { CreateRuleDto } from './dto/create-rule.dto';
 import { UpdateRuleDto } from './dto/update-rule.dto';
 import { TestRuleDto } from './dto/test-rule.dto';
-import { SuggestionStatus } from '../generated/client';
+import { SuggestionStatus, Profile } from '../generated/client';
+import { SessionAuthGuard } from '../auth/guards/session-auth.guard';
+import { CurrentProfile } from '../auth/decorators/current-profile.decorator';
 
 @Controller('rules')
+@UseGuards(SessionAuthGuard)
 export class RulesController {
   constructor(private readonly rulesService: RulesService) {}
 
   @Post()
-  create(@Body() createRuleDto: CreateRuleDto) {
-    return this.rulesService.create(createRuleDto);
+  create(
+    @Body() createRuleDto: CreateRuleDto,
+    @CurrentProfile() profile: Profile,
+  ) {
+    return this.rulesService.create(createRuleDto, profile.id);
   }
 
   @Get()
-  findAll(@Query('enabled') enabled?: string) {
+  findAll(
+    @Query('enabled') enabled: string | undefined,
+    @CurrentProfile() profile: Profile,
+  ) {
     const isEnabled =
       enabled === 'true' ? true : enabled === 'false' ? false : undefined;
-    return this.rulesService.findAll(isEnabled);
+    return this.rulesService.findAll(profile.id, isEnabled);
   }
 
   @Get('suggestions')
-  getSuggestions(@Query('status') status?: SuggestionStatus) {
-    return this.rulesService.getSuggestions(status);
+  getSuggestions(
+    @CurrentProfile() profile: Profile,
+    @Query('status') status?: SuggestionStatus,
+  ) {
+    return this.rulesService.getSuggestions(profile.id, status);
   }
 
   @Get('suggestions/detect')
-  detectPatterns() {
-    return this.rulesService.detectAndStoreSuggestions();
+  detectPatterns(@CurrentProfile() profile: Profile) {
+    return this.rulesService.detectAndStoreSuggestions(profile.id);
   }
 
   @Get('suggestions/for-transaction/:transactionId')
@@ -48,10 +61,12 @@ export class RulesController {
   @Post('suggestions/reject-prompt')
   rejectRulePrompt(
     @Body() body: { conditionsJson: string; categoryId: string },
+    @CurrentProfile() profile: Profile,
   ) {
     return this.rulesService.rejectRulePrompt(
       body.conditionsJson,
       body.categoryId,
+      profile.id,
     );
   }
 
@@ -84,17 +99,21 @@ export class RulesController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.rulesService.findOne(id);
+  findOne(@Param('id') id: string, @CurrentProfile() profile: Profile) {
+    return this.rulesService.findOne(id, profile.id);
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() updateRuleDto: UpdateRuleDto) {
-    return this.rulesService.update(id, updateRuleDto);
+  update(
+    @Param('id') id: string,
+    @Body() updateRuleDto: UpdateRuleDto,
+    @CurrentProfile() profile: Profile,
+  ) {
+    return this.rulesService.update(id, profile.id, updateRuleDto);
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.rulesService.remove(id);
+  remove(@Param('id') id: string, @CurrentProfile() profile: Profile) {
+    return this.rulesService.remove(id, profile.id);
   }
 }

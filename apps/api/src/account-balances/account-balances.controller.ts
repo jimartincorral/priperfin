@@ -6,10 +6,13 @@ import {
   Body,
   Param,
   Query,
+  UseGuards,
 } from '@nestjs/common';
 import { AccountBalancesService } from './account-balances.service';
+import { SessionAuthGuard } from '../auth/guards/session-auth.guard';
 
 @Controller('account-balances')
+@UseGuards(SessionAuthGuard)
 export class AccountBalancesController {
   constructor(private readonly service: AccountBalancesService) {}
 

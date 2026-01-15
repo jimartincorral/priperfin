@@ -31,36 +31,39 @@ export class PrismaService
 
   private async validateSchema() {
     try {
-      // Try to query a transaction with suggestedCategoryId to verify column exists
-      // Use Prisma's API to avoid SQL syntax issues with table names
+      // Validate schema by querying a basic transaction field
+      // This ensures the database schema is properly initialized
       await this.transaction.findFirst({
-        select: { suggestedCategoryId: true },
+        select: { id: true },
       });
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : String(error);
 
       if (
-        errorMessage.includes('suggestedCategoryId') ||
+        errorMessage.includes('no such table') ||
         errorMessage.includes('no such column')
       ) {
-        console.error('[PrismaService] Database schema validation failed!');
-        console.error(
-          '[PrismaService] The Transaction table is missing the suggestedCategoryId column.',
+        const logger = new (await import('@nestjs/common')).Logger(
+          'PrismaService',
         );
-        console.error(
-          '[PrismaService] This usually means the database was not properly migrated.',
+        logger.error('Database schema validation failed!');
+        logger.error(
+          'The database schema is missing required tables or columns.',
         );
-        console.error('[PrismaService]');
-        console.error(
-          '[PrismaService] To fix this, run: npx prisma db push --schema=prisma/schema.prisma',
+        logger.error(
+          'This usually means the database was not properly migrated.',
         );
-        console.error(
-          '[PrismaService] Or restart the add-on to trigger automatic schema sync.',
+        logger.error('');
+        logger.error(
+          'To fix this, run: npx prisma db push --schema=prisma/schema.prisma',
+        );
+        logger.error(
+          'Or restart the add-on to trigger automatic schema sync.',
         );
 
         throw new Error(
-          'Database schema is out of sync. Missing required column: Transaction.suggestedCategoryId. ' +
+          'Database schema is out of sync. ' +
             'Please run: npx prisma db push --schema=prisma/schema.prisma',
         );
       }

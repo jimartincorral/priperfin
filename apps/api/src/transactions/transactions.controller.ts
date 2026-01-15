@@ -14,25 +14,35 @@ import {
   UploadedFile,
   ParseFilePipe,
   MaxFileSizeValidator,
+  UseGuards,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { TransactionsService } from './transactions.service';
 import { CreateTransactionDto } from './create-transaction.dto';
 import { UpdateTransactionDto } from './update-transaction.dto';
 import { GetTransactionsDto } from './get-transactions.dto';
 import { CreateSplitsDto } from './create-split.dto';
+import { SessionAuthGuard } from '../auth/guards/session-auth.guard';
+import { CurrentProfile } from '../auth/decorators/current-profile.decorator';
+import { Profile } from '../generated/client';
 
 @Controller('transactions')
+@UseGuards(SessionAuthGuard)
 export class TransactionsController {
   constructor(private readonly transactionsService: TransactionsService) {}
 
   @Post()
   @UsePipes(new ValidationPipe({ transform: true }))
-  create(@Body() createTransactionDto: CreateTransactionDto) {
-    return this.transactionsService.create(createTransactionDto);
+  create(
+    @Body() createTransactionDto: CreateTransactionDto,
+    @CurrentProfile() profile: Profile,
+  ) {
+    return this.transactionsService.create(createTransactionDto, profile.id);
   }
 
   @Post('import')
+  @Throttle({ import: { limit: 20, ttl: 3600000 } })
   @UseInterceptors(FileInterceptor('file'))
   uploadFile(
     @UploadedFile(
@@ -43,11 +53,13 @@ export class TransactionsController {
       }),
     )
     file: Express.Multer.File,
+    @CurrentProfile() profile: Profile,
   ) {
-    return this.transactionsService.import(file.buffer);
+    return this.transactionsService.import(file.buffer, profile.id);
   }
 
   @Post('bulk')
+  @Throttle({ import: { limit: 20, ttl: 3600000 } })
   async createBulk(
     @Body()
     body: {
@@ -55,12 +67,14 @@ export class TransactionsController {
       force?: boolean;
       mergeInstructions?: any[];
     },
+    @CurrentProfile() profile: Profile,
   ) {
     console.log('[TransactionsController] createBulk called');
     const result = await this.transactionsService.createMany(
       body.transactions,
       body.force || false,
       body.mergeInstructions || [],
+      profile.id,
     );
     console.log('[TransactionsController] createBulk result:', result);
     return result;
@@ -71,61 +85,83 @@ export class TransactionsController {
   update(
     @Param('id') id: string,
     @Body() updateTransactionDto: UpdateTransactionDto,
+    @CurrentProfile() profile: Profile,
   ) {
-    return this.transactionsService.update(id, updateTransactionDto);
+    return this.transactionsService.update(id, profile.id, updateTransactionDto);
   }
 
   @Get('balance')
-  getBalance(@Query('accountId') accountId?: string) {
+  getBalance(
+    @CurrentProfile() profile: Profile,
+    @Query('accountId') accountId?: string,
+  ) {
     if (accountId) {
-      return this.transactionsService.getAccountBalance(accountId);
+      return this.transactionsService.getAccountBalance(accountId, profile.id);
     }
-    return this.transactionsService.getBalance();
+    return this.transactionsService.getBalance(profile.id);
   }
 
   @Get('suggest')
-  suggestCategory(@Query('description') description: string) {
-    return this.transactionsService.suggestCategory(description);
+  suggestCategory(
+    @Query('description') description: string,
+    @CurrentProfile() profile: Profile,
+  ) {
+    return this.transactionsService.suggestCategory(description, profile.id);
   }
 
   @Post('propagate')
-  propagate(@Body() body: { description: string; categoryId: string }) {
+  propagate(
+    @Body() body: { description: string; categoryId: string },
+    @CurrentProfile() profile: Profile,
+  ) {
     return this.transactionsService.propagateCategory(
       body.description,
       body.categoryId,
+      profile.id,
     );
   }
 
   @Get()
   @UsePipes(new ValidationPipe({ transform: true }))
-  findAll(@Query() query: GetTransactionsDto) {
-    return this.transactionsService.findAll(query);
+  findAll(
+    @Query() query: GetTransactionsDto,
+    @CurrentProfile() profile: Profile,
+  ) {
+    return this.transactionsService.findAll(query, profile.id);
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.transactionsService.findOne(id);
+  findOne(@Param('id') id: string, @CurrentProfile() profile: Profile) {
+    return this.transactionsService.findOne(id, profile.id);
   }
 
   @Post(':id/splits')
   @UsePipes(new ValidationPipe({ transform: true }))
-  createSplits(@Param('id') id: string, @Body() dto: CreateSplitsDto) {
-    return this.transactionsService.createSplits(id, dto);
+  createSplits(
+    @Param('id') id: string,
+    @Body() dto: CreateSplitsDto,
+    @CurrentProfile() profile: Profile,
+  ) {
+    return this.transactionsService.createSplits(id, dto, profile.id);
   }
 
   @Put(':id/splits')
   @UsePipes(new ValidationPipe({ transform: true }))
-  updateSplits(@Param('id') id: string, @Body() dto: CreateSplitsDto) {
-    return this.transactionsService.updateSplits(id, dto);
+  updateSplits(
+    @Param('id') id: string,
+    @Body() dto: CreateSplitsDto,
+    @CurrentProfile() profile: Profile,
+  ) {
+    return this.transactionsService.updateSplits(id, dto, profile.id);
   }
 
   @Delete(':id/splits')
-  deleteSplits(@Param('id') id: string) {
-    return this.transactionsService.deleteSplits(id);
+  deleteSplits(@Param('id') id: string, @CurrentProfile() profile: Profile) {
+    return this.transactionsService.deleteSplits(id, profile.id);
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.transactionsService.remove(id);
+  remove(@Param('id') id: string, @CurrentProfile() profile: Profile) {
+    return this.transactionsService.remove(id, profile.id);
   }
 }
