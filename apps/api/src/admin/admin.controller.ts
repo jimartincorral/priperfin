@@ -14,9 +14,15 @@ export class AdminController {
   @Get('diagnostics')
   async getDiagnostics(@CurrentProfile() profile: Profile) {
     try {
-      const transactionCount = await this.prisma.transaction.count({ where: { profileId: profile.id } });
-      const accountCount = await this.prisma.account.count({ where: { profileId: profile.id } });
-      const categoryCount = await this.prisma.category.count({ where: { profileId: profile.id } });
+      const transactionCount = await this.prisma.transaction.count({
+        where: { profileId: profile.id },
+      });
+      const accountCount = await this.prisma.account.count({
+        where: { profileId: profile.id },
+      });
+      const categoryCount = await this.prisma.category.count({
+        where: { profileId: profile.id },
+      });
       const costObjectCount = await this.prisma.costObject
         .count({ where: { profileId: profile.id } })
         .catch(() => 'Error (Table missing?)');
@@ -48,14 +54,28 @@ export class AdminController {
 
   @Delete('reset')
   async resetData(@CurrentProfile() profile: Profile) {
-    this.logger.warn(`Resetting data for profile: ${profile.name} (${profile.id})`);
+    this.logger.warn(
+      `Resetting data for profile: ${profile.name} (${profile.id})`,
+    );
     // Delete only the current profile's data
-    await this.prisma.transaction.deleteMany({ where: { profileId: profile.id } });
-    await this.prisma.savingsGoal.deleteMany({ where: { profileId: profile.id } });
-    await this.prisma.monthlyBalance.deleteMany({ where: { account: { profileId: profile.id } } });
-    await this.prisma.accountBalance.deleteMany({ where: { account: { profileId: profile.id } } });
-    await this.prisma.categorizationRule.deleteMany({ where: { profileId: profile.id } });
-    await this.prisma.ruleSuggestion.deleteMany({ where: { profileId: profile.id } });
+    await this.prisma.transaction.deleteMany({
+      where: { profileId: profile.id },
+    });
+    await this.prisma.savingsGoal.deleteMany({
+      where: { profileId: profile.id },
+    });
+    await this.prisma.monthlyBalance.deleteMany({
+      where: { account: { profileId: profile.id } },
+    });
+    await this.prisma.accountBalance.deleteMany({
+      where: { account: { profileId: profile.id } },
+    });
+    await this.prisma.categorizationRule.deleteMany({
+      where: { profileId: profile.id },
+    });
+    await this.prisma.ruleSuggestion.deleteMany({
+      where: { profileId: profile.id },
+    });
     return { message: 'Profile data reset successful' };
   }
 

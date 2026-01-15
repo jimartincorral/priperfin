@@ -42,7 +42,7 @@ export class CategoriesService {
     const category = await this.prisma.category.findFirst({
       where: { id, profileId },
     });
-    
+
     if (!category) {
       throw new Error('Category not found or access denied');
     }
@@ -60,11 +60,11 @@ export class CategoriesService {
       const result = await this.prisma.category.deleteMany({
         where: { id, profileId },
       });
-      
+
       if (result.count === 0) {
         throw new Error('Category not found or access denied');
       }
-      
+
       this.logger.log(`Removed category ${id}`);
       return { success: true };
     } catch (e) {

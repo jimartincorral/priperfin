@@ -87,7 +87,11 @@ export class TransactionsController {
     @Body() updateTransactionDto: UpdateTransactionDto,
     @CurrentProfile() profile: Profile,
   ) {
-    return this.transactionsService.update(id, profile.id, updateTransactionDto);
+    return this.transactionsService.update(
+      id,
+      profile.id,
+      updateTransactionDto,
+    );
   }
 
   @Get('balance')

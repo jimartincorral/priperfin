@@ -381,32 +381,10 @@ export class ViewSettings extends LitElement {
             
             const endpoint = downloadUrl.startsWith('/api') ? downloadUrl.substring(4) : downloadUrl;
             console.log('[ViewSettings] Endpoint after processing:', endpoint);
-            
-            const fullUrl = `${apiBase}${endpoint}`;
-            console.log('[ViewSettings] Full download URL:', fullUrl);
-            console.log('[ViewSettings] Document base URI:', document.baseURI);
-            console.log('[ViewSettings] Window location:', window.location.href);
 
-            // Use fetch+blob download to maintain authentication context
-            // This is critical for Home Assistant Ingress where opening a new tab loses auth
+            // Use ApiClient download method to maintain authentication
             console.log('[ViewSettings] Fetching backup file...');
-            const downloadResponse = await fetch(fullUrl, {
-                method: 'GET',
-                credentials: 'same-origin', // Ensure cookies/session are included
-            });
-
-            console.log('[ViewSettings] Download response status:', downloadResponse.status, downloadResponse.statusText);
-            console.log('[ViewSettings] Download response headers:', Object.fromEntries(downloadResponse.headers.entries()));
-
-            if (!downloadResponse.ok) {
-                const errorText = await downloadResponse.text();
-                console.error('[ViewSettings] Download failed. Response body:', errorText);
-                throw new Error(`Download failed: ${downloadResponse.statusText}`);
-            }
-
-            // Convert response to blob
-            console.log('[ViewSettings] Converting response to blob...');
-            const blob = await downloadResponse.blob();
+            const blob = await api.download(endpoint);
             console.log('[ViewSettings] Blob created, size:', blob.size, 'type:', blob.type);
 
             // Create a temporary object URL and trigger download

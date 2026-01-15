@@ -43,7 +43,11 @@ export class SavingsGoalsController {
     @Body() updateSavingsGoalDto: UpdateSavingsGoalDto,
     @CurrentProfile() profile: Profile,
   ) {
-    return this.savingsGoalsService.update(id, profile.id, updateSavingsGoalDto);
+    return this.savingsGoalsService.update(
+      id,
+      profile.id,
+      updateSavingsGoalDto,
+    );
   }
 
   @Delete(':id')

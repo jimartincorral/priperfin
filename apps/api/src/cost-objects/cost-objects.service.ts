@@ -23,7 +23,7 @@ export class CostObjectsService {
     const costObject = await this.prisma.costObject.findFirst({
       where: { id, profileId },
     });
-    
+
     if (!costObject) {
       throw new NotFoundException('Cost object not found or access denied');
     }
@@ -38,11 +38,11 @@ export class CostObjectsService {
     const result = await this.prisma.costObject.deleteMany({
       where: { id, profileId },
     });
-    
+
     if (result.count === 0) {
       throw new NotFoundException('Cost object not found or access denied');
     }
-    
+
     return { success: true };
   }
 }

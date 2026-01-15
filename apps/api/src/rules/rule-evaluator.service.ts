@@ -136,8 +136,8 @@ export class RuleEvaluatorService {
       val === null || val === undefined ? '' : String(val);
     const normalizeString = (val: any) =>
       caseSensitive ? toString(val) : toString(val).toLowerCase();
-    
-    // Advanced normalization for contains/startsWith/endsWith: 
+
+    // Advanced normalization for contains/startsWith/endsWith:
     // Remove punctuation and collapse whitespace for fuzzy matching
     const fuzzyNormalize = (val: any) => {
       const str = normalizeString(val);

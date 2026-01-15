@@ -34,9 +34,12 @@ export class TransactionsService {
     });
 
     // Evaluate rules
-    const match = await this.rulesService.evaluateTransaction(transaction, profileId);
+    const match = await this.rulesService.evaluateTransaction(
+      transaction,
+      profileId,
+    );
 
-      if (match) {
+    if (match) {
       // Disabled: too verbose during imports
       // this.logger.log(
       //   `Rule match found: ${match.rule.name}, mode: ${match.mode}`,
@@ -72,7 +75,11 @@ export class TransactionsService {
     return { total: result._sum.amount ? result._sum.amount.toNumber() : 0 };
   }
 
-  async suggestCategory(description: string, profileId: string, notes?: string) {
+  async suggestCategory(
+    description: string,
+    profileId: string,
+    notes?: string,
+  ) {
     if (!description) return null;
 
     // Create a minimal mock transaction for rule evaluation
@@ -95,7 +102,10 @@ export class TransactionsService {
       splits: [],
     } as any; // Mock transaction for rule evaluation
 
-    const match = await this.rulesService.evaluateTransaction(mockTx, profileId);
+    const match = await this.rulesService.evaluateTransaction(
+      mockTx,
+      profileId,
+    );
     if (match && match.categoryId) {
       return {
         categoryId: match.categoryId,
@@ -210,14 +220,18 @@ export class TransactionsService {
     });
   }
 
-  async update(id: string, profileId: string, dto: Prisma.TransactionUpdateInput) {
+  async update(
+    id: string,
+    profileId: string,
+    dto: Prisma.TransactionUpdateInput,
+  ) {
     this.logger.log(`Updating ${id} with: ${JSON.stringify(dto)}`);
     try {
       // Verify ownership
       const transaction = await this.prisma.transaction.findFirst({
         where: { id, profileId },
       });
-      
+
       if (!transaction) {
         throw new NotFoundException('Transaction not found or access denied');
       }
@@ -234,7 +248,11 @@ export class TransactionsService {
     }
   }
 
-  async propagateCategory(description: string, categoryId: string, profileId: string) {
+  async propagateCategory(
+    description: string,
+    categoryId: string,
+    profileId: string,
+  ) {
     try {
       const result = await this.prisma.transaction.updateMany({
         where: {
@@ -400,7 +418,10 @@ export class TransactionsService {
         } as any; // Mock transaction for rule evaluation
 
         // Evaluate rules
-        const match = await this.rulesService.evaluateTransaction(mockTx, profileId);
+        const match = await this.rulesService.evaluateTransaction(
+          mockTx,
+          profileId,
+        );
         if (match) {
           if (match.mode === RuleMode.AUTO_APPLY && match.categoryId) {
             categoryId = match.categoryId;
@@ -528,7 +549,7 @@ export class TransactionsService {
     }
 
     const result = await this.prisma.transaction.createMany({
-      data: transactionsToImport.map(t => ({ ...t, profileId })),
+      data: transactionsToImport.map((t) => ({ ...t, profileId })),
     });
 
     const response = {
@@ -551,11 +572,11 @@ export class TransactionsService {
     const result = await this.prisma.transaction.deleteMany({
       where: { id, profileId },
     });
-    
+
     if (result.count === 0) {
       throw new NotFoundException('Transaction not found or access denied');
     }
-    
+
     return { success: true };
   }
 
@@ -582,7 +603,11 @@ export class TransactionsService {
     return transaction;
   }
 
-  async createSplits(transactionId: string, dto: CreateSplitsDto, profileId: string) {
+  async createSplits(
+    transactionId: string,
+    dto: CreateSplitsDto,
+    profileId: string,
+  ) {
     const transaction = await this.prisma.transaction.findFirst({
       where: { id: transactionId, profileId },
       include: { splits: true },
@@ -638,7 +663,11 @@ export class TransactionsService {
     });
   }
 
-  async updateSplits(transactionId: string, dto: CreateSplitsDto, profileId: string) {
+  async updateSplits(
+    transactionId: string,
+    dto: CreateSplitsDto,
+    profileId: string,
+  ) {
     const transaction = await this.prisma.transaction.findFirst({
       where: { id: transactionId, profileId },
     });

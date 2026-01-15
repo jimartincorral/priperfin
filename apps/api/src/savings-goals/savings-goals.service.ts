@@ -33,7 +33,7 @@ export class SavingsGoalsService {
       const goal = await this.prisma.savingsGoal.findFirst({
         where: { id, profileId },
       });
-      
+
       if (!goal) {
         throw new Error('Savings goal not found or access denied');
       }
@@ -129,11 +129,11 @@ export class SavingsGoalsService {
     const result = await this.prisma.savingsGoal.deleteMany({
       where: { id, profileId },
     });
-    
+
     if (result.count === 0) {
       throw new Error('Savings goal not found or access denied');
     }
-    
+
     return { success: true };
   }
 }

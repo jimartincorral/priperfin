@@ -27,19 +27,23 @@ export class AccountsService {
     const account = await this.prisma.account.findFirst({
       where: { id, profileId },
     });
-    
+
     if (!account) {
       throw new NotFoundException('Account not found or access denied');
     }
-    
+
     return account;
   }
 
-  async update(id: string, profileId: string, updateAccountDto: UpdateAccountDto) {
+  async update(
+    id: string,
+    profileId: string,
+    updateAccountDto: UpdateAccountDto,
+  ) {
     const account = await this.prisma.account.findFirst({
       where: { id, profileId },
     });
-    
+
     if (!account) {
       throw new NotFoundException('Account not found or access denied');
     }
@@ -54,11 +58,11 @@ export class AccountsService {
     const result = await this.prisma.account.deleteMany({
       where: { id, profileId },
     });
-    
+
     if (result.count === 0) {
       throw new NotFoundException('Account not found or access denied');
     }
-    
+
     return { success: true };
   }
 }

@@ -58,9 +58,7 @@ export class PrismaService
         logger.error(
           'To fix this, run: npx prisma db push --schema=prisma/schema.prisma',
         );
-        logger.error(
-          'Or restart the add-on to trigger automatic schema sync.',
-        );
+        logger.error('Or restart the add-on to trigger automatic schema sync.');
 
         throw new Error(
           'Database schema is out of sync. ' +

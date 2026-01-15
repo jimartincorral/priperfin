@@ -213,6 +213,26 @@ export class ApiClient {
         const response = await fetch(`${this.baseUrl}${endpoint}`, options);
         return this.parseResponse(response);
     }
+
+    async download(endpoint: string): Promise<Blob> {
+        const response = await fetch(`${this.baseUrl}${endpoint}`, {
+            method: 'GET',
+            headers: this.getHeaders(),
+            credentials: 'same-origin',
+        });
+        
+        if (response.status === 401) {
+            this.handleUnauthorized();
+            throw new Error('Session expired. Please log in again.');
+        }
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Download failed: ${response.statusText}. ${errorText}`);
+        }
+        
+        return response.blob();
+    }
 }
 
 export const api = new ApiClient();

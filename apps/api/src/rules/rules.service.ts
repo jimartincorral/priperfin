@@ -27,15 +27,19 @@ export class RulesService {
   ) {}
 
   async create(createRuleDto: CreateRuleDto, profileId: string) {
-    this.logger.log(`[create] Creating rule "${createRuleDto.name}" for category ${createRuleDto.categoryId}`);
-    
+    this.logger.log(
+      `[create] Creating rule "${createRuleDto.name}" for category ${createRuleDto.categoryId}`,
+    );
+
     // Check if a similar rule already exists
     const existingRules = await this.prisma.categorizationRule.findMany({
       where: { profileId, categoryId: createRuleDto.categoryId },
       select: { id: true, name: true, conditionsJson: true },
     });
 
-    this.logger.log(`[create] Found ${existingRules.length} existing rules for this category`);
+    this.logger.log(
+      `[create] Found ${existingRules.length} existing rules for this category`,
+    );
 
     const newNormalized = this.normalizeConditionsForComparison(
       JSON.parse(createRuleDto.conditionsJson),
@@ -46,7 +50,9 @@ export class RulesService {
       const existingNormalized = this.normalizeConditionsForComparison(
         JSON.parse(rule.conditionsJson),
       );
-      this.logger.log(`[create] Comparing with "${rule.name}": ${existingNormalized}`);
+      this.logger.log(
+        `[create] Comparing with "${rule.name}": ${existingNormalized}`,
+      );
 
       if (existingNormalized === newNormalized) {
         this.logger.warn(
@@ -66,9 +72,9 @@ export class RulesService {
 
   async findAll(profileId: string, enabled?: boolean) {
     return this.prisma.categorizationRule.findMany({
-      where: { 
+      where: {
         profileId,
-        ...(enabled !== undefined ? { enabled } : {})
+        ...(enabled !== undefined ? { enabled } : {}),
       },
       orderBy: { priority: 'desc' },
       include: { category: true },
@@ -80,7 +86,10 @@ export class RulesService {
       where: { id, profileId },
       include: { category: true },
     });
-    if (!rule) throw new NotFoundException(`Rule with ID ${id} not found or access denied`);
+    if (!rule)
+      throw new NotFoundException(
+        `Rule with ID ${id} not found or access denied`,
+      );
     return rule;
   }
 
@@ -258,8 +267,10 @@ export class RulesService {
           const suggestionConditions = s.conditions;
 
           // Normalize both for comparison
-          const rejectedStr = this.normalizeConditionsForComparison(rejectedConditions);
-          const suggestionStr = this.normalizeConditionsForComparison(suggestionConditions);
+          const rejectedStr =
+            this.normalizeConditionsForComparison(rejectedConditions);
+          const suggestionStr =
+            this.normalizeConditionsForComparison(suggestionConditions);
 
           return rejectedStr === suggestionStr;
         } catch (e) {
@@ -315,9 +326,9 @@ export class RulesService {
 
   async getSuggestions(profileId: string, status?: SuggestionStatus) {
     return this.prisma.ruleSuggestion.findMany({
-      where: { 
+      where: {
         profileId,
-        ...(status ? { status } : {}) 
+        ...(status ? { status } : {}),
       },
       orderBy: { confidence: 'desc' },
       include: { category: true },
@@ -358,7 +369,11 @@ export class RulesService {
     });
   }
 
-  async rejectRulePrompt(conditionsJson: string, categoryId: string, profileId: string) {
+  async rejectRulePrompt(
+    conditionsJson: string,
+    categoryId: string,
+    profileId: string,
+  ) {
     // Create a REJECTED suggestion to track that user declined creating this rule
     // This prevents us from asking again for the same pattern
     const conditions = JSON.parse(conditionsJson);
@@ -423,7 +438,9 @@ export class RulesService {
   }
 
   async suggestRuleForTransaction(transactionId: string) {
-    this.logger.log(`[suggestRuleForTransaction] Called for transaction ${transactionId}`);
+    this.logger.log(
+      `[suggestRuleForTransaction] Called for transaction ${transactionId}`,
+    );
     const transaction = await this.prisma.transaction.findUnique({
       where: { id: transactionId },
       include: { category: true, account: true },
@@ -435,12 +452,15 @@ export class RulesService {
     }
 
     if (!transaction.categoryId) {
-      this.logger.log(`[suggestRuleForTransaction] Transaction has no category - cannot suggest`);
+      this.logger.log(
+        `[suggestRuleForTransaction] Transaction has no category - cannot suggest`,
+      );
       return null;
     }
 
-    this.logger.log(`[suggestRuleForTransaction] Transaction found with category ${transaction.categoryId}`);
-
+    this.logger.log(
+      `[suggestRuleForTransaction] Transaction found with category ${transaction.categoryId}`,
+    );
 
     // Find similar transactions with same category
     const similarTransactions = await this.prisma.transaction.findMany({
@@ -452,10 +472,14 @@ export class RulesService {
       orderBy: { date: 'desc' },
     });
 
-    this.logger.log(`[suggestRuleForTransaction] Found ${similarTransactions.length} similar transactions`);
-    
+    this.logger.log(
+      `[suggestRuleForTransaction] Found ${similarTransactions.length} similar transactions`,
+    );
+
     if (similarTransactions.length < 3) {
-      this.logger.log(`[suggestRuleForTransaction] Not enough similar transactions (need 3+)`);
+      this.logger.log(
+        `[suggestRuleForTransaction] Not enough similar transactions (need 3+)`,
+      );
       return null; // Not enough data
     }
 
@@ -683,7 +707,9 @@ export class RulesService {
     }
 
     // Return suggestion (not saved to DB, just returned for UI)
-    this.logger.log(`[suggestRuleForTransaction] Returning suggestion with ${conditions.length} conditions, confidence: ${Math.round(weightedConfidence)}`);
+    this.logger.log(
+      `[suggestRuleForTransaction] Returning suggestion with ${conditions.length} conditions, confidence: ${Math.round(weightedConfidence)}`,
+    );
     return {
       name: `Auto-categorize as ${transaction.category?.name || 'Unknown'}`,
       conditionsJson,

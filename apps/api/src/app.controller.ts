@@ -1,8 +1,8 @@
-import { Controller, Get, Req, Res, Logger } from '@nestjs/common';
+import { Controller, Get, Req, Res, Logger, All } from '@nestjs/common';
 import { AppService } from './app.service';
 import { Request, Response } from 'express';
-import { readFileSync, existsSync } from 'fs';
-import { join } from 'path';
+import { readFileSync, existsSync, statSync } from 'fs';
+import { join, extname } from 'path';
 
 @Controller()
 export class AppController {
@@ -13,13 +13,76 @@ export class AppController {
   constructor(private readonly appService: AppService) {
     // Get static path from environment or default
     this.staticPath = process.env.STATIC_PATH || '/app/client';
+    this.logger.log(`Static files will be served from: ${this.staticPath}`);
   }
 
-  @Get()
+  @Get('health')
+  getHealth(): object {
+    return { status: 'ok' };
+  }
+
+  // Serve static assets (CSS, JS, images, etc.)
+  @Get('assets/*')
+  async getAsset(@Req() req: Request, @Res() res: Response) {
+    try {
+      // Get the requested file path
+      const requestedPath = req.path; // e.g., /assets/index-BIidnPpS.js
+      const filePath = join(this.staticPath, requestedPath);
+
+      this.logger.log(`Asset request: ${requestedPath}`);
+      this.logger.log(`Resolved to: ${filePath}`);
+
+      if (!existsSync(filePath)) {
+        this.logger.error(`Asset not found: ${filePath}`);
+        return res.status(404).send('Not found');
+      }
+
+      // Check if it's a file (not a directory)
+      const stats = statSync(filePath);
+      if (!stats.isFile()) {
+        this.logger.error(`Not a file: ${filePath}`);
+        return res.status(404).send('Not found');
+      }
+
+      // Determine content type based on file extension
+      const ext = extname(filePath).toLowerCase();
+      const contentTypes: Record<string, string> = {
+        '.js': 'application/javascript; charset=utf-8',
+        '.mjs': 'application/javascript; charset=utf-8',
+        '.css': 'text/css; charset=utf-8',
+        '.json': 'application/json; charset=utf-8',
+        '.png': 'image/png',
+        '.jpg': 'image/jpeg',
+        '.jpeg': 'image/jpeg',
+        '.gif': 'image/gif',
+        '.svg': 'image/svg+xml',
+        '.ico': 'image/x-icon',
+        '.woff': 'font/woff',
+        '.woff2': 'font/woff2',
+        '.ttf': 'font/ttf',
+        '.eot': 'application/vnd.ms-fontobject',
+      };
+
+      const contentType = contentTypes[ext] || 'application/octet-stream';
+      this.logger.log(`Serving ${filePath} as ${contentType}`);
+
+      // Read and send the file
+      const fileContent = readFileSync(filePath);
+      res.setHeader('Content-Type', contentType);
+      res.setHeader('Cache-Control', 'public, max-age=31536000'); // Cache assets for 1 year
+      res.send(fileContent);
+    } catch (error) {
+      this.logger.error('Error serving asset:', error);
+      res.status(500).send('Error loading asset');
+    }
+  }
+
+  // Serve root HTML and catch-all for SPA routes
+  @Get('*')
   getRoot(@Req() req: Request, @Res() res: Response) {
     // Check if this is an API request (has Accept: application/json)
     const acceptHeader = req.headers.accept || '';
-    if (acceptHeader.includes('application/json')) {
+    if (acceptHeader.includes('application/json') && req.path === '/') {
       return res.json(this.appService.getHello());
     }
 
@@ -32,6 +95,7 @@ export class AppController {
       const ingressPath = ingressMatch ? ingressMatch[1] : null;
 
       this.logger.log(`Root request - URL: ${req.originalUrl}`);
+      this.logger.log(`Path: ${req.path}`);
       this.logger.log(`Ingress path detected: ${ingressPath || 'none (standalone mode)'}`);
 
       // Read index.html
@@ -68,10 +132,5 @@ export class AppController {
       this.logger.error('Error serving index.html:', error);
       res.status(500).send('Error loading application');
     }
-  }
-
-  @Get('health')
-  getHealth(): object {
-    return { status: 'ok' };
   }
 }
