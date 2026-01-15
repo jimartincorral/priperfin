@@ -1,4 +1,4 @@
-import { Module, Logger } from '@nestjs/common';
+import { Module, Logger, MiddlewareConsumer, NestModule } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
@@ -21,6 +21,7 @@ import { AccountBalancesModule } from './account-balances/account-balances.modul
 import { RulesModule } from './rules/rules.module';
 import { AuthModule } from './auth/auth.module';
 import { ConfigModule } from '@nestjs/config';
+import { IngressBaseMiddleware } from './ingress-base.middleware';
 
 const logger = new Logger('AppModule');
 
@@ -105,6 +106,8 @@ function getStaticPath(): string {
     ]),
     ServeStaticModule.forRoot({
       rootPath: getStaticPath(),
+      serveRoot: '/',
+      exclude: ['/api*'], // Don't serve static files for API routes
     }),
     PrismaModule,
     AuthModule,
@@ -133,4 +136,9 @@ function getStaticPath(): string {
     // },
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    // Apply the ingress base middleware to all routes (it will filter internally)
+    consumer.apply(IngressBaseMiddleware).forRoutes('*');
+  }
+}
