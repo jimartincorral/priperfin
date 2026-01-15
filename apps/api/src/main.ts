@@ -46,46 +46,13 @@ async function bootstrap() {
     }),
   );
 
-  // Configure CORS with restricted origins
-  // In development, allow common local dev server ports
-  // In production, set CORS_ORIGINS environment variable
-  const allowedOrigins = process.env.CORS_ORIGINS
-    ? process.env.CORS_ORIGINS.split(',').map((origin) => origin.trim())
-    : [
-        'http://localhost:3000',
-        'http://localhost:5173',
-        'http://localhost:5174',
-        'http://127.0.0.1:3000',
-        'http://127.0.0.1:5173',
-        'http://127.0.0.1:5174',
-      ];
-
+  // Enable permissive CORS
+  // Since this is a self-hosted app usually accessed via local IP or Ingress,
+  // we can be more permissive to prevent blocking legitimate requests.
   app.enableCors({
-    origin: (
-      origin: string | undefined,
-      callback: (err: Error | null, allow?: boolean) => void,
-    ) => {
-      // Allow requests with no origin (like mobile apps, curl, or same-origin)
-      if (!origin) {
-        callback(null, true);
-        return;
-      }
-      // Allow localhost and private network IPs (this is a self-hosted app)
-      const isLocalhost =
-        origin.startsWith('http://localhost:') ||
-        origin.startsWith('http://127.0.0.1:');
-      const isPrivateNetwork =
-        /^https?:\/\/(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)/.test(
-          origin,
-        );
-      if (allowedOrigins.includes(origin) || isLocalhost || isPrivateNetwork) {
-        callback(null, true);
-      } else {
-        callback(new Error('Not allowed by CORS'));
-      }
-    },
+    origin: true, // Reflects the request origin
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
     credentials: true,
   });
 

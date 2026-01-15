@@ -61,7 +61,15 @@ export class AppController {
   async getAsset(@Req() req: Request, @Res() res: Response) {
     try {
       // Get the requested file path
+      // Note: req.path contains the full path including /assets/
       const requestedPath = req.path; // e.g., /assets/index-BIidnPpS.js
+      
+      // Security check: prevent directory traversal
+      if (requestedPath.includes('..')) {
+        this.logger.error(`Security violation: directory traversal attempt in ${requestedPath}`);
+        return res.status(403).send('Forbidden');
+      }
+
       const filePath = join(this.staticPath, requestedPath);
 
       this.logger.log(`Asset request: ${requestedPath}`);
@@ -105,6 +113,10 @@ export class AppController {
       const fileContent = readFileSync(filePath);
       res.setHeader('Content-Type', contentType);
       res.setHeader('Cache-Control', 'public, max-age=31536000'); // Cache assets for 1 year
+      
+      // Explicitly allow CORS for assets (fixes issues with some browsers/proxies)
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      
       res.send(fileContent);
     } catch (error) {
       this.logger.error('Error serving asset:', error);
@@ -167,6 +179,11 @@ export class AppController {
         const baseTag = `<base href="${ingressPath}/">`;
         html = html.replace('<head>', `<head>\n  ${baseTag}`);
         this.logger.log(`✓ Injected base tag: ${baseTag}`);
+        
+        // Remove crossorigin attribute from script tags to avoid CORS issues on same-origin (proxied) requests
+        // Vite adds crossorigin by default which can cause issues with Ingress proxies
+        html = html.replace(/crossorigin/g, '');
+        this.logger.log('✓ Removed crossorigin attributes');
       } else {
         this.logger.log('Standalone mode - no base tag needed');
       }
