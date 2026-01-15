@@ -8,7 +8,15 @@ import helmet from 'helmet';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-  app.setGlobalPrefix('api');
+  // Set global prefix for API routes, but exclude AppController which serves static files
+  app.setGlobalPrefix('api', {
+    exclude: [
+      '/', // Root HTML
+      'health', // Health check
+      'assets/(.*)', // Static assets (JS, CSS, etc.)
+      '{*}', // Catch-all for SPA routes (handled by AppController)
+    ],
+  });
 
   // Apply Helmet security headers
   app.use(
