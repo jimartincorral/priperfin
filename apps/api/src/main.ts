@@ -24,20 +24,7 @@ async function bootstrap() {
   // Apply Helmet security headers
   app.use(
     helmet({
-      contentSecurityPolicy: {
-        directives: {
-          defaultSrc: ["'self'"],
-          scriptSrc: ["'self'"],
-          styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'], // Lit requires inline styles, Google Fonts
-          imgSrc: ["'self'", 'data:', 'blob:'],
-          fontSrc: ["'self'", 'data:', 'https://fonts.gstatic.com'], // Google Fonts
-          connectSrc: ["'self'"],
-          frameSrc: ["'none'"],
-          objectSrc: ["'none'"],
-          baseUri: ["'self'"],
-          formAction: ["'self'"],
-        },
-      },
+      contentSecurityPolicy: false, // Disabled to prevent blocking assets in Ingress
       crossOriginEmbedderPolicy: false, // Home Assistant compatibility
       hsts: false, // Disabled (supports both HTTP and HTTPS)
       noSniff: true,

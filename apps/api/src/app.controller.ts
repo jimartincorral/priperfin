@@ -73,6 +73,7 @@ export class AppController {
       const filePath = join(this.staticPath, requestedPath);
 
       this.logger.log(`Asset request: ${requestedPath}`);
+      this.logger.log(`Headers: ${JSON.stringify(req.headers)}`);
       this.logger.log(`Resolved to: ${filePath}`);
 
       if (!existsSync(filePath)) {
@@ -115,7 +116,14 @@ export class AppController {
       res.setHeader('Cache-Control', 'public, max-age=31536000'); // Cache assets for 1 year
       
       // Explicitly allow CORS for assets (fixes issues with some browsers/proxies)
-      res.setHeader('Access-Control-Allow-Origin', '*');
+      const origin = req.headers.origin;
+      if (origin) {
+        res.setHeader('Access-Control-Allow-Origin', origin);
+        res.setHeader('Access-Control-Allow-Credentials', 'true');
+        this.logger.log(`Set CORS for origin: ${origin}`);
+      } else {
+        res.setHeader('Access-Control-Allow-Origin', '*');
+      }
       
       res.send(fileContent);
     } catch (error) {
