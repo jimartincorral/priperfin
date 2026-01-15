@@ -1,6 +1,6 @@
-import { Controller, Get, Req, Res, Logger, All } from '@nestjs/common';
+import { Controller, Get, Req, Res, Logger, All, Next } from '@nestjs/common';
 import { AppService } from './app.service';
-import { Request, Response } from 'express';
+import { Request, Response, NextFunction } from 'express';
 import { readFileSync, existsSync, statSync } from 'fs';
 import { join, extname } from 'path';
 
@@ -115,7 +115,13 @@ export class AppController {
 
   // Serve root HTML and catch-all for SPA routes
   @Get('*')
-  getRoot(@Req() req: Request, @Res() res: Response) {
+  getRoot(@Req() req: Request, @Res() res: Response, @Next() next: NextFunction) {
+    // IMPORTANT: Skip API routes - let NestJS handle them
+    if (req.path.startsWith('/api/') || req.path.startsWith('/api')) {
+      this.logger.log(`Skipping API route: ${req.path}`);
+      return next();
+    }
+
     // Check if this is an API request (has Accept: application/json)
     const acceptHeader = req.headers.accept || '';
     if (acceptHeader.includes('application/json') && req.path === '/') {
