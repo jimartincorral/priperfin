@@ -4,6 +4,7 @@ import { Request, Response } from 'express';
 import { readFileSync, existsSync, statSync } from 'fs';
 import { join, extname } from 'path';
 
+// Empty path means this controller is at root, not under /api prefix
 @Controller()
 export class AppController {
   private readonly logger = new Logger(AppController.name);

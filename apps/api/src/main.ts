@@ -11,10 +11,18 @@ async function bootstrap() {
   // Set global prefix for API routes, but exclude AppController which serves static files
   app.setGlobalPrefix('api', {
     exclude: [
-      '/', // Root HTML
+      '', // Root path (/)
+      '/', // Also explicitly exclude /
       'health', // Health check
-      'assets/(.*)', // Static assets (JS, CSS, etc.)
-      '{*}', // Catch-all for SPA routes (handled by AppController)
+      'assets/*', // Static assets (JS, CSS, etc.)
+      // SPA routes that should serve index.html
+      'login',
+      'setup',
+      'goals',
+      'reports',
+      'categories',
+      'rules',
+      'settings',
     ],
   });
 
