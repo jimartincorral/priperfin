@@ -12,9 +12,44 @@ export class AppController {
   private staticPath: string;
 
   constructor(private readonly appService: AppService) {
-    // Get static path from environment or default
-    this.staticPath = process.env.STATIC_PATH || '/app/client';
+    // Determine static path based on environment
+    this.staticPath = this.resolveStaticPath();
     this.logger.log(`Static files will be served from: ${this.staticPath}`);
+  }
+
+  private resolveStaticPath(): string {
+    // 1. Check environment variable
+    if (process.env.STATIC_PATH) {
+      this.logger.log(`Using STATIC_PATH env var: ${process.env.STATIC_PATH}`);
+      return process.env.STATIC_PATH;
+    }
+
+    // 2. Check Docker path (production container)
+    const dockerPath = '/app/client';
+    if (existsSync(dockerPath)) {
+      this.logger.log(`Using Docker path: ${dockerPath}`);
+      return dockerPath;
+    }
+
+    // 3. Try to find web/dist relative to current location (development)
+    const possiblePaths = [
+      join(__dirname, '../..', 'web/dist'), // From apps/api/src (Dev)
+      join(__dirname, '../../..', 'web/dist'), // From apps/api/dist (Built)
+      join(__dirname, '../../../../web/dist'), // Deeper nesting
+      join(process.cwd(), 'apps/web/dist'), // CWD based (monorepo root)
+      join(process.cwd(), '../web/dist'), // CWD if in apps/api
+    ];
+
+    for (const p of possiblePaths) {
+      if (existsSync(p)) {
+        this.logger.log(`Found static files at: ${p}`);
+        return p;
+      }
+    }
+
+    // Default fallback
+    this.logger.warn('Could not find static files, using default path');
+    return join(process.cwd(), 'apps/web/dist');
   }
 
   @Get('health')
