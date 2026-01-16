@@ -138,9 +138,9 @@ export class AppController {
   // Serve root HTML and catch-all for SPA routes
   @Get('*')
   getWildcard(@Req() req: Request, @Res() res: Response, @Next() next: NextFunction) {
-    // IMPORTANT: Skip API routes - let NestJS handle them
-    if (req.path.startsWith('/api/') || req.path.startsWith('/api')) {
-      this.logger.log(`Skipping API route in wildcard handler: ${req.path}`);
+    // IMPORTANT: Skip API routes and asset routes - let specific handlers handle them
+    if (req.path.startsWith('/api/') || req.path.startsWith('/api') || req.path.startsWith('/assets/')) {
+      this.logger.log(`Skipping ${req.path.startsWith('/assets/') ? 'asset' : 'API'} route in wildcard handler: ${req.path}`);
       return next();
     }
 
