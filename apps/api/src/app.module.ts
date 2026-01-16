@@ -1,6 +1,7 @@
-import { Module, Logger } from '@nestjs/common';
+import { Module, Logger, NestModule, MiddlewareConsumer } from '@nestjs/common';
 import { APP_GUARD, RouterModule } from '@nestjs/core';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { IngressPathMiddleware } from './ingress-path.middleware';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { PrismaModule } from './prisma/prisma.module';
@@ -99,4 +100,10 @@ import { ConfigModule } from '@nestjs/config';
     // },
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    // Apply URL rewriting middleware to all routes
+    // This strips the Ingress prefix so standard routing works
+    consumer.apply(IngressPathMiddleware).forRoutes('*');
+  }
+}

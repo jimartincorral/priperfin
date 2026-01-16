@@ -157,15 +157,12 @@ export class AppController {
 
     // Serve HTML with base tag injection for Ingress
     try {
-      // Detect Home Assistant Ingress path
-      const ingressMatch = req.originalUrl.match(
-        /^(\/api\/hassio_ingress\/[^\/]+)/,
-      );
-      const ingressPath = ingressMatch ? ingressMatch[1] : null;
+      // Ingress path is now detected by IngressPathMiddleware and stored in req
+      const ingressPath = (req as any).ingressPath;
 
-      this.logger.log(`Root request - URL: ${req.originalUrl}`);
-      this.logger.log(`Path: ${req.path}`);
-      this.logger.log(`Ingress path detected: ${ingressPath || 'none (standalone mode)'}`);
+      // Log diagnostics (using rewritten path)
+      this.logger.log(`Serving HTML for path: ${req.path}`);
+      this.logger.log(`Ingress path detected: ${ingressPath || 'none'}`);
 
       // Read index.html (fresh read each time to support both Ingress and non-Ingress)
       const indexPath = join(this.staticPath, 'index.html');
