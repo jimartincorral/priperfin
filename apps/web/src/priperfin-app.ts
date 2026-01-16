@@ -319,7 +319,7 @@ export class PriPerFinApp extends LitElement {
     // Listen for session expiry
     window.addEventListener('session-expired', () => {
       console.log('[PriPerFin] Session expired, redirecting to login');
-      window.location.href = '/login';
+      window.location.href = 'login';
     });
     
     // Listen for URL changes (including replaceState) to update navigation links

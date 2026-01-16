@@ -19,7 +19,7 @@ export class ViewSetup extends LitElement {
       const status = await authApi.getStatus();
       if (status.setupComplete) {
         // Redirect to login if setup is already complete
-        window.location.href = '/login';
+        window.location.href = 'login';
       }
     } catch (e) {
       // If check fails, allow user to proceed with setup
@@ -168,7 +168,7 @@ export class ViewSetup extends LitElement {
       await authApi.setup(this.profileName, pinDigits);
       // Auto-login after setup
       await authApi.login(this.profileName, pinDigits);
-      window.location.href = '/';
+      window.location.href = './';
     } catch (e: any) {
       this.loading = false;
       this.error = e.message || 'Setup failed';
