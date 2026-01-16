@@ -432,8 +432,16 @@ export class ViewSettings extends LitElement {
                 formData.append('decryptionKey', this.decryptionKey);
             }
 
+            // Get session token directly from storage since we're using raw fetch
+            const token = localStorage.getItem('session_token');
+            const headers: HeadersInit = {};
+            if (token) {
+                headers['X-Session-Token'] = token;
+            }
+
             const response = await fetch(`${getApiBaseUrl()}/backup/restore`, {
                 method: 'POST',
+                headers: headers,
                 body: formData,
                 credentials: 'same-origin', // Ensure authentication context in HA Ingress
             });
