@@ -319,7 +319,7 @@ export class PriPerFinApp extends LitElement {
     // Listen for session expiry
     window.addEventListener('session-expired', () => {
       console.log('[PriPerFin] Session expired, redirecting to login');
-      window.location.href = 'login';
+      window.location.href = new URL('login', document.baseURI).href;
     });
     
     // Listen for URL changes (including replaceState) to update navigation links
@@ -409,27 +409,27 @@ export class PriPerFinApp extends LitElement {
     return html`
       ${showNav ? html`
         <nav>
-          <a href="/${this.getCurrentQueryParams()}" class="nav-item ${this.currentPath === '/' ? 'active' : ''}">
+          <a href="./${this.getCurrentQueryParams()}" class="nav-item ${this.currentPath === '/' ? 'active' : ''}">
               <div class="icon-container"><span class="material-symbols-outlined">receipt_long</span></div>
               <span class="nav-label">${i18n.t('nav.expenses')}</span>
           </a>
-          <a href="/goals" class="nav-item ${this.currentPath === '/goals' ? 'active' : ''}">
+          <a href="goals" class="nav-item ${this.currentPath === '/goals' ? 'active' : ''}">
               <div class="icon-container"><span class="material-symbols-outlined">savings</span></div>
               <span class="nav-label">${i18n.t('nav.goals')}</span>
           </a>
-          <a href="/reports${this.getCurrentQueryParams()}" class="nav-item ${this.currentPath === '/reports' ? 'active' : ''}">
+          <a href="reports${this.getCurrentQueryParams()}" class="nav-item ${this.currentPath === '/reports' ? 'active' : ''}">
                <div class="icon-container"><span class="material-symbols-outlined">bar_chart</span></div>
                <span class="nav-label">${i18n.t('nav.reports')}</span>
           </a>
-          <a href="/categories" class="nav-item ${this.currentPath === '/categories' ? 'active' : ''}">
+          <a href="categories" class="nav-item ${this.currentPath === '/categories' ? 'active' : ''}">
                <div class="icon-container"><span class="material-symbols-outlined">category</span></div>
                <span class="nav-label">${i18n.t('nav.categories')}</span>
           </a>
-          <a href="/rules" class="nav-item ${this.currentPath === '/rules' ? 'active' : ''}">
+          <a href="rules" class="nav-item ${this.currentPath === '/rules' ? 'active' : ''}">
                <div class="icon-container"><span class="material-symbols-outlined">rule</span></div>
                <span class="nav-label">${i18n.t('nav.rules')}</span>
           </a>
-          <a href="/settings" class="nav-item ${this.currentPath === '/settings' ? 'active' : ''}">
+          <a href="settings" class="nav-item ${this.currentPath === '/settings' ? 'active' : ''}">
                <div class="icon-container"><span class="material-symbols-outlined">settings</span></div>
                <span class="nav-label">${i18n.t('nav.settings')}</span>
           </a>

@@ -126,7 +126,7 @@ export class ViewLogin extends LitElement {
       const status = await authApi.getStatus();
       if (!status.setupComplete) {
         // Redirect to setup if not complete
-        window.location.href = 'setup';
+        window.location.href = new URL('setup', document.baseURI).href;
         return;
       }
     } catch (e) {
@@ -167,7 +167,7 @@ export class ViewLogin extends LitElement {
     try {
       await authApi.login(this.selectedProfile, this.pin);
       // Successful login - redirect will be handled by router
-      window.location.href = './';
+      window.location.href = new URL('.', document.baseURI).href;
     } catch (e: any) {
       this.loading = false;
       if (e.message.includes('429') || e.message.includes('Rate limit')) {

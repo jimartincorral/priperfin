@@ -256,7 +256,7 @@ export class ViewSettings extends LitElement {
             await api.delete('/admin/reset');
             localStorage.removeItem('priperfin_total_savings');
             alert('Profile data has been reset.');
-            window.location.href = './';
+            window.location.href = new URL('.', document.baseURI).href;
         } catch (e: any) {
             console.error('Failed to reset profile data', e);
             alert('Failed to reset profile data: ' + (e.message || 'Unknown error'));
@@ -275,7 +275,7 @@ export class ViewSettings extends LitElement {
             this.showDeleteProfileModal = false;
             this.deleteProfilePin = '';
             // Redirect to login
-            window.location.href = 'login';
+            window.location.href = new URL('login', document.baseURI).href;
         } catch (e: any) {
             alert('Failed to delete profile: ' + (e.message || 'Unknown error'));
         }
@@ -293,7 +293,7 @@ export class ViewSettings extends LitElement {
             alert('All data from all profiles has been deleted.');
             this.showDeleteAllDataModal = false;
             this.deleteAllDataConfirmText = '';
-            window.location.href = 'setup';
+            window.location.href = new URL('setup', document.baseURI).href;
         } catch (e: any) {
             alert('Failed to delete all data: ' + (e.message || 'Unknown error'));
         }
@@ -317,7 +317,7 @@ export class ViewSettings extends LitElement {
             this.showChangePinModal = false;
             this.changePinForm = { oldPin: '', newPin: '', confirmPin: '' };
             // User will be logged out automatically by the backend
-            window.location.href = 'login';
+            window.location.href = new URL('login', document.baseURI).href;
         } catch (e: any) {
             alert('Failed to change PIN: ' + (e.message || 'Unknown error'));
         }
@@ -353,12 +353,12 @@ export class ViewSettings extends LitElement {
     async handleLogout() {
         try {
             await authApi.logout();
-            window.location.href = 'login';
+            window.location.href = new URL('login', document.baseURI).href;
         } catch (e: any) {
             console.error('Logout failed:', e);
             // Clear session anyway and redirect
             api.clearSession();
-            window.location.href = 'login';
+            window.location.href = new URL('login', document.baseURI).href;
         }
     }
 
