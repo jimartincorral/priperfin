@@ -8,9 +8,22 @@ export class IngressPathMiddleware implements NestMiddleware {
   use(req: Request, res: Response, next: NextFunction) {
     const originalUrl = req.originalUrl || req.url;
     
-    // Detect Home Assistant Ingress path
+    // 1. Check for Home Assistant Ingress Header (Standard method)
+    // Home Assistant strips the prefix but sends it in this header
+    const ingressHeader = req.headers['x-ingress-path'] as string;
+    
+    if (ingressHeader) {
+      this.logger.log(`Found X-Ingress-Path header: ${ingressHeader}`);
+      
+      // Store ingress path for AppController to use
+      // We don't need to rewrite URL because HA already stripped it (as confirmed by logs receiving '/')
+      (req as any).ingressPath = ingressHeader;
+      
+      return next();
+    }
+
+    // 2. Fallback: Detect Ingress path in URL (for setups that don't strip it)
     // Pattern: /api/hassio_ingress/{token}
-    // We capture the prefix to inject into HTML, and strip it for routing
     const ingressMatch = originalUrl.match(/^(\/api\/hassio_ingress\/[^/]+)(.*)/);
     
     if (ingressMatch) {
@@ -21,15 +34,14 @@ export class IngressPathMiddleware implements NestMiddleware {
       (req as any).ingressPath = ingressPrefix;
       
       // Rewrite URL to strip ingress prefix so NestJS routing works standardly
-      // This ensures controllers (like @Get('categories')) match correctly
-      // even when accessed via Ingress URL
       req.url = remainingPath;
       
       this.logger.log(`Rewrote Ingress URL: ${originalUrl} -> ${req.url}`);
       this.logger.log(`Captured Ingress Prefix: ${ingressPrefix}`);
     } else {
-      // Log for debugging non-ingress requests (or if regex failed)
-      this.logger.log(`No Ingress prefix detected in URL: ${originalUrl}`);
+      // Log for debugging non-ingress requests
+      // Also logging headers to debug if we missed the header
+      // this.logger.debug(`No Ingress detected. Headers: ${JSON.stringify(req.headers)}`);
     }
     
     next();
