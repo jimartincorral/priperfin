@@ -139,8 +139,11 @@ export class AppController {
   @Get('*')
   getWildcard(@Req() req: Request, @Res() res: Response, @Next() next: NextFunction) {
     // IMPORTANT: Skip API routes and asset routes - let specific handlers handle them
-    if (req.path.startsWith('/api/') || req.path.startsWith('/api') || req.path.startsWith('/assets/')) {
-      this.logger.log(`Skipping ${req.path.startsWith('/assets/') ? 'asset' : 'API'} route in wildcard handler: ${req.path}`);
+    // Normalize path to handle double slashes (e.g., //assets/... -> /assets/...)
+    const normalizedPath = req.path.replace(/\/+/g, '/');
+    
+    if (normalizedPath.startsWith('/api/') || normalizedPath.startsWith('/api') || normalizedPath.startsWith('/assets/')) {
+      this.logger.log(`Skipping ${normalizedPath.startsWith('/assets/') ? 'asset' : 'API'} route in wildcard handler: ${req.path}`);
       return next();
     }
 
