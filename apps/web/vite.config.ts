@@ -1,7 +1,7 @@
 import { defineConfig } from 'vite'
 
 export default defineConfig({
-    base: './',
+    base: '/',  // Use absolute paths from root (not relative './')
     build: {
         outDir: 'dist',
     },
