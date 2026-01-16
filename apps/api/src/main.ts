@@ -24,11 +24,25 @@ async function bootstrap() {
     }),
   );
 
-  // Enable permissive CORS
-  // Since this is a self-hosted app usually accessed via local IP or Ingress,
-  // we can be more permissive to prevent blocking legitimate requests.
+  // Enable CORS for same-origin and localhost development
+  // Ingress requests are same-origin (no CORS needed) but we allow localhost for dev
   app.enableCors({
-    origin: true, // Reflects the request origin
+    origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+      // Allow requests with no origin (same-origin requests from Ingress)
+      if (!origin) {
+        callback(null, true);
+        return;
+      }
+      
+      // Allow localhost for development
+      if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
+        callback(null, true);
+        return;
+      }
+      
+      // Reject all other origins
+      callback(new Error('CORS policy does not allow access from this origin'));
+    },
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
     credentials: true,

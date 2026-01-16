@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.13.0] - 2026-01-16
+
+### Security
+- **Ingress IP Restriction** - Implemented strict IP checking middleware to allow requests only from Home Assistant Ingress gateway (172.30.32.2) and localhost.
+- **AppArmor Profile** - Added custom `apparmor.txt` profile to restrict file system capabilities and network access.
+- **Directory Access** - Removed unused write permissions for `/config` and `/share` directories.
+- **Port Exposure** - Removed direct port 3000 exposure; access is now exclusively via Ingress.
+- **CORS Policy** - Tightened CORS settings to allow only same-origin and localhost requests.
+
+### Added
+- **Configuration Translations** - Added English descriptions for add-on configuration options.
+- **Documentation** - Added Security, License, and Support sections to documentation.
+
 ## [1.11.0] - 2026-01-15
 
 ### Added

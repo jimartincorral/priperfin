@@ -31,9 +31,9 @@ The `backup_encryption_key` is an optional 32-character string used to encrypt y
 
 ## Accessing the Web Interface
 
-Once the add-on is running, access the web interface at:
-- Local: `http://homeassistant.local:3000`
-- Or use your Home Assistant IP: `http://YOUR_HA_IP:3000`
+Once the add-on is running, click the "Open Web UI" button in the Home Assistant add-on page or access it via the sidebar if you enabled the "Show in sidebar" option.
+
+**Note:** Direct port access (port 3000) is disabled for security reasons. You must use the Home Assistant Ingress interface.
 
 ## Managing Transactions
 
@@ -105,3 +105,57 @@ The "Reports" tab provides:
 - The database file may be corrupted
 - Try restoring from a backup
 - As a last resort, delete the database file (data will be lost) and restart the add-on
+
+---
+
+# Security
+
+This add-on uses Home Assistant Ingress for secure access. Ingress provides:
+
+- **Authentication**: Access is restricted to logged-in Home Assistant users
+- **Encryption**: Traffic is encrypted when using HTTPS with Home Assistant
+- **Network Isolation**: The add-on only accepts connections from the Home Assistant Ingress gateway
+
+**Important**: Direct port access has been disabled for security. Always access the add-on through the Home Assistant UI via the sidebar panel or "Open Web UI" button.
+
+## AppArmor
+
+This add-on includes a custom AppArmor profile that restricts:
+- File system access (only /data and /backup directories)
+- Network capabilities (HTTP server only)
+- System resource access
+
+The AppArmor profile provides defense-in-depth security. You can view the profile in the `apparmor.txt` file in the add-on repository.
+
+## Backup Encryption
+
+Backups can optionally be encrypted with AES-256-CBC encryption. To enable:
+
+1. Generate a strong random key (32+ characters recommended)
+2. Add the key to the "Backup Encryption Key" configuration option
+3. **Keep this key safe!** You'll need it to restore encrypted backups
+
+Without the encryption key, encrypted backups cannot be restored.
+
+---
+
+# License
+
+This add-on is licensed under the Apache License 2.0. See the [LICENSE](https://github.com/jimartincorral/priperfin/blob/master/LICENSE) file for details.
+
+Copyright 2025 PriPerFin Contributors
+
+---
+
+# Support
+
+For issues, questions, or feature requests:
+
+- **GitHub Issues**: [https://github.com/jimartincorral/priperfin/issues](https://github.com/jimartincorral/priperfin/issues)
+- **Discussions**: [https://github.com/jimartincorral/priperfin/discussions](https://github.com/jimartincorral/priperfin/discussions)
+
+When reporting issues, please include:
+- Add-on version (check the Info tab)
+- Home Assistant version
+- Architecture (amd64, armv7, aarch64)
+- Relevant log entries (check the Log tab)

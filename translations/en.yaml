@@ -1,0 +1,10 @@
+configuration:
+  database_path:
+    name: Database Path
+    description: SQLite database file location. Use the 'file:' prefix (e.g., file:/data/priperfin.db). The /data directory is automatically provided by Home Assistant.
+  backup_dir:
+    name: Backup Directory
+    description: Directory where encrypted/unencrypted backup archives will be stored. Default is /backup/priperfin which maps to your Home Assistant backup folder.
+  backup_encryption_key:
+    name: Backup Encryption Key
+    description: Optional AES-256 encryption key for backups. Leave empty for unencrypted backups. If set, you'll need this key to restore backups. Keep it safe!
