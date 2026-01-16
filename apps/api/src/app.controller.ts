@@ -161,12 +161,12 @@ export class AppController {
 
     // Serve HTML with base tag injection for Ingress
     try {
-      // Ingress path is now detected by IngressPathMiddleware and stored in req
+      // Get Ingress path from middleware (set from X-Ingress-Path header)
       const ingressPath = (req as any).ingressPath;
 
-      // Log diagnostics (using rewritten path)
+      // Log diagnostics
       this.logger.log(`Serving HTML for path: ${req.path}`);
-      this.logger.log(`Ingress path detected: ${ingressPath || 'none'}`);
+      this.logger.log(`Ingress path: ${ingressPath || 'none'}`);
 
       // Read index.html (fresh read each time to support both Ingress and non-Ingress)
       const indexPath = join(this.staticPath, 'index.html');
@@ -179,10 +179,19 @@ export class AppController {
       
       let html = readFileSync(indexPath, 'utf-8');
 
-      // Don't inject base tag - Home Assistant Ingress handles path translation
-      // The proxy automatically maps /api/hassio_ingress/{token}/path to /path
-      // so assets resolve correctly without any special handling
-      this.logger.log('Serving HTML without base tag (Ingress proxy handles paths)');
+      // Inject base tag if X-Ingress-Path header is present
+      if (ingressPath) {
+        // Inject base tag with the Ingress path from the header
+        const baseTag = `<base href="${ingressPath}/">`;
+        html = html.replace('<head>', `<head>\n  ${baseTag}`);
+        this.logger.log(`✓ Injected base tag: ${baseTag}`);
+        
+        // Remove crossorigin to avoid CORS issues
+        html = html.replace(/crossorigin/g, '');
+        this.logger.log('✓ Removed crossorigin attributes');
+      } else {
+        this.logger.log('Standalone mode - no base tag needed');
+      }
 
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       res.send(html);
