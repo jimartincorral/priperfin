@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.13.3] - 2026-01-16
+
+### Fixed
+- **CORS Policy** - Reverted to permissive CORS policy (`origin: true`) to fix issues with POST requests in Home Assistant Ingress. Since the user's Home Assistant URL is unknown/dynamic, strict allow-listing blocked legitimate Ingress traffic. Network security is still enforced by the Ingress IP restriction middleware.
+
 ## [1.13.2] - 2026-01-16
 
 ### Fixed
