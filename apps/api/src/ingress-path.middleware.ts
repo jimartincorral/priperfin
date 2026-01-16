@@ -6,42 +6,26 @@ export class IngressPathMiddleware implements NestMiddleware {
   private readonly logger = new Logger(IngressPathMiddleware.name);
 
   use(req: Request, res: Response, next: NextFunction) {
-    const originalUrl = req.originalUrl || req.url;
+    // Detect if we're behind a proxy (Home Assistant Ingress)
+    // HA strips the /api/hassio_ingress/{token} prefix before forwarding,
+    // so we can't detect it from the URL. Instead, we look for proxy headers.
+    const xForwardedFor = req.headers['x-forwarded-for'];
+    const xRealIp = req.headers['x-real-ip'];
+    const xForwardedHost = req.headers['x-forwarded-host'];
     
-    // 1. Check for Home Assistant Ingress Header (Standard method)
-    // Home Assistant strips the prefix but sends it in this header
-    const ingressHeader = req.headers['x-ingress-path'] as string;
-    
-    if (ingressHeader) {
-      this.logger.log(`Found X-Ingress-Path header: ${ingressHeader}`);
+    // If any proxy header is present, we're likely in Ingress mode
+    if (xForwardedFor || xRealIp || xForwardedHost) {
+      // Mark as Ingress mode with empty string
+      // Empty string means "use relative base tag" (we can't know the actual token)
+      (req as any).ingressPath = '';
       
-      // Store ingress path for AppController to use
-      // We don't need to rewrite URL because HA already stripped it (as confirmed by logs receiving '/')
-      (req as any).ingressPath = ingressHeader;
-      
-      return next();
-    }
-
-    // 2. Fallback: Detect Ingress path in URL (for setups that don't strip it)
-    // Pattern: /api/hassio_ingress/{token}
-    const ingressMatch = originalUrl.match(/^(\/api\/hassio_ingress\/[^/]+)(.*)/);
-    
-    if (ingressMatch) {
-      const ingressPrefix = ingressMatch[1];
-      const remainingPath = ingressMatch[2] || '/';
-      
-      // Store ingress path for AppController to use
-      (req as any).ingressPath = ingressPrefix;
-      
-      // Rewrite URL to strip ingress prefix so NestJS routing works standardly
-      req.url = remainingPath;
-      
-      this.logger.log(`Rewrote Ingress URL: ${originalUrl} -> ${req.url}`);
-      this.logger.log(`Captured Ingress Prefix: ${ingressPrefix}`);
+      this.logger.log('Ingress mode detected via proxy headers');
+      this.logger.log(`  X-Forwarded-For: ${xForwardedFor || 'none'}`);
+      this.logger.log(`  X-Real-IP: ${xRealIp || 'none'}`);
+      this.logger.log(`  X-Forwarded-Host: ${xForwardedHost || 'none'}`);
     } else {
-      // Log for debugging non-ingress requests
-      // Also logging headers to debug if we missed the header
-      // this.logger.debug(`No Ingress detected. Headers: ${JSON.stringify(req.headers)}`);
+      // No proxy headers detected - running in standalone mode
+      this.logger.log('No Ingress prefix detected in URL: ' + req.path);
     }
     
     next();

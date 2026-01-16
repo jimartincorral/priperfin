@@ -20,7 +20,7 @@ async function bootstrap() {
       hsts: false, // Disabled (supports both HTTP and HTTPS)
       noSniff: true,
       xssFilter: true,
-      frameguard: { action: 'deny' },
+      frameguard: false, // Allow iframing (required for Home Assistant Ingress)
     }),
   );
 

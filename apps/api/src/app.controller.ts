@@ -177,11 +177,14 @@ export class AppController {
       let html = readFileSync(indexPath, 'utf-8');
 
       // Inject <base> tag if in Ingress mode
-      if (ingressPath) {
-        // Inject <base href="{ingressPath}/"> after <head>
-        const baseTag = `<base href="${ingressPath}/">`;
+      // Check for !== undefined (not just truthiness) because empty string is valid for Ingress
+      if (ingressPath !== undefined) {
+        // Inject <base href="./"> for Ingress mode
+        // The ./ tells browser to resolve all paths relative to current directory
+        // This works because HA preserves the path structure in the browser URL
+        const baseTag = `<base href="./">`;
         html = html.replace('<head>', `<head>\n  ${baseTag}`);
-        this.logger.log(`✓ Injected base tag: ${baseTag}`);
+        this.logger.log(`✓ Injected base tag for Ingress: ${baseTag}`);
         
         // Remove crossorigin attribute from script tags to avoid CORS issues on same-origin (proxied) requests
         // Vite adds crossorigin by default which can cause issues with Ingress proxies
