@@ -6,6 +6,14 @@ export class IngressPathMiddleware implements NestMiddleware {
   private readonly logger = new Logger(IngressPathMiddleware.name);
 
   use(req: Request, res: Response, next: NextFunction) {
+    // Normalize path to remove duplicate slashes (e.g., //assets -> /assets)
+    // This happens when base tag is "./" and current path is "/"
+    const originalPath = req.path;
+    if (originalPath.includes('//')) {
+      req.url = req.url.replace(/\/+/g, '/');
+      this.logger.log(`Normalized path: ${originalPath} -> ${req.path}`);
+    }
+    
     // Detect if we're behind a proxy (Home Assistant Ingress)
     // HA strips the /api/hassio_ingress/{token} prefix before forwarding,
     // so we can't detect it from the URL. Instead, we look for proxy headers.
