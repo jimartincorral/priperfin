@@ -1,5 +1,5 @@
 import { Module, Logger } from '@nestjs/common';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD, RouterModule } from '@nestjs/core';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -49,6 +49,29 @@ import { ConfigModule } from '@nestjs/config';
     ]),
     // Note: ServeStaticModule disabled - static files are now served via AppController
     // This provides better control over Ingress path handling
+    
+    // Register all API modules under the /api prefix
+    RouterModule.register([
+      {
+        path: 'api',
+        children: [
+          AuthModule,
+          CategoriesModule,
+          TransactionsModule,
+          SavingsGoalsModule,
+          ReportsModule,
+          AdminModule,
+          SettingsModule,
+          MonthlyBalancesModule,
+          BackupModule,
+          AccountsModule,
+          CostObjectsModule,
+          AccountBalancesModule,
+          RulesModule,
+        ],
+      },
+    ]),
+    
     PrismaModule,
     AuthModule,
     CategoriesModule,
