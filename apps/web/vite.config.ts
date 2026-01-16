@@ -1,7 +1,7 @@
 import { defineConfig } from 'vite'
 
 export default defineConfig({
-    base: '/',  // Use absolute paths from root (not relative './')
+    base: '',  // Use empty string for relative paths (e.g. "assets/index.js")
     build: {
         outDir: 'dist',
     },
