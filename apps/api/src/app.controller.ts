@@ -115,21 +115,12 @@ export class AppController {
       res.setHeader('Content-Type', contentType);
       res.setHeader('Cache-Control', 'public, max-age=31536000'); // Cache assets for 1 year
       
-      // CORS Handling
-      const origin = req.headers.origin;
-      if (origin) {
-        // If Origin header is present, echo it and allow credentials
-        // This is valid and supports authenticated cross-origin requests
-        res.setHeader('Access-Control-Allow-Origin', origin);
-        res.setHeader('Access-Control-Allow-Credentials', 'true');
-        res.setHeader('Vary', 'Origin'); // Tell caches to vary by Origin
-        this.logger.log(`Set CORS for origin: ${origin}`);
-      } else {
-        // No Origin header implies same-origin request (or non-browser)
-        // Do NOT set Access-Control-Allow-Origin to '*' if we might need credentials
-        // Just let it be treated as same-origin
-        this.logger.log('No Origin header - treating as same-origin');
-      }
+      // CORS Handling for Assets
+      // Use wildcard to allow loading from any origin (including sandboxed iframes)
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+      // Do NOT set Access-Control-Allow-Credentials with wildcard
+      this.logger.log('Set CORS: Access-Control-Allow-Origin: *');
       
       res.send(fileContent);
     } catch (error) {
