@@ -22,12 +22,10 @@ export class IngressSecurityMiddleware implements NestMiddleware {
   }
 
   private getClientIp(req: Request): string {
-    // Check X-Forwarded-For header first (from Ingress proxy)
-    const forwarded = req.headers['x-forwarded-for'];
-    if (forwarded) {
-      const ips = (forwarded as string).split(',');
-      return ips[0].trim();
-    }
+    // SECURITY CRITICAL: We must check the direct socket connection IP,
+    // NOT the X-Forwarded-For header. 
+    // X-Forwarded-For contains the *original user's IP* (e.g. 192.168.1.50),
+    // but we want to verify the request is coming from the Ingress Proxy (172.30.32.2).
     
     // Fall back to socket remote address
     const socketAddress = req.socket.remoteAddress;
