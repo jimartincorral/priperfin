@@ -140,10 +140,11 @@ export class AppController {
   getWildcard(@Req() req: Request, @Res() res: Response, @Next() next: NextFunction) {
     // IMPORTANT: Skip API routes - let NestJS handle them
     if (req.path.startsWith('/api/') || req.path.startsWith('/api')) {
-      this.logger.log(`Skipping API route: ${req.path}`);
+      this.logger.log(`Skipping API route in wildcard handler: ${req.path}`);
       return next();
     }
 
+    this.logger.log(`Wildcard handler serving HTML for: ${req.path}`);
     return this.serveHtml(req, res);
   }
 

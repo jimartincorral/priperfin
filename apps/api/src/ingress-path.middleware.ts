@@ -25,7 +25,11 @@ export class IngressPathMiddleware implements NestMiddleware {
       // even when accessed via Ingress URL
       req.url = remainingPath;
       
-      // this.logger.verbose(`Rewrote Ingress URL: ${originalUrl} -> ${req.url}`);
+      this.logger.log(`Rewrote Ingress URL: ${originalUrl} -> ${req.url}`);
+      this.logger.log(`Captured Ingress Prefix: ${ingressPrefix}`);
+    } else {
+      // Log for debugging non-ingress requests (or if regex failed)
+      this.logger.log(`No Ingress prefix detected in URL: ${originalUrl}`);
     }
     
     next();
