@@ -179,22 +179,10 @@ export class AppController {
       
       let html = readFileSync(indexPath, 'utf-8');
 
-      // Inject <base> tag if in Ingress mode
-      // Check for !== undefined (not just truthiness) because empty string is valid for Ingress
-      if (ingressPath !== undefined) {
-        // Inject <base href="/"> for Ingress mode
-        // Use absolute path from root to avoid double-slash issues
-        const baseTag = `<base href="/">`;
-        html = html.replace('<head>', `<head>\n  ${baseTag}`);
-        this.logger.log(`✓ Injected base tag for Ingress: ${baseTag}`);
-        
-        // Remove crossorigin attribute from script tags to avoid CORS issues on same-origin (proxied) requests
-        // Vite adds crossorigin by default which can cause issues with Ingress proxies
-        html = html.replace(/crossorigin/g, '');
-        this.logger.log('✓ Removed crossorigin attributes');
-      } else {
-        this.logger.log('Standalone mode - no base tag needed');
-      }
+      // Don't inject base tag - Home Assistant Ingress handles path translation
+      // The proxy automatically maps /api/hassio_ingress/{token}/path to /path
+      // so assets resolve correctly without any special handling
+      this.logger.log('Serving HTML without base tag (Ingress proxy handles paths)');
 
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       res.send(html);
