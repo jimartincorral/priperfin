@@ -182,10 +182,9 @@ export class AppController {
       // Inject <base> tag if in Ingress mode
       // Check for !== undefined (not just truthiness) because empty string is valid for Ingress
       if (ingressPath !== undefined) {
-        // Inject <base href="./"> for Ingress mode
-        // The ./ tells browser to resolve all paths relative to current directory
-        // This works because HA preserves the path structure in the browser URL
-        const baseTag = `<base href="./">`;
+        // Inject <base href="/"> for Ingress mode
+        // Use absolute path from root to avoid double-slash issues
+        const baseTag = `<base href="/">`;
         html = html.replace('<head>', `<head>\n  ${baseTag}`);
         this.logger.log(`✓ Injected base tag for Ingress: ${baseTag}`);
         
