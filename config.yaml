@@ -1,6 +1,6 @@
 name: "Personal Finance Tracker"
 description: "A comprehensive personal finance tracker with expense tracking, savings goals, and reporting."
-version: "1.13.0"
+version: "1.13.1"
 slug: "priperfin"
 
 init: false
@@ -8,7 +8,6 @@ arch:
   - aarch64
   - amd64
   - armv7
-ports:
 ingress: true
 ingress_port: 3000
 ingress_entry: "/"
