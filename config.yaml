@@ -1,6 +1,6 @@
 name: "Personal Finance Tracker"
 description: "A comprehensive personal finance tracker with expense tracking, savings goals, and reporting."
-version: "1.12.19"
+version: "1.12.20"
 slug: "priperfin"
 
 init: false
@@ -12,6 +12,7 @@ ports:
   3000/tcp: 3000
 ingress: true
 ingress_port: 3000
+ingress_entry: "/"
 ingress_stream: false
 panel_icon: "mdi:finance"
 panel_title: "Finance"
