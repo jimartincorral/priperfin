@@ -363,8 +363,11 @@ export class TransactionsService {
         skipped: transactionsToCreate.length - result.count,
       };
     } catch (error) {
-      this.logger.error('[CSV Import] Failed to parse CSV:', error);
-      throw new Error(`CSV Import Failed: ${error.message}`);
+      this.logger.error('[CSV Import] Error processing file:', error);
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      throw new BadRequestException(`CSV Import Failed: ${error.message}`);
     }
   }
 
