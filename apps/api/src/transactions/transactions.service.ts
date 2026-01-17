@@ -454,6 +454,9 @@ export class TransactionsService {
     const costObjectIds = new Set(
       enhancedDtos.map((d) => d.costObjectId).filter((id) => !!id),
     );
+    const accountIds = new Set(
+      enhancedDtos.map((d: any) => d.accountId).filter((id) => !!id),
+    );
 
     let validCategoryIds = new Set<string>();
     if (categoryIds.size > 0) {
@@ -482,6 +485,15 @@ export class TransactionsService {
       validCostObjectIds = new Set(costObjects.map((c) => c.id));
     }
 
+    let validAccountIds = new Set<string>();
+    if (accountIds.size > 0) {
+      const accounts = await this.prisma.account.findMany({
+        where: { id: { in: Array.from(accountIds) as string[] }, profileId },
+        select: { id: true },
+      });
+      validAccountIds = new Set(accounts.map((a) => a.id));
+    }
+
     // Sanitize DTOs to ensure all IDs exist
     enhancedDtos = enhancedDtos.map((d) => ({
       ...d,
@@ -496,6 +508,10 @@ export class TransactionsService {
       costObjectId:
         d.costObjectId && validCostObjectIds.has(d.costObjectId)
           ? d.costObjectId
+          : null,
+      accountId:
+        (d as any).accountId && validAccountIds.has((d as any).accountId)
+          ? (d as any).accountId
           : null,
     }));
 
