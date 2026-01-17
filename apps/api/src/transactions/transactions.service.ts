@@ -397,7 +397,7 @@ export class TransactionsService {
       };
     }
 
-    const enhancedDtos = await Promise.all(
+    let enhancedDtos = await Promise.all(
       dtos.map(async (dto) => {
         let categoryId = dto.categoryId;
         let suggestedByRuleId = null;
@@ -443,6 +443,61 @@ export class TransactionsService {
         };
       }),
     );
+
+    // Validate Foreign Keys to prevent constraints errors during import
+    const categoryIds = new Set(
+      enhancedDtos.map((d) => d.categoryId).filter((id) => !!id),
+    );
+    const ruleIds = new Set(
+      enhancedDtos.map((d) => d.suggestedByRuleId).filter((id) => !!id),
+    );
+    const costObjectIds = new Set(
+      enhancedDtos.map((d) => d.costObjectId).filter((id) => !!id),
+    );
+
+    let validCategoryIds = new Set<string>();
+    if (categoryIds.size > 0) {
+      const categories = await this.prisma.category.findMany({
+        where: { id: { in: Array.from(categoryIds) as string[] }, profileId },
+        select: { id: true },
+      });
+      validCategoryIds = new Set(categories.map((c) => c.id));
+    }
+
+    let validRuleIds = new Set<string>();
+    if (ruleIds.size > 0) {
+      const rules = await this.prisma.categorizationRule.findMany({
+        where: { id: { in: Array.from(ruleIds) as string[] }, profileId },
+        select: { id: true },
+      });
+      validRuleIds = new Set(rules.map((r) => r.id));
+    }
+
+    let validCostObjectIds = new Set<string>();
+    if (costObjectIds.size > 0) {
+      const costObjects = await this.prisma.costObject.findMany({
+        where: { id: { in: Array.from(costObjectIds) as string[] }, profileId },
+        select: { id: true },
+      });
+      validCostObjectIds = new Set(costObjects.map((c) => c.id));
+    }
+
+    // Sanitize DTOs to ensure all IDs exist
+    enhancedDtos = enhancedDtos.map((d) => ({
+      ...d,
+      categoryId:
+        d.categoryId && validCategoryIds.has(d.categoryId)
+          ? d.categoryId
+          : null,
+      suggestedByRuleId:
+        d.suggestedByRuleId && validRuleIds.has(d.suggestedByRuleId)
+          ? d.suggestedByRuleId
+          : null,
+      costObjectId:
+        d.costObjectId && validCostObjectIds.has(d.costObjectId)
+          ? d.costObjectId
+          : null,
+    }));
 
     const externalIds = enhancedDtos
       .map((d) => d.externalId)
