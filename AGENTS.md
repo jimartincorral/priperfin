@@ -200,9 +200,15 @@ describe('RulesService', () => {
 
 **CRITICAL**: Only commit when explicitly requested. Do not auto-commit.
 
-**Version Management**: Update `config.yaml` version field when releasing.
+**Version Management**: 
+- ALWAYS increment the `version` field in `config.yaml` when making changes that need to be deployed.
+- Home Assistant ONLY detects updates via GitHub Releases matching the `config.yaml` version.
 
-**Release Process**: See CLAUDE.md for complete instructions. Every version bump requires a GitHub Release.
+**Release Process**: 
+1. Bump version in `config.yaml`
+2. Commit and push
+3. Create GitHub Release (e.g., `gh release create v1.x.x --generate-notes`)
+4. See CLAUDE.md for complete instructions.
 
 ## Important Constraints
 
