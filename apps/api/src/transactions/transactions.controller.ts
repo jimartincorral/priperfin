@@ -125,6 +125,18 @@ export class TransactionsController {
     );
   }
 
+  @Post('bulk-assign-account')
+  bulkAssignAccount(
+    @Body() body: { transactionIds: string[]; accountId?: string | null },
+    @CurrentProfile() profile: Profile,
+  ) {
+    return this.transactionsService.bulkUpdateAccount(
+      body.transactionIds,
+      body.accountId || null,
+      profile.id,
+    );
+  }
+
   @Get()
   @UsePipes(new ValidationPipe({ transform: true }))
   findAll(

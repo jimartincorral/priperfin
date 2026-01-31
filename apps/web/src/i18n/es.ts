@@ -276,6 +276,10 @@ export const es = {
         delete_selected: 'Eliminar Seleccionados',
         move_to: 'Mover a',
         select_category: 'Seleccionar Categoría...',
+        assign_to: 'Asignar a',
+        select_account: 'Seleccionar Cuenta...',
+        unassign: 'Desasignar (Sin Cuenta)',
+        assign_account_failed: 'Error al asignar cuenta',
     },
     table: {
         columns_title: 'Columnas de Tabla',

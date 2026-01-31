@@ -272,6 +272,40 @@ export class TransactionsService {
     }
   }
 
+  async bulkUpdateAccount(
+    transactionIds: string[],
+    accountId: string | null,
+    profileId: string,
+  ) {
+    try {
+      // Validate accountId if provided
+      if (accountId) {
+        const account = await this.prisma.account.findFirst({
+          where: { id: accountId, profileId },
+        });
+        if (!account) {
+          throw new BadRequestException('Invalid account ID');
+        }
+      }
+
+      const result = await this.prisma.transaction.updateMany({
+        where: {
+          id: { in: transactionIds },
+          profileId,
+        },
+        data: { accountId },
+      });
+
+      this.logger.log(
+        `[Bulk Account Assignment] Updated ${result.count} transactions to account ${accountId || 'unassigned'}`,
+      );
+      return { count: result.count };
+    } catch (e) {
+      this.logger.error('[Bulk Account Assignment] Failed to update', e);
+      throw e;
+    }
+  }
+
   async import(fileBuffer: Buffer, profileId: string) {
     try {
       const { parse } = await import('csv-parse/sync');

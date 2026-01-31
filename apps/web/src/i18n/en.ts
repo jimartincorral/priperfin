@@ -276,6 +276,10 @@ export const en = {
         delete_selected: 'Delete Selected',
         move_to: 'Move to',
         select_category: 'Select Category...',
+        assign_to: 'Assign to',
+        select_account: 'Select Account...',
+        unassign: 'Unassign (No Account)',
+        assign_account_failed: 'Failed to assign account',
     },
     table: {
         columns_title: 'Table Columns',

@@ -317,6 +317,20 @@ export class ViewExpenses extends LitElement {
     }
   }
 
+  async bulkUpdateAccount(accountId: string) {
+    if (!accountId) return;
+    try {
+      await api.post('/transactions/bulk-assign-account', {
+        transactionIds: Array.from(this.selectedTransactions),
+        accountId: accountId === 'unassigned' ? null : accountId,
+      });
+      this.selectedTransactions = new Set();
+      await this.loadData(true);
+    } catch (e: any) {
+      alert(i18n.t('bulk_actions.assign_account_failed') + ': ' + e.message);
+    }
+  }
+
   renderPaginationControls() {
     return html`
         <div class="pagination-controls" style="margin-bottom: 1rem;">
@@ -1707,6 +1721,23 @@ Tables: ${result.tables?.join(', ')}`;
                         ]}"
                         .placeholder="${i18n.t('bulk_actions.select_category')}"
                         @change="${(e: CustomEvent) => this.bulkUpdateCategory(e.detail.value)}"
+                        width="200px">
+                    </filterable-select>
+
+                    <span style="font-size: 0.875rem; margin-left: 16px;">${i18n.t('bulk_actions.assign_to')}:</span>
+                    <filterable-select
+                        .value=""
+                        .options="${[
+                          { value: '', label: i18n.t('bulk_actions.select_account') },
+                          { value: 'unassigned', label: i18n.t('bulk_actions.unassign') },
+                          ...this.accounts.map(account => ({
+                            value: account.id,
+                            label: account.name,
+                            icon: account.type === 'CREDIT' ? '💳' : '🏦'
+                          }))
+                        ]}"
+                        .placeholder="${i18n.t('bulk_actions.select_account')}"
+                        @change="${(e: CustomEvent) => this.bulkUpdateAccount(e.detail.value)}"
                         width="200px">
                     </filterable-select>
                 </div>
