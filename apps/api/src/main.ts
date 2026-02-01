@@ -27,8 +27,8 @@ async function bootstrap() {
   // Enable CORS for same-origin and localhost development
   // Ingress requests are same-origin (no CORS needed) but we allow localhost for dev
   app.enableCors({
-    origin: true, // Reflects the request origin. 
-    // This is required because we don't know the Home Assistant URL (origin) 
+    origin: true, // Reflects the request origin.
+    // This is required because we don't know the Home Assistant URL (origin)
     // to allow-list it, and browsers send 'Origin' headers for POST requests even in Ingress.
     // Security is handled by IngressSecurityMiddleware which blocks non-Ingress network traffic.
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],

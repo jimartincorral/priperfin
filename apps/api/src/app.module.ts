@@ -51,7 +51,7 @@ import { ConfigModule } from '@nestjs/config';
     ]),
     // Note: ServeStaticModule disabled - static files are now served via AppController
     // This provides better control over Ingress path handling
-    
+
     // Register all API modules under the /api prefix
     RouterModule.register([
       {
@@ -73,7 +73,7 @@ import { ConfigModule } from '@nestjs/config';
         ],
       },
     ]),
-    
+
     PrismaModule,
     AuthModule,
     CategoriesModule,

@@ -63,10 +63,12 @@ export class AppController {
       // Get the requested file path
       // Note: req.path contains the full path including /assets/
       const requestedPath = req.path; // e.g., /assets/index-BIidnPpS.js
-      
+
       // Security check: prevent directory traversal
       if (requestedPath.includes('..')) {
-        this.logger.error(`Security violation: directory traversal attempt in ${requestedPath}`);
+        this.logger.error(
+          `Security violation: directory traversal attempt in ${requestedPath}`,
+        );
         return res.status(403).send('Forbidden');
       }
 
@@ -114,14 +116,14 @@ export class AppController {
       const fileContent = readFileSync(filePath);
       res.setHeader('Content-Type', contentType);
       res.setHeader('Cache-Control', 'public, max-age=31536000'); // Cache assets for 1 year
-      
+
       // CORS Handling for Assets
       // Use wildcard to allow loading from any origin (including sandboxed iframes)
       res.setHeader('Access-Control-Allow-Origin', '*');
       res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
       // Do NOT set Access-Control-Allow-Credentials with wildcard
       this.logger.log('Set CORS: Access-Control-Allow-Origin: *');
-      
+
       res.send(fileContent);
     } catch (error) {
       this.logger.error('Error serving asset:', error);
@@ -137,13 +139,23 @@ export class AppController {
 
   // Serve root HTML and catch-all for SPA routes
   @Get('*')
-  getWildcard(@Req() req: Request, @Res() res: Response, @Next() next: NextFunction) {
+  getWildcard(
+    @Req() req: Request,
+    @Res() res: Response,
+    @Next() next: NextFunction,
+  ) {
     // IMPORTANT: Skip API routes and asset routes - let specific handlers handle them
     // Normalize path to handle double slashes (e.g., //assets/... -> /assets/...)
     const normalizedPath = req.path.replace(/\/+/g, '/');
-    
-    if (normalizedPath.startsWith('/api/') || normalizedPath.startsWith('/api') || normalizedPath.startsWith('/assets/')) {
-      this.logger.log(`Skipping ${normalizedPath.startsWith('/assets/') ? 'asset' : 'API'} route in wildcard handler: ${req.path}`);
+
+    if (
+      normalizedPath.startsWith('/api/') ||
+      normalizedPath.startsWith('/api') ||
+      normalizedPath.startsWith('/assets/')
+    ) {
+      this.logger.log(
+        `Skipping ${normalizedPath.startsWith('/assets/') ? 'asset' : 'API'} route in wildcard handler: ${req.path}`,
+      );
       return next();
     }
 
@@ -171,12 +183,12 @@ export class AppController {
       // Read index.html (fresh read each time to support both Ingress and non-Ingress)
       const indexPath = join(this.staticPath, 'index.html');
       this.logger.log(`Reading index.html from: ${indexPath}`);
-      
+
       if (!existsSync(indexPath)) {
         this.logger.error(`index.html not found at: ${indexPath}`);
         return res.status(404).send('index.html not found');
       }
-      
+
       let html = readFileSync(indexPath, 'utf-8');
 
       // Inject base tag if X-Ingress-Path header is present
@@ -185,7 +197,7 @@ export class AppController {
         const baseTag = `<base href="${ingressPath}/">`;
         html = html.replace('<head>', `<head>\n  ${baseTag}`);
         this.logger.log(`✓ Injected base tag: ${baseTag}`);
-        
+
         // Remove crossorigin to avoid CORS issues
         html = html.replace(/crossorigin/g, '');
         this.logger.log('✓ Removed crossorigin attributes');

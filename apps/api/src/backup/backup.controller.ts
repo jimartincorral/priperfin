@@ -18,6 +18,8 @@ import { diskStorage } from 'multer';
 import { promises as fs } from 'fs';
 import * as path from 'path';
 import { SessionAuthGuard } from '../auth/guards/session-auth.guard';
+import { CurrentProfile } from '../auth/decorators/current-profile.decorator';
+import { Profile } from '../generated/client';
 
 @Controller('backup')
 @UseGuards(SessionAuthGuard)
@@ -31,9 +33,12 @@ export class BackupController {
   async createBackup(
     @Body('encryptionKey') encryptionKey: string | undefined,
     @Res() res: Response,
+    @CurrentProfile() profile: Profile,
   ) {
-    const { filename, filePath } =
-      await this.backupService.createBackup(encryptionKey);
+    const { filename, filePath } = await this.backupService.createBackup(
+      profile.id,
+      encryptionKey,
+    );
     this.logger.log(`Backup created: ${filename} at ${filePath}`);
     // For direct download after creation, or just return metadata
     res.status(201).json({
@@ -91,6 +96,7 @@ export class BackupController {
     @Body('confirmOverwrite') confirmOverwrite: string, // Expecting 'true' or 'false'
     @Body('decryptionKey') decryptionKey: string | undefined,
     @Res() res: Response,
+    @CurrentProfile() profile: Profile,
   ) {
     if (!file) {
       res.status(400).json({ message: 'No backup file uploaded.' });
@@ -102,6 +108,7 @@ export class BackupController {
       await this.backupService.restoreBackup(
         file.path,
         overwrite,
+        profile.id,
         decryptionKey,
       );
       res.status(200).json({

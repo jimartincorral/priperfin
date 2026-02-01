@@ -471,17 +471,37 @@ export class ViewExpenses extends LitElement {
     let expense = 0;
 
     this.transactions.forEach(t => {
-      const cat = this.categories.find(c => c.id === t.categoryId);
-      const amt = Number(t.amount);
+      // Handle split transactions
+      if (t.splits && t.splits.length > 0) {
+        t.splits.forEach((split: any) => {
+          if (!split.categoryId) return;
+          const splitCat = this.categories.find(c => c.id === split.categoryId);
+          const splitAmt = Number(split.amount);
 
-      // Use category type if available, otherwise fallback to amount sign
-      const isIncome = cat ? cat.type === 'INCOME' : amt > 0;
+          // Use category type if available, otherwise fallback to amount sign
+          const isIncome = splitCat ? splitCat.type === 'INCOME' : splitAmt > 0;
 
-      if (isIncome) {
-        income += amt;
+          if (isIncome) {
+            income += splitAmt;
+          } else {
+            // Expenses are stored as negative, so subtract to get positive magnitude
+            expense -= splitAmt;
+          }
+        });
       } else {
-        // Expenses are stored as negative, so subtract to get positive magnitude
-        expense -= amt;
+        // No splits, use parent transaction
+        const cat = this.categories.find(c => c.id === t.categoryId);
+        const amt = Number(t.amount);
+
+        // Use category type if available, otherwise fallback to amount sign
+        const isIncome = cat ? cat.type === 'INCOME' : amt > 0;
+
+        if (isIncome) {
+          income += amt;
+        } else {
+          // Expenses are stored as negative, so subtract to get positive magnitude
+          expense -= amt;
+        }
       }
     });
     return { income, expense };

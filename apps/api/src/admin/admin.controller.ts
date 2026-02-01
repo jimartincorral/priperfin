@@ -1,4 +1,11 @@
-import { Controller, Delete, Get, UseGuards, Logger } from '@nestjs/common';
+import {
+  Controller,
+  Delete,
+  Get,
+  UseGuards,
+  Logger,
+  ForbiddenException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { SessionAuthGuard } from '../auth/guards/session-auth.guard';
 import { CurrentProfile } from '../auth/decorators/current-profile.decorator';
@@ -27,7 +34,7 @@ export class AdminController {
         .count({ where: { profileId: profile.id } })
         .catch(() => 'Error (Table missing?)');
       const splitCount = await this.prisma.transactionSplit
-        .count()
+        .count({ where: { parent: { profileId: profile.id } } })
         .catch(() => 'Error (Table missing?)');
 
       const tables = await this.prisma.$queryRawUnsafe<any[]>(
@@ -58,6 +65,7 @@ export class AdminController {
       `Resetting data for profile: ${profile.name} (${profile.id})`,
     );
     // Delete only the current profile's data
+    // Transaction Splits cascade delete from Transaction
     await this.prisma.transaction.deleteMany({
       where: { profileId: profile.id },
     });
@@ -80,18 +88,11 @@ export class AdminController {
   }
 
   @Delete('reset-all')
-  async resetAllData() {
-    this.logger.warn('⚠️ RESETTING ALL DATA FOR ALL PROFILES...');
-    // Delete ALL data from ALL profiles
-    await this.prisma.transaction.deleteMany();
-    await this.prisma.savingsGoal.deleteMany();
-    await this.prisma.monthlyBalance.deleteMany();
-    await this.prisma.accountBalance.deleteMany();
-    await this.prisma.categorizationRule.deleteMany();
-    await this.prisma.ruleSuggestion.deleteMany();
-    await this.prisma.account.deleteMany();
-    await this.prisma.category.deleteMany();
-    await this.prisma.costObject.deleteMany();
-    return { message: 'All data from all profiles reset successful' };
+  async resetAllData(@CurrentProfile() profile: Profile) {
+    this.logger.warn(
+      `reset-all called by ${profile.name}. Redirecting to profile reset for safety.`,
+    );
+    // Redirect to profile reset to prevent accidental full database wipe
+    return this.resetData(profile);
   }
 }
