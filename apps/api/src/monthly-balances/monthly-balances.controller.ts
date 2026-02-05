@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Query, UseGuards } from '@nestjs/common';
 import { MonthlyBalancesService } from './monthly-balances.service';
 import { SessionAuthGuard } from '../auth/guards/session-auth.guard';
 import { CurrentProfile } from '../auth/decorators/current-profile.decorator';
@@ -10,8 +10,12 @@ export class MonthlyBalancesController {
   constructor(private readonly service: MonthlyBalancesService) {}
 
   @Get(':month')
-  findOne(@Param('month') month: string, @CurrentProfile() profile: Profile) {
-    return this.service.findOne(month, profile.id);
+  findOne(
+    @Param('month') month: string,
+    @Query('accountId') accountId: string,
+    @CurrentProfile() profile: Profile,
+  ) {
+    return this.service.findOne(month, profile.id, accountId);
   }
 
   @Post()
