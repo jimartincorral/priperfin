@@ -416,7 +416,7 @@ export class ViewExpenses extends LitElement {
       prevTxs.forEach((t: any) => {
         const cat = this.categories.find(c => c.id === t.categoryId);
         const amount = Number(t.amount);
-        if (cat?.type === 'INCOME') income += amount;
+        if (cat?.type === 'INCOME' || amount > 0) income += amount;
         else expense += amount;
       });
 
@@ -478,8 +478,8 @@ export class ViewExpenses extends LitElement {
           const splitCat = this.categories.find(c => c.id === split.categoryId);
           const splitAmt = Number(split.amount);
 
-          // Use category type if available, otherwise fallback to amount sign
-          const isIncome = splitCat ? splitCat.type === 'INCOME' : splitAmt > 0;
+          // Income if category type is INCOME OR amount is positive
+          const isIncome = (splitCat?.type === 'INCOME') || splitAmt > 0;
 
           if (isIncome) {
             income += splitAmt;
@@ -493,8 +493,8 @@ export class ViewExpenses extends LitElement {
         const cat = this.categories.find(c => c.id === t.categoryId);
         const amt = Number(t.amount);
 
-        // Use category type if available, otherwise fallback to amount sign
-        const isIncome = cat ? cat.type === 'INCOME' : amt > 0;
+        // Income if category type is INCOME OR amount is positive
+        const isIncome = (cat?.type === 'INCOME') || amt > 0;
 
         if (isIncome) {
           income += amt;
