@@ -58,7 +58,7 @@ export class ViewGoals extends LitElement {
         valA = catA ? catA.name : '';
         valB = catB ? catB.name : '';
       } else if (this.sortField === 'status') {
-        const getDiff = (g: any) => Number(g.savedAmount || 0) - Number(g.shouldHaveSaved || 0);
+        const getDiff = (g: any) => Number(g.savedAmount || 0) - this.getEffectiveShouldHaveSaved(g);
         valA = getDiff(a);
         valB = getDiff(b);
       }
@@ -80,7 +80,7 @@ export class ViewGoals extends LitElement {
              const targetAmount = Number(goal.targetAmount || 0);
              const savedAmount = Number(goal.savedAmount || 0);
              const percent = targetAmount > 0 ? (savedAmount / targetAmount) * 100 : 0;
-             const shouldHave = Number(goal.shouldHaveSaved || 0);
+             const shouldHave = this.getEffectiveShouldHaveSaved(goal);
              const diff = savedAmount - shouldHave;
              
              if (percent >= 100) goalValue = 'completed';
@@ -503,20 +503,46 @@ export class ViewGoals extends LitElement {
     const targetAmount = Number(g.targetAmount || 0);
     const savedAmount = Number(g.savedAmount || 0);
     if (targetAmount <= savedAmount) return 0;
+
+    const evergreenMonths = this.getEvergreenTargetMonths(g);
     
-    if (g.isEvergreen && g.targetMonths) {
+    if (g.isEvergreen && evergreenMonths) {
       // For evergreen goals, use targetMonths
-      return (targetAmount - savedAmount) / g.targetMonths;
+      return (targetAmount - savedAmount) / evergreenMonths;
     } else if (g.targetDate) {
-      // For timed goals, calculate based on target date
+      // For timed goals, use complete months only
       const now = new Date();
       const target = new Date(g.targetDate);
       if (target <= now) return targetAmount - savedAmount;
-      const diffMonths = (target.getFullYear() - now.getFullYear()) * 12 + (target.getMonth() - now.getMonth());
-      return (targetAmount - savedAmount) / Math.max(1, diffMonths);
+      const fullMonthsRemaining = this.getRemainingFullMonths(now, target);
+      return (targetAmount - savedAmount) / Math.max(1, fullMonthsRemaining);
     }
     
     return 0;
+  }
+
+  private getEvergreenTargetMonths(goal: any): number {
+    const parsed = Number(goal?.targetMonths);
+    if (Number.isFinite(parsed) && parsed > 0) {
+      return Math.floor(parsed);
+    }
+    return 12;
+  }
+
+  private getRemainingFullMonths(fromDate: Date, toDate: Date): number {
+    if (toDate.getTime() <= fromDate.getTime()) {
+      return 0;
+    }
+
+    let months =
+      (toDate.getFullYear() - fromDate.getFullYear()) * 12 +
+      (toDate.getMonth() - fromDate.getMonth());
+
+    if (toDate.getDate() <= fromDate.getDate()) {
+      months -= 1;
+    }
+
+    return Math.max(0, months);
   }
 
   calculateUnassigned() {
@@ -533,9 +559,24 @@ export class ViewGoals extends LitElement {
 
   // --- Inline Editing Logic ---
 
+  private formatDateForInput(value: unknown): string {
+    if (!value) return '';
+    if (typeof value === 'string') {
+      const isoDateMatch = value.match(/^(\d{4}-\d{2}-\d{2})/);
+      if (isoDateMatch) return isoDateMatch[1];
+    }
+
+    const parsed = new Date(value as string);
+    if (Number.isNaN(parsed.getTime())) return '';
+    return parsed.toISOString().split('T')[0];
+  }
+
   startEditing(id: string, field: string, value: any) {
     this.editingCell = { id, field };
-    this.editValue = value;
+    this.editValue =
+      field === 'startDate' || field === 'targetDate'
+        ? this.formatDateForInput(value)
+        : value;
     // Delay focus to let render happen
     setTimeout(() => {
       const input = this.shadowRoot?.querySelector(`#edit-${id}-${field}`) as HTMLElement;
@@ -566,7 +607,11 @@ export class ViewGoals extends LitElement {
         if (field === 'targetDate') { this.cancelEditing(); return; } // Target date required
         payload[field] = null; // Start date optional
       } else {
-        payload[field] = new Date(this.editValue).toISOString();
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(this.editValue)) {
+          alert('Date format must be yyyy-mm-dd');
+          return;
+        }
+        payload[field] = new Date(`${this.editValue}T00:00:00.000Z`).toISOString();
       }
     } else {
       payload[field] = this.editValue;
@@ -658,28 +703,68 @@ export class ViewGoals extends LitElement {
   // --- Distribution Helper Methods ---
 
   getEffectiveTargetDate(goal: any): Date {
-    if (goal.isEvergreen && goal.targetMonths) {
-      const start = goal.startDate ? new Date(goal.startDate) : new Date();
-      start.setMonth(start.getMonth() + goal.targetMonths);
+    const evergreenMonths = this.getEvergreenTargetMonths(goal);
+    if (goal.isEvergreen && evergreenMonths) {
+      const parsedStart = goal.startDate ? new Date(goal.startDate) : new Date();
+      const start = Number.isNaN(parsedStart.getTime()) ? new Date() : parsedStart;
+      start.setMonth(start.getMonth() + evergreenMonths);
       return start;
     }
-    return goal.targetDate ? new Date(goal.targetDate) : new Date('9999-12-31');
+    if (!goal.targetDate) return new Date('9999-12-31');
+    const parsedTarget = new Date(goal.targetDate);
+    return Number.isNaN(parsedTarget.getTime())
+      ? new Date('9999-12-31')
+      : parsedTarget;
   }
 
   getEffectiveShouldHaveSaved(goal: any): number {
-    // If backend already calculated it (timed goals)
-    if (goal.shouldHaveSaved !== null && goal.shouldHaveSaved !== undefined) {
-      return Number(goal.shouldHaveSaved);
-    }
-    
+    const targetAmount = Number(goal.targetAmount || 0);
+    if (targetAmount <= 0) return 0;
+
     // For evergreen goals, calculate based on elapsed time vs targetMonths
-    if (goal.isEvergreen && goal.targetMonths) {
-      const start = goal.startDate ? new Date(goal.startDate) : new Date();
+    const evergreenMonths = this.getEvergreenTargetMonths(goal);
+    if (goal.isEvergreen && evergreenMonths) {
+      const parsedStart = goal.startDate ? new Date(goal.startDate) : new Date();
+      const start = Number.isNaN(parsedStart.getTime()) ? new Date() : parsedStart;
       const now = new Date();
-      const elapsedMs = now.getTime() - start.getTime();
-      const totalMs = goal.targetMonths * 30.44 * 24 * 60 * 60 * 1000; // Average month duration
-      const progress = Math.min(1, Math.max(0, elapsedMs / totalMs));
-      return Number(goal.targetAmount) * progress;
+
+      const monthDelta =
+        (now.getFullYear() - start.getFullYear()) * 12 +
+        (now.getMonth() - start.getMonth());
+      const hasReachedDayInMonth = now.getDate() >= start.getDate();
+      const rawElapsedMonths = monthDelta + (hasReachedDayInMonth ? 1 : 0);
+      const hasStarted = now.getTime() >= start.getTime();
+      const elapsedMonths = hasStarted ? Math.max(1, rawElapsedMonths) : 0;
+      const progress = Math.min(1, Math.max(0, elapsedMonths / evergreenMonths));
+
+      return Number((targetAmount * progress).toFixed(2));
+    }
+
+    if (goal.targetDate) {
+      const now = new Date();
+      const parsedTarget = new Date(goal.targetDate);
+      if (Number.isNaN(parsedTarget.getTime())) return 0;
+
+      if (now.getTime() >= parsedTarget.getTime()) {
+        return targetAmount;
+      }
+
+      const parsedStart = goal.startDate ? new Date(goal.startDate) : now;
+      const start = Number.isNaN(parsedStart.getTime()) ? now : parsedStart;
+      const totalMonths = this.getRemainingFullMonths(start, parsedTarget);
+
+      if (totalMonths <= 0) {
+        return targetAmount;
+      }
+
+      const remainingMonths = this.getRemainingFullMonths(now, parsedTarget);
+      const elapsedMonths = Math.min(
+        totalMonths,
+        Math.max(0, totalMonths - remainingMonths),
+      );
+      const progress = elapsedMonths / totalMonths;
+
+      return Number((targetAmount * progress).toFixed(2));
     }
     
     return 0;
@@ -730,8 +815,11 @@ export class ViewGoals extends LitElement {
       if (needed > 0) {
         let toAdd: number;
         if (isLast) {
-          // Last goal gets exactly what's remaining to ensure total = availableFunds
-          toAdd = Math.round((availableFunds - totalAllocated) * 100) / 100;
+          // Last goal gets remaining funds, but never above needed
+          toAdd = Math.min(
+            needed,
+            Math.round((availableFunds - totalAllocated) * 100) / 100,
+          );
         } else {
           toAdd = Math.min(remaining, needed);
           toAdd = Math.round(toAdd * 100) / 100; // Round to 2 decimals
@@ -782,8 +870,11 @@ export class ViewGoals extends LitElement {
       if (needed > 0) {
         let toAdd: number;
         if (isLast) {
-          // Last goal gets exactly what's remaining to ensure total = availableFunds
-          toAdd = Math.round((availableFunds - totalAllocated) * 100) / 100;
+          // Last goal gets remaining funds, but never above needed
+          toAdd = Math.min(
+            needed,
+            Math.round((availableFunds - totalAllocated) * 100) / 100,
+          );
         } else {
           toAdd = Math.min(remaining, needed);
           toAdd = Math.round(toAdd * 100) / 100; // Round to 2 decimals
@@ -842,15 +933,18 @@ export class ViewGoals extends LitElement {
     for (let i = 0; i < shortfalls.length; i++) {
       const { goal, currentSaved, shortfall } = shortfalls[i];
       const isLast = i === shortfalls.length - 1;
-      
+
       let allocation: number;
       if (isLast) {
-        // Last goal gets exactly what's remaining to avoid rounding errors
-        allocation = Math.round((availableFunds - totalAllocated) * 100) / 100;
+        // Last goal gets remaining funds, but never above its shortfall
+        allocation = Math.min(
+          shortfall,
+          Math.round((availableFunds - totalAllocated) * 100) / 100,
+        );
       } else {
         const proportion = shortfall / totalShortfall;
         allocation = availableFunds * proportion;
-        allocation = Math.round(allocation * 100) / 100; // Round to 2 decimals
+        allocation = Math.min(shortfall, Math.round(allocation * 100) / 100); // Round and cap
       }
       
       const newAmount = Math.round((currentSaved + allocation) * 100) / 100;
@@ -1126,7 +1220,7 @@ export class ViewGoals extends LitElement {
       const targetAmount = Number(goal.targetAmount || 0);
       const savedAmount = Number(goal.savedAmount || 0);
       const percent = targetAmount > 0 ? Math.min(100, (savedAmount / targetAmount) * 100) : 0;
-      const shouldHave = Number(goal.shouldHaveSaved || 0);
+      const shouldHave = this.getEffectiveShouldHaveSaved(goal);
       const diff = savedAmount - shouldHave;
       const isBehind = diff < 0;
 
@@ -1161,21 +1255,21 @@ export class ViewGoals extends LitElement {
                                 ` : (goal.categoryId ? html`<span class="category-tag">${this.getCategoryName(goal.categoryId)}</span>` : '-')}
                             </td>
 
-                            <td class="editable col-date" @click="${() => !isEditingStartDate && this.startEditing(goal.id, 'startDate', goal.startDate ? new Date(goal.startDate).toISOString().split('T')[0] : '')}">
+                            <td class="editable col-date" @click="${() => !isEditingStartDate && this.startEditing(goal.id, 'startDate', goal.startDate)}">
                                 ${isEditingStartDate ? html`
-                                    <input id="edit-${goal.id}-startDate" type="date" .value="${this.editValue}"
-                                                                                                        @input="${(e: any) => this.editValue = e.target.value}"
-                                                                                                        @blur="${() => this.saveCell(goal.id, 'startDate')}"
-                                                                                                        @keydown="${(e: any) => this.handleKeyDown(e, goal.id, 'startDate')}">
-                                                                                                ` : (goal.startDate ? new Date(goal.startDate).toISOString().split('T')[0] : '-')}
-                                                                                            </td>                            <td class="editable col-date" @click="${() => !isEditingDate && this.startEditing(goal.id, 'targetDate', new Date(goal.targetDate).toISOString().split('T')[0])}">
+                                    <input id="edit-${goal.id}-startDate" type="text" pattern="\d{4}-\d{2}-\d{2}" placeholder="yyyy-mm-dd" .value="${this.editValue}"
+                                                                                                         @input="${(e: any) => this.editValue = e.target.value}"
+                                                                                                         @blur="${() => this.saveCell(goal.id, 'startDate')}"
+                                                                                                         @keydown="${(e: any) => this.handleKeyDown(e, goal.id, 'startDate')}">
+                                                                                                ` : (goal.startDate ? this.formatDateForInput(goal.startDate) : '-')}
+                                                                                            </td>                            <td class="editable col-date" @click="${() => !isEditingDate && this.startEditing(goal.id, 'targetDate', goal.targetDate)}">
                                 ${isEditingDate ? html`
-                                    <input id="edit-${goal.id}-targetDate" type="date" .value="${this.editValue}"
-                                                                                                        @input="${(e: any) => this.editValue = e.target.value}"
-                                                                                                        @blur="${() => this.saveCell(goal.id, 'targetDate')}"
-                                                                                                        @keydown="${(e: any) => this.handleKeyDown(e, goal.id, 'targetDate')}">
-                                                                                                ` : (goal.isEvergreen ? html`<span style="color: var(--md-sys-color-tertiary);">∞ ${i18n.t('goals.evergreen')}${percent < 100 ? ` (${goal.targetMonths || 12}mo)` : ''}</span>` : (goal.targetDate ? new Date(goal.targetDate).toISOString().split('T')[0] : '-'))}
-                                                                                            </td>                            <td class="editable" @click="${() => !isEditingTarget && this.startEditing(goal.id, 'targetAmount', goal.targetAmount)}">
+                                    <input id="edit-${goal.id}-targetDate" type="text" pattern="\d{4}-\d{2}-\d{2}" placeholder="yyyy-mm-dd" .value="${this.editValue}"
+                                                                                                         @input="${(e: any) => this.editValue = e.target.value}"
+                                                                                                         @blur="${() => this.saveCell(goal.id, 'targetDate')}"
+                                                                                                         @keydown="${(e: any) => this.handleKeyDown(e, goal.id, 'targetDate')}">
+                                                                                                ` : (goal.isEvergreen ? html`<span style="color: var(--md-sys-color-tertiary);">∞ ${i18n.t('goals.evergreen')}${percent < 100 ? ` (${goal.targetMonths || 12}mo)` : ''}</span>` : (goal.targetDate ? this.formatDateForInput(goal.targetDate) : '-'))}
+                                                                                             </td>                            <td class="editable" @click="${() => !isEditingTarget && this.startEditing(goal.id, 'targetAmount', goal.targetAmount)}">
                                 ${isEditingTarget ? html`
                                     <input id="edit-${goal.id}-targetAmount" type="number" .value="${this.editValue}"
                                         @input="${(e: any) => this.editValue = parseFloat(e.target.value)}"
@@ -1200,7 +1294,7 @@ export class ViewGoals extends LitElement {
                             <td>
                                 <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 2px;">
                                     <div class="progress-bar"><div class="progress-fill" style="width: ${percent}%"></div></div>
-                                    <span style="font-size: 0.8rem; font-weight: 500; min-width: 35px;">${percent.toFixed(0)}%</span>
+                                    <span style="font-size: 0.8rem; font-weight: 500; min-width: 35px;">${percent >= 100 ? 100 : Math.floor(percent)}%</span>
                                 </div>
                                 <div class="${isBehind && percent < 100 && !goal.isEvergreen ? 'status-behind' : 'status-ok'}" style="font-size: 0.75rem;">
                                     ${percent >= 100 ? i18n.t('goals.status.completed') :

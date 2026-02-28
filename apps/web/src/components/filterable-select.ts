@@ -20,6 +20,8 @@ export class FilterableSelect extends LitElement {
   @state() private isOpen = false;
   @state() private filterText = '';
   @state() private focusedIndex = -1;
+  @state() private dropdownStyle = '';
+  @state() private openUpward = false;
 
   static styles = css`
     :host {
@@ -86,21 +88,25 @@ export class FilterableSelect extends LitElement {
     }
 
     .dropdown {
-      position: absolute;
-      top: 100%;
-      left: 0;
-      right: 0;
       background: var(--md-sys-color-surface);
       border: 1px solid var(--md-sys-color-outline);
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+      z-index: 1000;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .dropdown.open-down {
       border-top: none;
       border-bottom-left-radius: var(--md-sys-shape-corner-small);
       border-bottom-right-radius: var(--md-sys-shape-corner-small);
-      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-      z-index: 1000;
-      max-height: 300px;
-      overflow-y: auto;
-      display: flex;
-      flex-direction: column;
+    }
+
+    .dropdown.open-up {
+      border-bottom: none;
+      border-top-left-radius: var(--md-sys-shape-corner-small);
+      border-top-right-radius: var(--md-sys-shape-corner-small);
     }
 
     .filter-input {
@@ -184,11 +190,16 @@ export class FilterableSelect extends LitElement {
     if (this.isOpen) {
       this.filterText = '';
       this.focusedIndex = -1;
+      this.updateDropdownPosition();
+      window.addEventListener('resize', this.handleViewportChange);
+      window.addEventListener('scroll', this.handleViewportChange, true);
       // Focus the filter input after render
       this.updateComplete.then(() => {
         const input = this.shadowRoot?.querySelector('.filter-input') as HTMLInputElement;
         input?.focus();
       });
+    } else {
+      this.cleanupViewportListeners();
     }
   }
 
@@ -196,6 +207,49 @@ export class FilterableSelect extends LitElement {
     this.isOpen = false;
     this.filterText = '';
     this.focusedIndex = -1;
+    this.cleanupViewportListeners();
+  }
+
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    this.cleanupViewportListeners();
+  }
+
+  private cleanupViewportListeners() {
+    window.removeEventListener('resize', this.handleViewportChange);
+    window.removeEventListener('scroll', this.handleViewportChange, true);
+  }
+
+  private handleViewportChange = () => {
+    if (this.isOpen) {
+      this.updateDropdownPosition();
+    }
+  };
+
+  private updateDropdownPosition() {
+    const trigger = this.shadowRoot?.querySelector('.select-trigger') as HTMLElement | null;
+    if (!trigger) return;
+
+    const rect = trigger.getBoundingClientRect();
+    const viewportPadding = 8;
+    const preferredHeight = 300;
+    const minHeight = 160;
+    const spaceBelow = window.innerHeight - rect.bottom - viewportPadding;
+    const spaceAbove = rect.top - viewportPadding;
+
+    const shouldOpenUp = spaceBelow < 220 && spaceAbove > spaceBelow;
+    const availableHeight = shouldOpenUp ? spaceAbove : spaceBelow;
+    const maxHeight = Math.max(minHeight, Math.min(preferredHeight, availableHeight));
+
+    const width = Math.min(rect.width, window.innerWidth - viewportPadding * 2);
+    const left = Math.max(
+      viewportPadding,
+      Math.min(rect.left, window.innerWidth - width - viewportPadding),
+    );
+    const top = shouldOpenUp ? rect.top - maxHeight : rect.bottom;
+
+    this.openUpward = shouldOpenUp;
+    this.dropdownStyle = `position: fixed; left: ${left}px; top: ${top}px; width: ${width}px; max-height: ${maxHeight}px;`;
   }
 
   private selectOption(option: SelectOption) {
@@ -287,7 +341,10 @@ export class FilterableSelect extends LitElement {
 
         ${this.isOpen ? html`
           <div class="overlay" @click=${this.closeDropdown}></div>
-          <div class="dropdown">
+          <div
+            class="dropdown ${this.openUpward ? 'open-up' : 'open-down'}"
+            style=${this.dropdownStyle}
+          >
             <input
               class="filter-input"
               type="text"

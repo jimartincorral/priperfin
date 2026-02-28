@@ -13,7 +13,7 @@ export class UpdateTransactionDto extends PartialType(CreateTransactionDto) {
   @IsOptional()
   costObjectId?: string | null;
 
-  @ValidateIf((object, value) => value !== null)
+  @ValidateIf((_, value) => value !== null && value !== undefined && value !== '')
   @IsUUID()
   accountId?: string | null;
 }
