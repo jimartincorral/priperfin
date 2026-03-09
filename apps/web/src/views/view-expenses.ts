@@ -168,6 +168,8 @@ export class ViewExpenses extends LitElement {
 
   // Non-reactive property to preserve scroll position across renders
   private _preservedScrollY: number | null = null;
+  private _autoPageSizeToTotalOnNextLoad = false;
+  private _allTimePageSizeSuggested = false;
   @state() columnConfig: { id: string, label: string, visible: boolean }[] = [
     { id: 'select', label: 'Select', visible: true },
     { id: 'date', label: 'common.date', visible: true },
@@ -385,7 +387,7 @@ export class ViewExpenses extends LitElement {
         <div class="pagination-controls" style="margin-bottom: 1rem;">
             <span style="font-size: 0.875rem; color: var(--md-sys-color-on-surface-variant);">${i18n.t('table.rows_per_page')}:</span>
             <select style="width: auto; height: 32px; padding: 0 8px;" 
-                .value="${this.pageSize}" 
+                .value="${String(this.pageSize)}" 
                 @change="${(e: any) => {
                   const nextPageSize = parseInt(e.target.value, 10);
                   if (Number.isNaN(nextPageSize) || nextPageSize <= 0) return;
@@ -393,7 +395,7 @@ export class ViewExpenses extends LitElement {
                   this.currentPage = 1;
                 }}">
                 ${this.getPageSizeOptions().map(size => html`
-                    <option value="${size}">${size}${size === this.filteredTransactions.length ? ` (${i18n.t('common.total')})` : ''}</option>
+                    <option value="${size}" ?selected=${size === this.pageSize}>${size}${size === this.filteredTransactions.length ? ` (${i18n.t('common.total')})` : ''}</option>
                 `)}
             </select>
 
@@ -425,12 +427,14 @@ export class ViewExpenses extends LitElement {
     const monthKey = `${balanceYear}-${String(balanceMonth).padStart(2, '0')}`;
     const startBalanceKey = `starting_balance_all_${monthKey}`;
     const accountKey = this.selectedAccountId || 'all';
-    const verifiedBalanceKey = `balance_verified_${accountKey}_${balanceYear}_${balanceMonth}`;
+    const verifiedBalanceKey = this.getVerifiedBalanceSettingKey();
+    const legacyVerifiedBalanceKey = `balance_verified_${accountKey}_${balanceYear}_${balanceMonth}`;
 
     try {
-      const [balData, settingData, monthlyRecord, allAccountsStartSetting] = await Promise.all([
+      const [balData, settingData, legacySettingData, monthlyRecord, allAccountsStartSetting] = await Promise.all([
         api.get('/transactions/balance', this.selectedAccountId ? { accountId: this.selectedAccountId } : {}),
         api.get(`/settings/${verifiedBalanceKey}`).catch(() => null),
+        api.get(`/settings/${legacyVerifiedBalanceKey}`).catch(() => null),
         this.selectedAccountId
           ? api.get(
           `/monthly-balances/${monthKey}`,
@@ -443,7 +447,8 @@ export class ViewExpenses extends LitElement {
       ]);
 
       this.totalBalance = balData.total ?? balData.balance ?? 0;
-      this.verifiedBalance = settingData ? parseFloat(settingData) : 0;
+      const verifiedRaw = settingData ?? legacySettingData;
+      this.verifiedBalance = verifiedRaw ? parseFloat(verifiedRaw) : 0;
 
       if (monthlyRecord) {
         this.startingBalance = Number(monthlyRecord.balance);
@@ -471,6 +476,11 @@ export class ViewExpenses extends LitElement {
     }
 
     return { month: this.month, year: this.year };
+  }
+
+  getVerifiedBalanceSettingKey() {
+    const accountKey = this.selectedAccountId || 'all';
+    return `balance_verified_account_${accountKey}`;
   }
 
   async suggestStartingBalance(targetMonth = this.month, targetYear = this.year) {
@@ -717,8 +727,7 @@ export class ViewExpenses extends LitElement {
     if (isNaN(newVal)) return;
 
     this.verifiedBalance = newVal;
-    const accountKey = this.selectedAccountId || 'all';
-    const verifiedBalanceKey = `balance_verified_${accountKey}_${this.year}_${this.month}`;
+    const verifiedBalanceKey = this.getVerifiedBalanceSettingKey();
 
     try {
       await api.post(`/settings/${verifiedBalanceKey}`, { value: newVal.toString() });
@@ -1274,6 +1283,22 @@ export class ViewExpenses extends LitElement {
 
       if (txsResult.status === 'fulfilled') {
         this.transactions = txsResult.value;
+
+        const shouldSuggestAllTimePageSize =
+          this.dateFilterMode === 'all_time' &&
+          (this._autoPageSizeToTotalOnNextLoad || !this._allTimePageSizeSuggested);
+
+        if (shouldSuggestAllTimePageSize) {
+          const totalRows = this.filteredTransactions.length;
+          if (totalRows > 0) {
+            this.pageSize = totalRows;
+            this.currentPage = 1;
+          }
+          this._allTimePageSizeSuggested = true;
+          this._autoPageSizeToTotalOnNextLoad = false;
+        } else if (this.dateFilterMode !== 'all_time') {
+          this._allTimePageSizeSuggested = false;
+        }
       } else {
         console.error('Failed to load transactions', txsResult.reason);
         alert('Failed to load transactions. Check console for details.');
@@ -1729,7 +1754,20 @@ Tables: ${result.tables?.join(', ')}`;
                     @change="${(e: CustomEvent) => { this.selectedAccountId = e.detail.value; this.loadData(true); }}"
                     width="200px">
                 </filterable-select>
-                <select @change="${(e: any) => { this.dateFilterMode = e.target.value as DateFilterMode; this.loadData(true); }}" .value="${this.dateFilterMode}">
+                <select @change="${(e: any) => {
+                    const previousMode = this.dateFilterMode;
+                    const nextMode = e.target.value as DateFilterMode;
+                    this.dateFilterMode = nextMode;
+
+                    if (previousMode === 'all_time' && nextMode !== 'all_time') {
+                      this.pageSize = 20;
+                      this.currentPage = 1;
+                      this._allTimePageSizeSuggested = false;
+                    }
+
+                    this._autoPageSizeToTotalOnNextLoad = this.dateFilterMode === 'all_time';
+                    this.loadData(true);
+                }}" .value="${this.dateFilterMode}">
                     <option value="month">${i18n.t('filters.mode_month')}</option>
                     <option value="year">${i18n.t('filters.mode_year')}</option>
                     <option value="custom">${i18n.t('filters.mode_custom')}</option>
@@ -2241,7 +2279,7 @@ Tables: ${result.tables?.join(', ')}`;
         <div class="pagination-controls">
             <span style="font-size: 0.875rem; color: var(--md-sys-color-on-surface-variant);">${i18n.t('table.rows_per_page')}:</span>
             <select style="width: auto; height: 32px; padding: 0 8px;" 
-                .value="${this.pageSize}" 
+                .value="${String(this.pageSize)}" 
                 @change="${(e: any) => {
                   const nextPageSize = parseInt(e.target.value, 10);
                   if (Number.isNaN(nextPageSize) || nextPageSize <= 0) return;
@@ -2249,7 +2287,7 @@ Tables: ${result.tables?.join(', ')}`;
                   this.currentPage = 1;
                 }}">
                 ${this.getPageSizeOptions().map(size => html`
-                    <option value="${size}">${size}${size === this.filteredTransactions.length ? ` (${i18n.t('common.total')})` : ''}</option>
+                    <option value="${size}" ?selected=${size === this.pageSize}>${size}${size === this.filteredTransactions.length ? ` (${i18n.t('common.total')})` : ''}</option>
                 `)}
             </select>
 

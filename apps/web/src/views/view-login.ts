@@ -7,9 +7,10 @@ import type { SelectOption } from '../components/filterable-select';
 
 @customElement('view-login')
 export class ViewLogin extends LitElement {
-  @state() profiles: Array<{ id: string; name: string }> = [];
+  @state() profiles: Array<{ id: string; name: string; pinLength?: number }> = [];
   @state() selectedProfile = '';
   @state() pin = '';
+  @state() pinLength = 6;
   @state() loading = false;
   @state() error = '';
   @state() showPin = false;
@@ -68,18 +69,25 @@ export class ViewLogin extends LitElement {
     }
 
     .pin-container {
-      display: flex;
-      gap: 8px;
-      justify-content: center;
       margin: 16px 0;
     }
 
-    .pin-digit {
-      width: 48px;
-      height: 56px;
-      text-align: center;
+    .pin-line-input {
+      width: 100%;
+      border: none;
+      border-bottom: 2px solid var(--md-sys-color-outline);
+      border-radius: 0;
+      background: transparent;
+      padding: 12px 4px;
       font-size: 24px;
-      padding: 0;
+      text-align: center;
+      letter-spacing: 6px;
+      color: var(--md-sys-color-on-surface);
+    }
+
+    .pin-line-input:focus {
+      outline: none;
+      border-bottom-color: var(--md-sys-color-primary);
     }
 
     button {
@@ -142,10 +150,24 @@ export class ViewLogin extends LitElement {
       this.profiles = profiles;
       if (profiles.length > 0) {
         this.selectedProfile = profiles[0].name;
+        this.pinLength = this.getProfilePinLength(this.selectedProfile);
       }
     } catch (e: any) {
       this.error = 'Failed to load profiles';
     }
+  }
+
+  getProfilePinLength(profileName: string) {
+    const profile = this.profiles.find((item) => item.name === profileName);
+    const length = profile?.pinLength ?? 6;
+    return length >= 4 && length <= 6 ? length : 6;
+  }
+
+  handleProfileChange(profileName: string) {
+    this.selectedProfile = profileName;
+    this.pinLength = this.getProfilePinLength(profileName);
+    this.pin = '';
+    this.error = '';
   }
 
   getProfileOptions(): SelectOption[] {
@@ -194,36 +216,23 @@ export class ViewLogin extends LitElement {
     }, 1000);
   }
 
-  handlePinInput(e: Event, index: number) {
+  handlePinInput(e: Event) {
     const input = e.target as HTMLInputElement;
-    const value = input.value;
+    const onlyDigits = input.value.replace(/\D/g, '');
+    this.pin = onlyDigits.slice(0, 6);
+    input.value = this.pin;
 
-    if (!/^\d*$/.test(value)) {
-      input.value = '';
-      return;
-    }
-
-    if (value && index < 5) {
-      const nextInput = this.shadowRoot?.querySelectorAll('.pin-digit')[index + 1] as HTMLInputElement;
-      nextInput?.focus();
-    }
-
-    this.pin = Array.from(this.shadowRoot?.querySelectorAll('.pin-digit') || [])
-      .map((input: any) => input.value)
-      .join('');
-
-    if (this.pin.length === 6 && index === 5) {
+    if (this.pin.length === this.pinLength) {
       this.handleLogin();
     }
   }
 
-  handlePinKeydown(e: KeyboardEvent, index: number) {
-    if (e.key === 'Backspace') {
-      const input = e.target as HTMLInputElement;
-      if (!input.value && index > 0) {
-        const prevInput = this.shadowRoot?.querySelectorAll('.pin-digit')[index - 1] as HTMLInputElement;
-        prevInput?.focus();
+  handlePinKeydown(e: KeyboardEvent) {
+    if (e.key === 'Enter') {
+      if (this.pin.length >= 4 && this.pin.length <= 6) {
+        this.handleLogin();
       }
+      return;
     }
   }
 
@@ -238,23 +247,22 @@ export class ViewLogin extends LitElement {
             .value="${this.selectedProfile}"
             .options="${this.getProfileOptions()}"
             .placeholder="${i18n.t('auth.login.profile')}"
-            @change="${(e: CustomEvent) => this.selectedProfile = e.detail.value}">
+            @change="${(e: CustomEvent) => this.handleProfileChange(e.detail.value)}">
           </filterable-select>
         </div>
 
         <div class="form-field">
           <label>${i18n.t('auth.login.pin')}</label>
           <div class="pin-container">
-            ${[0, 1, 2, 3, 4, 5].map(i => html`
-              <input 
-                type="${this.showPin ? 'text' : 'password'}"
-                inputmode="numeric"
-                maxlength="1"
-                class="pin-digit"
-                @input=${(e: Event) => this.handlePinInput(e, i)}
-                @keydown=${(e: KeyboardEvent) => this.handlePinKeydown(e, i)}
-              />
-            `)}
+            <input
+              type="${this.showPin ? 'text' : 'password'}"
+              inputmode="numeric"
+              maxlength="6"
+              class="pin-line-input"
+              .value="${this.pin}"
+              @input=${(e: Event) => this.handlePinInput(e)}
+              @keydown=${(e: KeyboardEvent) => this.handlePinKeydown(e)}
+            />
           </div>
           <button class="show-pin-btn" @click=${() => this.showPin = !this.showPin}>
             ${this.showPin ? i18n.t('auth.login.hidePin') : i18n.t('auth.login.showPin')}

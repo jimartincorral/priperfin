@@ -20,6 +20,10 @@ export class AuthService {
 
   constructor(private prisma: PrismaService) {}
 
+  private getPinLengthSettingKey(profileId: string) {
+    return `pin_length_profile_${profileId}`;
+  }
+
   async createProfile(dto: CreateProfileDto) {
     this.logger.log(`Creating profile: ${dto.name}`);
 
@@ -43,6 +47,15 @@ export class AuthService {
       data: {
         name: dto.name,
         pinHash,
+      },
+    });
+
+    await this.prisma.setting.upsert({
+      where: { key: this.getPinLengthSettingKey(profile.id) },
+      update: { value: dto.pin.length.toString() },
+      create: {
+        key: this.getPinLengthSettingKey(profile.id),
+        value: dto.pin.length.toString(),
       },
     });
 
@@ -75,6 +88,15 @@ export class AuthService {
       this.logger.warn(`Login failed: Invalid PIN for profile ${dto.name}`);
       throw new UnauthorizedException('Invalid profile name or PIN');
     }
+
+    await this.prisma.setting.upsert({
+      where: { key: this.getPinLengthSettingKey(profile.id) },
+      update: { value: dto.pin.length.toString() },
+      create: {
+        key: this.getPinLengthSettingKey(profile.id),
+        value: dto.pin.length.toString(),
+      },
+    });
 
     // Generate session token
     const token = randomUUID();
@@ -175,6 +197,15 @@ export class AuthService {
       data: { pinHash: newPinHash },
     });
 
+    await this.prisma.setting.upsert({
+      where: { key: this.getPinLengthSettingKey(profileId) },
+      update: { value: dto.newPin.length.toString() },
+      create: {
+        key: this.getPinLengthSettingKey(profileId),
+        value: dto.newPin.length.toString(),
+      },
+    });
+
     // Invalidate all sessions for this profile (force re-login)
     const deletedSessions = await this.prisma.session.deleteMany({
       where: { profileId },
@@ -191,10 +222,32 @@ export class AuthService {
   }
 
   async getAllProfiles() {
-    return this.prisma.profile.findMany({
+    const profiles = await this.prisma.profile.findMany({
       select: { id: true, name: true },
       orderBy: { name: 'asc' },
     });
+
+    const settings = await this.prisma.setting.findMany({
+      where: {
+        key: {
+          startsWith: 'pin_length_profile_',
+        },
+      },
+    });
+
+    const pinLengthByProfileId = new Map<string, number>();
+    settings.forEach((setting) => {
+      const profileId = setting.key.replace('pin_length_profile_', '');
+      const parsedLength = parseInt(setting.value, 10);
+      if (!Number.isNaN(parsedLength) && parsedLength >= 4 && parsedLength <= 6) {
+        pinLengthByProfileId.set(profileId, parsedLength);
+      }
+    });
+
+    return profiles.map((profile) => ({
+      ...profile,
+      pinLength: pinLengthByProfileId.get(profile.id) ?? 6,
+    }));
   }
 
   async deleteProfile(profileId: string, dto: { pin: string }) {
@@ -229,6 +282,10 @@ export class AuthService {
     await this.prisma.profile.delete({
       where: { id: profileId },
     });
+
+    await this.prisma.setting
+      .delete({ where: { key: this.getPinLengthSettingKey(profileId) } })
+      .catch(() => null);
 
     this.logger.log(`Profile deleted successfully: ${profileId}`);
   }

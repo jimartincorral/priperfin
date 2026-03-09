@@ -89,6 +89,29 @@ export class BackupService {
     return crypto.pbkdf2Sync(password, salt, 100000, 32, 'sha256');
   }
 
+  private isProfileSettingKey(
+    key: string,
+    accountIds: Set<string>,
+    profileId: string,
+  ): boolean {
+    if (key === 'goals_total_savings') return true;
+    if (key.startsWith('starting_balance_all_')) return true;
+    if (key.startsWith('balance_verified_all_')) return true;
+    if (key === 'balance_verified_account_all') return true;
+    if (key === `pin_length_profile_${profileId}`) return true;
+
+    for (const accountId of accountIds) {
+      if (key.startsWith(`balance_verified_${accountId}_`)) {
+        return true;
+      }
+      if (key === `balance_verified_account_${accountId}`) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
   async exportProfileData(profileId: string) {
     this.logger.log(`Exporting data for profile ${profileId}...`);
     const profile = await this.prisma.profile.findUnique({
@@ -122,6 +145,11 @@ export class BackupService {
     const monthlyBalances = await this.prisma.monthlyBalance.findMany({
       where: { account: { profileId } },
     });
+    const accountIds = new Set(accounts.map((account) => account.id));
+    const settings = await this.prisma.setting.findMany();
+    const scopedSettings = settings.filter((setting) =>
+      this.isProfileSettingKey(setting.key, accountIds, profileId),
+    );
 
     return {
       version: 2,
@@ -136,6 +164,7 @@ export class BackupService {
       savingsGoals,
       accountBalances,
       monthlyBalances,
+      settings: scopedSettings,
     };
   }
 
@@ -326,6 +355,21 @@ export class BackupService {
               balance: b.balance,
             })),
           });
+        }
+
+        // Settings related to balances/reconciliation/goals
+        if (data.settings?.length) {
+          for (const setting of data.settings) {
+            if (!setting?.key) continue;
+            await tx.setting.upsert({
+              where: { key: setting.key },
+              update: { value: setting.value ?? '' },
+              create: {
+                key: setting.key,
+                value: setting.value ?? '',
+              },
+            });
+          }
         }
       },
       {
