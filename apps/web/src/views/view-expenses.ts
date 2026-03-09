@@ -180,6 +180,49 @@ export class ViewExpenses extends LitElement {
     { id: 'actions', label: 'common.actions', visible: true }
   ];
 
+  normalizeColumnConfig(rawConfig: any) {
+    const defaultConfig = [
+      { id: 'select', label: 'Select', visible: true },
+      { id: 'date', label: 'common.date', visible: true },
+      { id: 'description', label: 'common.description', visible: true },
+      { id: 'categoryId', label: 'common.category', visible: true },
+      { id: 'costObjectId', label: 'cost_objects.funding_source', visible: false },
+      { id: 'amount', label: 'common.amount', visible: true },
+      { id: 'budget', label: 'expenses.budget_remaining', visible: true },
+      { id: 'notes', label: 'common.notes', visible: true },
+      { id: 'actions', label: 'common.actions', visible: true },
+    ];
+
+    if (!Array.isArray(rawConfig)) return defaultConfig;
+
+    const defaultsById = new Map(defaultConfig.map(col => [col.id, col]));
+    const mergedById = new Map(defaultConfig.map(col => [col.id, { ...col }]));
+
+    rawConfig.forEach((item: any) => {
+      if (!item || typeof item.id !== 'string') return;
+      const defaultCol = defaultsById.get(item.id);
+      if (!defaultCol) return;
+
+      const isProtected = item.id === 'select' || item.id === 'actions';
+      const nextVisible = isProtected ? true : (typeof item.visible === 'boolean' ? item.visible : defaultCol.visible);
+
+      mergedById.set(item.id, {
+        ...defaultCol,
+        visible: nextVisible,
+      });
+    });
+
+    const orderedIds = rawConfig
+      .map((item: any) => item?.id)
+      .filter((id: any, index: number, arr: any[]) => typeof id === 'string' && defaultsById.has(id) && arr.indexOf(id) === index);
+
+    const missingIds = defaultConfig
+      .map(col => col.id)
+      .filter(id => !orderedIds.includes(id));
+
+    return [...orderedIds, ...missingIds].map(id => mergedById.get(id)!);
+  }
+
   get filteredTransactions() {
     let filtered = this.transactions;
 
@@ -199,11 +242,11 @@ export class ViewExpenses extends LitElement {
       filtered = filtered.filter(t => Math.abs(t.amount) <= this.filterMaxAmount!);
     }
 
-    if (this.filterDateFrom) {
+    if (this.isValidIsoDate(this.filterDateFrom)) {
       filtered = filtered.filter(t => new Date(t.date).toISOString().split('T')[0] >= this.filterDateFrom);
     }
 
-    if (this.filterDateTo) {
+    if (this.isValidIsoDate(this.filterDateTo)) {
       filtered = filtered.filter(t => new Date(t.date).toISOString().split('T')[0] <= this.filterDateTo);
     }
 
@@ -245,11 +288,17 @@ export class ViewExpenses extends LitElement {
 
   get pagedTransactions() {
     const total = this.filteredTransactions.length;
-    const maxPage = Math.ceil(total / this.pageSize) || 1;
+    const safePageSize = Number.isFinite(this.pageSize) && this.pageSize > 0 ? Math.floor(this.pageSize) : 20;
+    if (safePageSize !== this.pageSize) this.pageSize = safePageSize;
+
+    const safeCurrentPage = Number.isFinite(this.currentPage) && this.currentPage > 0 ? Math.floor(this.currentPage) : 1;
+    if (safeCurrentPage !== this.currentPage) this.currentPage = safeCurrentPage;
+
+    const maxPage = Math.ceil(total / safePageSize) || 1;
     if (this.currentPage > maxPage) this.currentPage = 1;
 
-    const start = (this.currentPage - 1) * this.pageSize;
-    return this.filteredTransactions.slice(start, start + this.pageSize);
+    const start = (this.currentPage - 1) * safePageSize;
+    return this.filteredTransactions.slice(start, start + safePageSize);
   }
 
   get sortedTransactions() {
@@ -337,12 +386,18 @@ export class ViewExpenses extends LitElement {
             <span style="font-size: 0.875rem; color: var(--md-sys-color-on-surface-variant);">${i18n.t('table.rows_per_page')}:</span>
             <select style="width: auto; height: 32px; padding: 0 8px;" 
                 .value="${this.pageSize}" 
-                @change="${(e: any) => { this.pageSize = parseInt(e.target.value); this.currentPage = 1; }}">
-                <option value="20">20</option>
-                <option value="50">50</option>
-                <option value="100">100</option>
-                <option value="200">200</option>
+                @change="${(e: any) => {
+                  const nextPageSize = parseInt(e.target.value, 10);
+                  if (Number.isNaN(nextPageSize) || nextPageSize <= 0) return;
+                  this.pageSize = nextPageSize;
+                  this.currentPage = 1;
+                }}">
+                ${this.getPageSizeOptions().map(size => html`
+                    <option value="${size}">${size}${size === this.filteredTransactions.length ? ` (${i18n.t('common.total')})` : ''}</option>
+                `)}
             </select>
+
+            <button class="btn-secondary" style="width: auto; height: 32px; padding: 0 12px;" @click="${() => this.showColumnModal = true}">${i18n.t('filters.columns')}</button>
 
             <span style="font-size: 0.875rem; color: var(--md-sys-color-on-surface-variant);">
                 ${(this.currentPage - 1) * this.pageSize + 1}-${Math.min(this.currentPage * this.pageSize, this.filteredTransactions.length)} of ${this.filteredTransactions.length}
@@ -366,24 +421,36 @@ export class ViewExpenses extends LitElement {
 
   async loadBalances() {
     this.balanceLoading = true;
-    const monthKey = `${this.year}-${String(this.month).padStart(2, '0')}`;
+    const { year: balanceYear, month: balanceMonth } = this.getBalanceReferenceMonthYear();
+    const monthKey = `${balanceYear}-${String(balanceMonth).padStart(2, '0')}`;
+    const startBalanceKey = `starting_balance_all_${monthKey}`;
     const accountKey = this.selectedAccountId || 'all';
-    const verifiedBalanceKey = `balance_verified_${accountKey}_${this.year}_${this.month}`;
+    const verifiedBalanceKey = `balance_verified_${accountKey}_${balanceYear}_${balanceMonth}`;
 
     try {
-      const [balData, settingData, monthlyRecord] = await Promise.all([
+      const [balData, settingData, monthlyRecord, allAccountsStartSetting] = await Promise.all([
         api.get('/transactions/balance', this.selectedAccountId ? { accountId: this.selectedAccountId } : {}),
         api.get(`/settings/${verifiedBalanceKey}`).catch(() => null),
-        this.selectedAccountId ? api.get(`/monthly-balances/${monthKey}`, { accountId: this.selectedAccountId }).catch(() => null) : Promise.resolve(null)
+        this.selectedAccountId
+          ? api.get(
+          `/monthly-balances/${monthKey}`,
+          this.selectedAccountId ? { accountId: this.selectedAccountId } : {},
+        ).catch(() => null)
+          : Promise.resolve(null),
+        !this.selectedAccountId
+          ? api.get(`/settings/${startBalanceKey}`).catch(() => null)
+          : Promise.resolve(null),
       ]);
 
-      this.totalBalance = balData.total || 0;
+      this.totalBalance = balData.total ?? balData.balance ?? 0;
       this.verifiedBalance = settingData ? parseFloat(settingData) : 0;
 
       if (monthlyRecord) {
         this.startingBalance = Number(monthlyRecord.balance);
+      } else if (allAccountsStartSetting !== null && allAccountsStartSetting !== undefined) {
+        this.startingBalance = Number(allAccountsStartSetting);
       } else {
-        await this.suggestStartingBalance();
+        await this.suggestStartingBalance(balanceMonth, balanceYear);
       }
     } catch (e) {
       console.error('Failed to load balances', e);
@@ -392,23 +459,56 @@ export class ViewExpenses extends LitElement {
     }
   }
 
-  async suggestStartingBalance() {
+  getBalanceReferenceMonthYear() {
+    if (this.dateFilterMode === 'all_time' && this.transactions.length > 0) {
+      const latestTxDate = this.transactions
+        .map((t: any) => new Date(t.date))
+        .sort((a, b) => b.getTime() - a.getTime())[0];
+      return {
+        month: latestTxDate.getMonth() + 1,
+        year: latestTxDate.getFullYear(),
+      };
+    }
+
+    return { month: this.month, year: this.year };
+  }
+
+  async suggestStartingBalance(targetMonth = this.month, targetYear = this.year) {
     // Calculate previous month
-    let prevMonth = this.month - 1;
-    let prevYear = this.year;
+    let prevMonth = targetMonth - 1;
+    let prevYear = targetYear;
     if (prevMonth === 0) {
       prevMonth = 12;
       prevYear--;
     }
     const prevKey = `${prevYear}-${String(prevMonth).padStart(2, '0')}`;
+    const prevAllAccountsStartBalanceKey = `starting_balance_all_${prevKey}`;
 
     try {
       // Get previous starting balance
-      const prevRecord = await api.get(`/monthly-balances/${prevKey}`).catch(() => null);
-      const prevStart = prevRecord ? Number(prevRecord.balance) : 0;
+      const [prevRecord, prevAllAccountsStartSetting] = await Promise.all([
+        this.selectedAccountId
+          ? api.get(
+            `/monthly-balances/${prevKey}`,
+            this.selectedAccountId ? { accountId: this.selectedAccountId } : {},
+          ).catch(() => null)
+          : Promise.resolve(null),
+        !this.selectedAccountId
+          ? api.get(`/settings/${prevAllAccountsStartBalanceKey}`).catch(() => null)
+          : Promise.resolve(null),
+      ]);
+      const prevStart = prevRecord
+        ? Number(prevRecord.balance)
+        : (prevAllAccountsStartSetting !== null && prevAllAccountsStartSetting !== undefined
+          ? Number(prevAllAccountsStartSetting)
+          : 0);
 
       // Get previous transactions to calc net change
-      const prevTxs = await api.get('/transactions', { month: prevMonth, year: prevYear });
+      const prevTxs = await api.get('/transactions', {
+        month: prevMonth,
+        year: prevYear,
+        ...(this.selectedAccountId ? { accountId: this.selectedAccountId } : {}),
+      });
 
       let income = 0;
       let expense = 0;
@@ -435,10 +535,87 @@ export class ViewExpenses extends LitElement {
 
     this.startingBalance = newVal;
     const monthKey = `${this.year}-${String(this.month).padStart(2, '0')}`;
+    const startBalanceKey = `starting_balance_all_${monthKey}`;
     try {
-      await api.post('/monthly-balances', { month: monthKey, balance: newVal });
+      if (this.selectedAccountId) {
+        await api.post('/monthly-balances', {
+          month: monthKey,
+          balance: newVal,
+          accountId: this.selectedAccountId,
+        });
+      } else {
+        await api.post(`/settings/${startBalanceKey}`, { value: newVal.toString() });
+      }
     } catch (e) {
       console.error('Failed to save monthly balance', e);
+    }
+  }
+
+  getMonthKey(dateValue: string) {
+    const date = new Date(dateValue);
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+  }
+
+  async setStartingBalanceFromTransaction(tx: any) {
+    const currentPrompt = `${i18n.t('expenses.set_from_movement_prompt')} (${new Date(tx.date).toISOString().split('T')[0]})`;
+    const entered = window.prompt(currentPrompt, (this.verifiedBalance || 0).toFixed(2));
+    if (entered === null) return;
+
+    const anchorBalanceAfter = parseFloat(entered.replace(',', '.'));
+    if (!Number.isFinite(anchorBalanceAfter)) {
+      alert(i18n.t('expenses.set_from_movement_invalid'));
+      return;
+    }
+
+    try {
+      const allTxs = await api.get('/transactions', {
+        filterMode: 'all_time',
+        ...(this.selectedAccountId ? { accountId: this.selectedAccountId } : {}),
+      });
+
+      const sortedTxs = [...allTxs].sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      const anchorIndex = sortedTxs.findIndex((item: any) => item.id === tx.id);
+      if (anchorIndex === -1) {
+        alert(i18n.t('expenses.set_from_movement_failed'));
+        return;
+      }
+
+      const anchorMonth = this.getMonthKey(tx.date);
+      const txUntilAnchorInMonth = sortedTxs.filter((item: any, index: number) => index <= anchorIndex && this.getMonthKey(item.date) === anchorMonth);
+      const movementUntilAnchor = txUntilAnchorInMonth.reduce((sum: number, item: any) => sum + Number(item.amount || 0), 0);
+      const anchorMonthStart = anchorBalanceAfter - movementUntilAnchor;
+
+      const monthKeys = Array.from(new Set(sortedTxs
+        .slice(anchorIndex)
+        .map((item: any) => this.getMonthKey(item.date))))
+        .sort();
+
+      let rollingMonthStart = anchorMonthStart;
+      for (const monthKey of monthKeys) {
+        if (this.selectedAccountId) {
+          await api.post('/monthly-balances', {
+            month: monthKey,
+            balance: rollingMonthStart,
+            accountId: this.selectedAccountId,
+          });
+        } else {
+          await api.post(`/settings/starting_balance_all_${monthKey}`, {
+            value: rollingMonthStart.toString(),
+          });
+        }
+
+        const monthlyNet = sortedTxs
+          .filter((item: any) => this.getMonthKey(item.date) === monthKey)
+          .reduce((sum: number, item: any) => sum + Number(item.amount || 0), 0);
+
+        rollingMonthStart += monthlyNet;
+      }
+
+      await this.loadData(true);
+      alert(i18n.t('expenses.set_from_movement_done'));
+    } catch (e: any) {
+      console.error('Failed to set balances from movement', e);
+      alert(`${i18n.t('expenses.set_from_movement_failed')}: ${e.message || i18n.t('common.unknown_error')}`);
     }
   }
 
@@ -505,6 +682,34 @@ export class ViewExpenses extends LitElement {
       }
     });
     return { income, expense };
+  }
+
+  getPageSizeOptions() {
+    const defaultSizes = [20, 50, 100, 200];
+    const totalRows = this.filteredTransactions.length;
+    const currentPageSize = Number(this.pageSize);
+    const sizes = [
+      ...defaultSizes,
+      totalRows,
+      currentPageSize,
+    ].filter(size => Number.isFinite(size) && size > 0) as number[];
+    return Array.from(new Set(sizes)).sort((a, b) => a - b);
+  }
+
+  isValidIsoDate(value: string) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+    const parsed = new Date(`${value}T00:00:00`);
+    if (Number.isNaN(parsed.getTime())) return false;
+    return parsed.toISOString().slice(0, 10) === value;
+  }
+
+  normalizeDateInput(value: string) {
+    return value
+      .trim()
+      .replace(/[./\s]+/g, '-')
+      .replace(/[^\d-]/g, '')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '');
   }
 
   async updateVerifiedBalance(e: any) {
@@ -663,6 +868,24 @@ export class ViewExpenses extends LitElement {
         width: 32px; height: 32px; padding: 0;
     }
 
+    .action-buttons {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-wrap: wrap;
+    }
+
+    .action-icon {
+        width: 32px;
+        height: 32px;
+        min-width: 32px;
+        padding: 0;
+        border-radius: 16px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+
     /* Cards: Elevated */
     .card {
         background: var(--md-sys-color-surface-container-low);
@@ -762,7 +985,8 @@ export class ViewExpenses extends LitElement {
     const storedColumns = localStorage.getItem('priperfin_column_config');
     if (storedColumns) {
       try {
-        this.columnConfig = JSON.parse(storedColumns);
+        const parsedColumns = JSON.parse(storedColumns);
+        this.columnConfig = this.normalizeColumnConfig(parsedColumns);
       } catch (e) { console.error('Failed to parse column config', e); }
     }
 
@@ -933,12 +1157,12 @@ export class ViewExpenses extends LitElement {
                                 <div style="display: flex; gap: 0.5rem; align-items: center;">
                                     <input type="text" placeholder="Emoji" style="width: 60px; text-align: center;" .value="${this.categoryForm.icon}" 
                                         @input="${(e: any) => this.categoryForm = { ...this.categoryForm, icon: e.target.value }}" />
-                                    <button @click="${() => this.showEmojiPicker = !this.showEmojiPicker}" title="Pick Emoji">😀</button>
+                                    <button type="button" @click="${() => this.showEmojiPicker = !this.showEmojiPicker}" title="Pick Emoji">😀</button>
                                 </div>
                                 ${this.showEmojiPicker ? html`
                                     <div style="position: absolute; z-index: 2000; bottom: 100%; left: 0; margin-bottom: 8px;">
                                         <div style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 1000;" @click="${() => this.showEmojiPicker = false}"></div>
-                                        <emoji-picker @emoji-click="${(e: any) => {
+                                        <emoji-picker style="position: relative; z-index: 1001;" @click="${(e: Event) => e.stopPropagation()}" @emoji-click="${(e: any) => {
           console.log('Expense Emoji clicked:', e.detail);
           this.categoryForm = { ...this.categoryForm, icon: e.detail.unicode };
           this.showEmojiPicker = false;
@@ -1072,7 +1296,17 @@ export class ViewExpenses extends LitElement {
 
       // Calculate and update totalBalance to match monthly ending balance
       // This will use the already loaded this.transactions and this.categories
-      const monthlyEndingBalance = this.startingBalance + this.monthlyStats.income - this.monthlyStats.expense;
+      const safeStartingBalance = Number.isFinite(this.startingBalance) ? this.startingBalance : 0;
+      const { year: balanceYear, month: balanceMonth } = this.getBalanceReferenceMonthYear();
+      const periodNet = this.dateFilterMode === 'all_time'
+        ? this.transactions
+          .filter((t: any) => {
+            const txDate = new Date(t.date);
+            return txDate.getFullYear() === balanceYear && txDate.getMonth() + 1 === balanceMonth;
+          })
+          .reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0)
+        : this.transactions.reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
+      const monthlyEndingBalance = safeStartingBalance + periodNet;
       this.totalBalance = monthlyEndingBalance;
 
       if (preserveScroll) {
@@ -1478,6 +1712,11 @@ Tables: ${result.tables?.join(', ')}`;
 
   render() {
     const symbol = this.currency === 'EUR' ? '€' : '$';
+    const totalBalance = Number.isFinite(this.totalBalance) ? this.totalBalance : null;
+    const verifiedBalance = Number.isFinite(this.verifiedBalance) ? this.verifiedBalance : null;
+    const difference = totalBalance !== null && verifiedBalance !== null ? verifiedBalance - totalBalance : null;
+    const isBalanced = difference !== null && Math.abs(difference) < 0.01;
+    const movementNet = this.monthlyStats.income - this.monthlyStats.expense;
 
     return html`
         <div class="header">
@@ -1520,44 +1759,43 @@ Tables: ${result.tables?.join(', ')}`;
             </div>
         </div>
 
-        <div class="card">
-            <div>
-                <div style="font-size: 0.875rem; color: var(--md-sys-color-secondary); margin-bottom: 0.25rem;">${this.isCredit ? i18n.t('expenses.amount_owed') : i18n.t('expenses.system_balance')}</div>
-                <div class="balance" style="color: ${this.isCredit ? (this.totalBalance > 0 ? 'var(--md-sys-color-error)' : '#16a34a') : (this.totalBalance >= 0 ? '#16a34a' : 'var(--md-sys-color-error)')}">
-                    ${symbol}${Math.abs(this.totalBalance).toFixed(2)}
-                </div>
+        <div class="card" style="display: flex; flex-direction: column; gap: 12px; align-items: stretch;">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+                <div style="font-size: 0.9rem; color: var(--md-sys-color-on-surface-variant); font-weight: 500;">${i18n.t('expenses.reconciliation_status')}</div>
+                <span style="font-size: 0.75rem; font-weight: 600; padding: 4px 10px; border-radius: 999px; background: ${isBalanced ? 'rgba(22, 163, 74, 0.16)' : 'var(--md-sys-color-error-container)'}; color: ${isBalanced ? '#16a34a' : 'var(--md-sys-color-on-error-container)'};">
+                    ${isBalanced ? i18n.t('expenses.balanced') : i18n.t('expenses.review')}
+                </span>
             </div>
-
-            <div class="vertical-divider"></div>
-
+            <div style="display: grid; grid-template-columns: repeat(3, minmax(180px, 1fr)); gap: 16px; align-items: center;">
             <div>
                 <div style="font-size: 0.875rem; color: var(--md-sys-color-secondary); margin-bottom: 0.25rem;">${i18n.t('expenses.verified_balance')}</div>
                 <div style="display: flex; align-items: center; gap: 0.5rem;">
                     <span style="font-size: 1.5rem; font-weight: 600; color: var(--md-sys-color-on-surface);">${symbol}</span>
-                    <input type="number" step="0.01" class="amount-input" .value="${this.verifiedBalance}" @change="${this.updateVerifiedBalance}" />
+                    <input type="number" step="0.01" class="amount-input" .value="${verifiedBalance ?? ''}" @change="${this.updateVerifiedBalance}" />
                 </div>
             </div>
-
-            <div class="vertical-divider"></div>
 
             <div>
-                <div style="font-size: 0.875rem; color: var(--md-sys-color-secondary); margin-bottom: 0.25rem;">${i18n.t('common.difference')}</div>
-                <div class="balance" style="color: ${Math.abs(this.verifiedBalance - this.totalBalance) < 0.01 ? '#16a34a' : 'var(--md-sys-color-error)'}">
-                    ${symbol}${(this.verifiedBalance - this.totalBalance).toFixed(2)}
+                <div style="font-size: 0.875rem; color: var(--md-sys-color-secondary); margin-bottom: 0.25rem;">${this.isCredit ? i18n.t('expenses.amount_owed') : i18n.t('expenses.system_balance')}</div>
+                <div class="balance" style="color: ${totalBalance === null ? 'var(--md-sys-color-on-surface-variant)' : totalBalance >= 0 ? '#16a34a' : 'var(--md-sys-color-error)'}">
+                    ${totalBalance === null ? '—' : `${totalBalance >= 0 ? '+' : '-'}${symbol}${Math.abs(totalBalance).toFixed(2)}`}
                 </div>
             </div>
+
+            <div>
+                <div style="font-size: 0.875rem; color: var(--md-sys-color-secondary); margin-bottom: 0.25rem;">${i18n.t('expenses.discrepancy')}</div>
+                <div class="balance" style="color: ${difference === null ? 'var(--md-sys-color-on-surface-variant)' : Math.abs(difference) < 0.01 ? '#16a34a' : 'var(--md-sys-color-error)'}">
+                    ${difference === null ? '—' : `${Math.abs(difference) < 0.01 ? '' : (difference > 0 ? '+' : '-')}${symbol}${Math.abs(difference).toFixed(2)}`}
+                </div>
+            </div>
+            </div>
+            </div>
+            <div style="font-size: 0.8rem; color: var(--md-sys-color-on-surface-variant);">${i18n.t('expenses.reconciliation_hint')}</div>
         </div>
 
         <div class="card" style="display: flex; flex-direction: column; gap: 1rem; align-items: stretch;">
-            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 1rem;">
-                <!-- Starting Balance -->
-                <div>
-                    <div style="font-size: 0.75rem; color: var(--md-sys-color-secondary); margin-bottom: 4px;">${i18n.t('expenses.starting_balance')}</div>
-                    <div style="display: flex; align-items: center; gap: 4px;">
-                        <span style="color: var(--md-sys-color-on-surface-variant);">${symbol}</span>
-                        <input type="number" step="0.01" .value="${this.startingBalance}" @change="${this.handleStartingBalanceChange}" style="width: 100%; border: none; background: transparent; font-size: 1rem; font-weight: 500; border-bottom: 1px solid var(--md-sys-color-outline);"/>
-                    </div>
-                </div>
+            <div style="font-size: 0.9rem; color: var(--md-sys-color-on-surface-variant); font-weight: 500;">${i18n.t('expenses.net_breakdown')}</div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem;">
 
                 <!-- Income -->
                 <div>
@@ -1577,11 +1815,14 @@ Tables: ${result.tables?.join(', ')}`;
 
                 <!-- Balance (Income - Expenses) -->
                 <div>
-                    <div style="font-size: 0.75rem; color: var(--md-sys-color-secondary); margin-bottom: 4px;">${i18n.t('common.balance')}</div>
-                    <div style="color: ${(this.monthlyStats.income - this.monthlyStats.expense) >= 0 ? '#16a34a' : 'var(--md-sys-color-error)'}; font-weight: 500; font-size: 1rem;">
-                        ${(this.monthlyStats.income - this.monthlyStats.expense) >= 0 ? '+' : '-'}${symbol}${Math.abs(this.monthlyStats.income - this.monthlyStats.expense).toFixed(2)}
+                    <div style="font-size: 0.75rem; color: var(--md-sys-color-secondary); margin-bottom: 4px;">${i18n.t('expenses.net_movements')}</div>
+                    <div style="color: ${movementNet >= 0 ? '#16a34a' : 'var(--md-sys-color-error)'}; font-weight: 500; font-size: 1rem;">
+                        ${movementNet >= 0 ? '+' : '-'}${symbol}${Math.abs(movementNet).toFixed(2)}
                     </div>
                 </div>
+            </div>
+            <div style="font-size: 0.78rem; color: var(--md-sys-color-on-surface-variant);">
+                ${i18n.t('expenses.net_formula')} · ${i18n.t('expenses.net_calculation_hint')}
             </div>
         </div>
 
@@ -1621,7 +1862,7 @@ Tables: ${result.tables?.join(', ')}`;
             <div style="display: flex; gap: 1rem; align-items: flex-end; flex-wrap: wrap;">
                 <label>
                     ${i18n.t('common.date')}
-                    <input type="date" 
+                    <input type="date"
                         .value="${this.newTransaction.date}"
                         @input="${(e: any) => this.newTransaction = { ...this.newTransaction, date: e.target.value }}"
                         style="display: block; padding: 0.5rem; border: 1px solid var(--md-sys-color-outline); border-radius: 4px; background: var(--md-sys-color-surface-container); color: var(--md-sys-color-on-surface);"
@@ -1717,12 +1958,19 @@ Tables: ${result.tables?.join(', ')}`;
   <input type="number" placeholder="${i18n.t('filters.min_amount')}" .value="${this.filterMinAmount ?? ''}" @input="${(e: any) => { this.filterMinAmount = e.target.value ? parseFloat(e.target.value) : null; this.currentPage = 1; }}" style="width: 120px;" />
     <input type="number" placeholder="${i18n.t('filters.max_amount')}" .value="${this.filterMaxAmount ?? ''}" @input="${(e: any) => { this.filterMaxAmount = e.target.value ? parseFloat(e.target.value) : null; this.currentPage = 1; }}" style="width: 120px;" />
       <div style="display: flex; align-items: center; gap: 8px;">
-        <input type="date" .value="${this.filterDateFrom}" @input="${(e: any) => { this.filterDateFrom = e.target.value; this.currentPage = 1; }}" style="width: 130px;" title="${i18n.t('filters.from_date')}" />
+        <div style="position: relative; width: 150px;">
+          <input type="text" inputmode="numeric" placeholder="yyyy-mm-dd" .value="${this.filterDateFrom}" @input="${(e: any) => { this.filterDateFrom = this.normalizeDateInput(e.target.value); this.currentPage = 1; }}" style="width: 100%; padding-right: 34px;" title="${i18n.t('filters.from_date')}" />
+          <span style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); pointer-events: none; color: var(--md-sys-color-on-surface-variant);">📅</span>
+          <input type="date" .value="${this.filterDateFrom}" @input="${(e: any) => { this.filterDateFrom = e.target.value; this.currentPage = 1; }}" style="position: absolute; top: 0; right: 0; width: 34px; height: 100%; opacity: 0; cursor: pointer; border: none; padding: 0;" title="${i18n.t('filters.from_date')}" />
+        </div>
           <span style="color: var(--md-sys-color-on-surface-variant);"> -</span>
-            <input type="date" .value="${this.filterDateTo}" @input="${(e: any) => { this.filterDateTo = e.target.value; this.currentPage = 1; }}" style="width: 130px;" title="${i18n.t('filters.to_date')}" />
-              </div>
+        <div style="position: relative; width: 150px;">
+          <input type="text" inputmode="numeric" placeholder="yyyy-mm-dd" .value="${this.filterDateTo}" @input="${(e: any) => { this.filterDateTo = this.normalizeDateInput(e.target.value); this.currentPage = 1; }}" style="width: 100%; padding-right: 34px;" title="${i18n.t('filters.to_date')}" />
+          <span style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); pointer-events: none; color: var(--md-sys-color-on-surface-variant);">📅</span>
+          <input type="date" .value="${this.filterDateTo}" @input="${(e: any) => { this.filterDateTo = e.target.value; this.currentPage = 1; }}" style="position: absolute; top: 0; right: 0; width: 34px; height: 100%; opacity: 0; cursor: pointer; border: none; padding: 0;" title="${i18n.t('filters.to_date')}" />
+        </div>
+      </div>
               <button class="btn-secondary" style="height: 32px; padding: 0 12px;" @click="${() => { this.filterCategoryId = ''; this.filterMinAmount = null; this.filterMaxAmount = null; this.filterText = ''; this.filterDateFrom = ''; this.filterDateTo = ''; }}">${i18n.t('filters.clear')}</button>
-                <button class="btn-secondary" style="height: 32px; padding: 0 12px; margin-left: auto;" @click="${() => this.showColumnModal = true}">${i18n.t('filters.columns')}</button>
                   </div>
 
                   <!--Bulk Actions-->
@@ -1977,7 +2225,7 @@ Tables: ${result.tables?.join(', ')}`;
                                             ${this.editingCell?.id === tx.id && this.editingCell?.field === 'notes' ? html`<input type="text" id="edit-${tx.id}-notes" .value="${this.editValue || ''}" @input="${(e: any) => this.editValue = e.target.value}" @blur="${() => this.saveCell(tx.id, 'notes')}" @keydown="${(e: KeyboardEvent) => this.handleKeyDown(e, tx.id, 'notes')}" />` : (tx.notes || '-')}
                                         </td>`;
             case 'actions':
-              return html`<td><button class="btn-secondary" @click="${(e: Event) => { e.stopPropagation(); this.openCreateRuleModal(tx); }}" title="Create Rule" style="margin-right: 4px;">📏</button><button class="btn-secondary" @click="${(e: Event) => { e.stopPropagation(); this.openSplitModal(tx); }}" title="Split Transaction" style="margin-right: 4px;">🔀</button><button class="btn-danger" @click="${() => this.deleteTransaction(tx.id)}" title="Delete Transaction">✕</button></td>`;
+              return html`<td><div class="action-buttons"><button class="btn-secondary action-icon" @click="${(e: Event) => { e.stopPropagation(); this.setStartingBalanceFromTransaction(tx); }}" title="${i18n.t('table.set_balance_from_here')}">⚓</button><button class="btn-secondary action-icon" @click="${(e: Event) => { e.stopPropagation(); this.openCreateRuleModal(tx); }}" title="${i18n.t('table.create_rule')}">📏</button><button class="btn-secondary action-icon" @click="${(e: Event) => { e.stopPropagation(); this.openSplitModal(tx); }}" title="${i18n.t('table.split_transaction')}">🔀</button><button class="btn-danger action-icon" @click="${() => this.deleteTransaction(tx.id)}" title="${i18n.t('table.delete_transaction')}">✕</button></div></td>`;
 
             default:
               return '';
@@ -1994,12 +2242,18 @@ Tables: ${result.tables?.join(', ')}`;
             <span style="font-size: 0.875rem; color: var(--md-sys-color-on-surface-variant);">${i18n.t('table.rows_per_page')}:</span>
             <select style="width: auto; height: 32px; padding: 0 8px;" 
                 .value="${this.pageSize}" 
-                @change="${(e: any) => { this.pageSize = parseInt(e.target.value); this.currentPage = 1; }}">
-                <option value="20">20</option>
-                <option value="50">50</option>
-                <option value="100">100</option>
-                <option value="200">200</option>
+                @change="${(e: any) => {
+                  const nextPageSize = parseInt(e.target.value, 10);
+                  if (Number.isNaN(nextPageSize) || nextPageSize <= 0) return;
+                  this.pageSize = nextPageSize;
+                  this.currentPage = 1;
+                }}">
+                ${this.getPageSizeOptions().map(size => html`
+                    <option value="${size}">${size}${size === this.filteredTransactions.length ? ` (${i18n.t('common.total')})` : ''}</option>
+                `)}
             </select>
+
+            <button class="btn-secondary" style="width: auto; height: 32px; padding: 0 12px;" @click="${() => this.showColumnModal = true}">${i18n.t('filters.columns')}</button>
 
             <span style="font-size: 0.875rem; color: var(--md-sys-color-on-surface-variant);">
                 ${(this.currentPage - 1) * this.pageSize + 1}-${Math.min(this.currentPage * this.pageSize, this.filteredTransactions.length)} of ${this.filteredTransactions.length}

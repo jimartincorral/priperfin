@@ -3,6 +3,7 @@ import { customElement, state, property } from 'lit/decorators.js';
 import { api } from '../api/client';
 import './filterable-select';
 import type { SelectOption } from './filterable-select';
+import { i18n } from '../i18n/i18n';
 
 @customElement('rule-editor')
 export class RuleEditor extends LitElement {
@@ -15,6 +16,8 @@ export class RuleEditor extends LitElement {
   @state() conditions: any[] = []; // Array of condition objects
   @state() testResults: any[] = [];
   @state() testing = false;
+
+  private readonly onLangChange = () => this.requestUpdate();
 
   static styles = css`
     :host { display: block; }
@@ -108,6 +111,7 @@ export class RuleEditor extends LitElement {
 
   connectedCallback() {
     super.connectedCallback();
+    i18n.addEventListener('lang-change', this.onLangChange);
     if (this.rule) {
         this.name = this.rule.name;
         this.mode = this.rule.mode;
@@ -131,9 +135,14 @@ export class RuleEditor extends LitElement {
     }
   }
 
+  disconnectedCallback() {
+    i18n.removeEventListener('lang-change', this.onLangChange);
+    super.disconnectedCallback();
+  }
+
   getCategoryOptions(): SelectOption[] {
     const options: SelectOption[] = [
-      { value: '', label: 'Select Category...' }
+      { value: '', label: i18n.t('rules.select_category') }
     ];
     
     const expenseCategories = this.categories.filter(c => c.type === 'EXPENSE' || !c.type);
@@ -249,15 +258,15 @@ export class RuleEditor extends LitElement {
           this.testResults = results;
       } catch (e) {
           console.error(e);
-          alert('Test failed');
+          alert(i18n.t('rules.test_failed'));
       } finally {
           this.testing = false;
       }
   }
 
   async save() {
-      if (!this.name) return alert('Name is required');
-      if (this.conditions.length === 0) return alert('At least one condition is required');
+      if (!this.name) return alert(i18n.t('rules.name_required'));
+      if (this.conditions.length === 0) return alert(i18n.t('rules.condition_required'));
 
       const conditionsJson = JSON.stringify({
           operator: 'AND',
@@ -292,39 +301,39 @@ export class RuleEditor extends LitElement {
     return html`
       <div class="modal-overlay" @click="${() => this.dispatchEvent(new CustomEvent('cancel'))}">
         <div class="modal" @click="${(e: Event) => e.stopPropagation()}">
-            <h3>${this.rule ? 'Edit Rule' : 'New Rule'}</h3>
+            <h3>${this.rule ? i18n.t('rules.edit_rule') : i18n.t('rules.new_rule')}</h3>
             
             <div class="form-group">
-                <label>Rule Name</label>
-                <input type="text" .value="${this.name}" @input="${(e: any) => this.name = e.target.value}" placeholder="e.g. Amazon Orders" />
+                <label>${i18n.t('rules.name')}</label>
+                <input type="text" .value="${this.name}" @input="${(e: any) => this.name = e.target.value}" placeholder="${i18n.t('rules.name_placeholder')}" />
             </div>
 
             <div class="form-group">
-                <label>Conditions (All must match)</label>
+                <label>${i18n.t('rules.conditions')}</label>
                 <div style="font-size: 0.75rem; color: var(--md-sys-color-on-surface-variant); margin-bottom: 8px;">
-                    💡 Tip: Expenses are negative (e.g., -10.50), income is positive (e.g., +100.00)
+                    ${i18n.t('rules.amount_tip')}
                 </div>
                 <div class="conditions-list">
                     ${this.conditions.map((cond, index) => html`
                         <div class="condition-row">
                             <select .value="${cond.field}" @change="${(e: any) => this.updateCondition(index, 'field', e.target.value)}" style="width: 120px;">
-                                <option value="description">Description</option>
-                                <option value="amount">Amount</option>
-                                <option value="merchant">Merchant</option>
-                                <option value="notes">Notes</option>
+                                <option value="description">${i18n.t('rules.fields.description')}</option>
+                                <option value="amount">${i18n.t('rules.fields.amount')}</option>
+                                <option value="merchant">${i18n.t('rules.fields.merchant')}</option>
+                                <option value="notes">${i18n.t('rules.fields.notes')}</option>
                             </select>
                             
                             <select .value="${cond.operator}" @change="${(e: any) => this.updateCondition(index, 'operator', e.target.value)}" style="width: 150px;">
                                 ${cond.field === 'amount' ? html`
-                                    <option value="equals">equals</option>
-                                    <option value="greaterThan">greater than (&gt;)</option>
-                                    <option value="lessThan">less than (&lt;)</option>
-                                    <option value="between">between</option>
+                                    <option value="equals">${i18n.t('rules.operators.equals')}</option>
+                                    <option value="greaterThan">${i18n.t('rules.operators.greaterThan')} (&gt;)</option>
+                                    <option value="lessThan">${i18n.t('rules.operators.lessThan')} (&lt;)</option>
+                                    <option value="between">${i18n.t('rules.operators.between')}</option>
                                 ` : html`
-                                    <option value="contains">contains</option>
-                                    <option value="equals">equals</option>
-                                    <option value="startsWith">starts with</option>
-                                    <option value="endsWith">ends with</option>
+                                    <option value="contains">${i18n.t('rules.operators.contains')}</option>
+                                    <option value="equals">${i18n.t('rules.operators.equals')}</option>
+                                    <option value="startsWith">${i18n.t('rules.operators.startsWith')}</option>
+                                    <option value="endsWith">${i18n.t('rules.operators.endsWith')}</option>
                                 `}
                             </select>
                             
@@ -338,10 +347,10 @@ export class RuleEditor extends LitElement {
                                             const max = typeof cond.value === 'object' ? cond.value?.max || 0 : 0;
                                             this.updateCondition(index, 'value', { min, max });
                                         }}" 
-                                        placeholder="Min"
+                                        placeholder="${i18n.t('rules.min')}"
                                         style="width: 70px;"
                                     />
-                                    <span style="color: var(--md-sys-color-on-surface-variant);">to</span>
+                                    <span style="color: var(--md-sys-color-on-surface-variant);">${i18n.t('rules.to')}</span>
                                     <input type="number" 
                                         step="0.01"
                                         .value="${typeof cond.value === 'object' ? cond.value?.max || '' : ''}" 
@@ -350,7 +359,7 @@ export class RuleEditor extends LitElement {
                                             const max = parseFloat(e.target.value) || 0;
                                             this.updateCondition(index, 'value', { min, max });
                                         }}" 
-                                        placeholder="Max"
+                                        placeholder="${i18n.t('rules.max')}"
                                         style="width: 70px;"
                                     />
                                 </div>
@@ -359,45 +368,45 @@ export class RuleEditor extends LitElement {
                                     step="${cond.field === 'amount' ? '0.01' : 'any'}"
                                     .value="${cond.value}" 
                                     @input="${(e: any) => this.updateCondition(index, 'value', cond.field === 'amount' ? parseFloat(e.target.value) || 0 : e.target.value)}" 
-                                    placeholder="Value"
+                                    placeholder="${i18n.t('rules.value')}"
                                 />
                             `}
                             
                             <button class="btn-icon" @click="${() => this.removeCondition(index)}">×</button>
                         </div>
                     `)}
-                    <button class="btn-add" @click="${this.addCondition}">+ Add Condition</button>
+                    <button class="btn-add" @click="${this.addCondition}">+ ${i18n.t('rules.add_condition')}</button>
                 </div>
             </div>
 
             <div class="form-group">
-                <label>Action: Set Category</label>
+                <label>${i18n.t('rules.action_set_category')}</label>
                 <filterable-select
                   .value="${this.categoryId}"
                   .options="${this.getCategoryOptions()}"
-                  .placeholder="Select Category..."
+                  .placeholder="${i18n.t('rules.select_category')}"
                   @change="${(e: CustomEvent) => this.categoryId = e.detail.value}">
                 </filterable-select>
             </div>
 
             <div class="form-group">
-                <label>Mode</label>
+                <label>${i18n.t('rules.mode')}</label>
                 <select .value="${this.mode}" @change="${(e: any) => this.mode = e.target.value}">
-                    <option value="SUGGEST">💡 Suggest Only (User must confirm)</option>
-                    <option value="AUTO_APPLY">⚡ Auto-Apply (Skip confirmation)</option>
+                    <option value="SUGGEST">💡 ${i18n.t('rules.mode_suggest_only')}</option>
+                    <option value="AUTO_APPLY">⚡ ${i18n.t('rules.mode_auto_apply_full')}</option>
                 </select>
             </div>
 
             <div style="display: flex; justify-content: space-between; align-items: center;">
                 <button class="btn-secondary" @click="${this.testRule}" ?disabled="${this.testing}">
-                    ${this.testing ? 'Testing...' : '🧪 Test Rule'}
+                    ${this.testing ? i18n.t('rules.testing') : `🧪 ${i18n.t('rules.test_rule')}`}
                 </button>
-                ${this.testResults.length > 0 ? html`<span>Matches: ${this.testResults.length}</span>` : ''}
+                ${this.testResults.length > 0 ? html`<span>${i18n.t('rules.matches')}: ${this.testResults.length}</span>` : ''}
             </div>
 
             ${this.testResults.length > 0 ? html`
                 <div class="test-results">
-                    <strong>Preview Matches:</strong><br/>
+                    <strong>${i18n.t('rules.preview_matches')}:</strong><br/>
                     ${this.testResults.map(tx => html`
                         <div style="margin-top: 4px; font-family: monospace;">
                             ${tx.date.substring(0,10)}: ${tx.description} (${tx.amount})
@@ -407,8 +416,8 @@ export class RuleEditor extends LitElement {
             ` : ''}
 
             <div class="actions">
-                <button class="btn-secondary" @click="${() => this.dispatchEvent(new CustomEvent('cancel'))}">Cancel</button>
-                <button class="btn-primary" @click="${this.save}">Save Rule</button>
+                <button class="btn-secondary" @click="${() => this.dispatchEvent(new CustomEvent('cancel'))}">${i18n.t('common.cancel')}</button>
+                <button class="btn-primary" @click="${this.save}">${i18n.t('rules.save_rule')}</button>
             </div>
         </div>
       </div>

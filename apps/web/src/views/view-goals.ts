@@ -15,6 +15,8 @@ interface Filter {
 
 @customElement('view-goals')
 export class ViewGoals extends LitElement {
+  private readonly totalSavingsSettingKey = 'goals_total_savings';
+
   @state() goals: any[] = [];
   @state() categories: any[] = [];
   @state() loading = false;
@@ -449,6 +451,25 @@ export class ViewGoals extends LitElement {
     const savedTotal = localStorage.getItem('priperfin_total_savings');
     if (savedTotal) this.totalSavings = parseFloat(savedTotal);
 
+    try {
+      const persistedTotal = await api.get(
+        `/settings/${this.totalSavingsSettingKey}`,
+      );
+      if (persistedTotal !== null && persistedTotal !== undefined) {
+        const parsed = parseFloat(persistedTotal);
+        if (!Number.isNaN(parsed)) {
+          this.totalSavings = parsed;
+          localStorage.setItem('priperfin_total_savings', parsed.toString());
+        }
+      } else if (savedTotal && !Number.isNaN(this.totalSavings)) {
+        await api.post(`/settings/${this.totalSavingsSettingKey}`, {
+          value: this.totalSavings.toString(),
+        });
+      }
+    } catch (e) {
+      console.warn('Failed to load persisted total savings setting', e);
+    }
+
     const storedCurrency = localStorage.getItem('priperfin_currency');
     if (storedCurrency) this.currency = storedCurrency;
 
@@ -550,11 +571,19 @@ export class ViewGoals extends LitElement {
     this.unassigned = this.totalSavings - allocated;
   }
 
-  handleTotalSavingsChange(e: Event) {
+  async handleTotalSavingsChange(e: Event) {
     const val = parseFloat((e.target as HTMLInputElement).value) || 0;
     this.totalSavings = val;
     localStorage.setItem('priperfin_total_savings', val.toString());
     this.calculateUnassigned();
+
+    try {
+      await api.post(`/settings/${this.totalSavingsSettingKey}`, {
+        value: val.toString(),
+      });
+    } catch (err) {
+      console.error('Failed to persist total savings setting', err);
+    }
   }
 
   // --- Inline Editing Logic ---

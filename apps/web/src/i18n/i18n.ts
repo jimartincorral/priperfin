@@ -13,7 +13,24 @@ export class I18nService extends EventTarget {
         const saved = localStorage.getItem('priperfin_lang');
         if (saved && (saved === 'en' || saved === 'es')) {
             this.setLocale(saved);
+            return;
         }
+
+        this.setLocale(this.getBrowserLocale());
+    }
+
+    private getBrowserLocale(): 'en' | 'es' {
+        const browserLocales = navigator.languages?.length
+            ? navigator.languages
+            : [navigator.language];
+
+        for (const locale of browserLocales) {
+            if (locale?.toLowerCase().startsWith('es')) {
+                return 'es';
+            }
+        }
+
+        return 'en';
     }
 
     static getInstance() {

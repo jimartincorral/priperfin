@@ -250,52 +250,52 @@ export class ViewSettings extends LitElement {
 
     // ============= Delete Operations =============
     async deleteProfileData() {
-        if (!confirm('⚠️ WARNING: This will delete ALL data in your current profile (transactions, accounts, categories, etc.). This action cannot be undone. Are you sure?')) return;
+        if (!confirm(`⚠️ ${i18n.t('auth.settings.profileDataDeleteConfirm')}`)) return;
 
         try {
             await api.delete('/admin/reset');
             localStorage.removeItem('priperfin_total_savings');
-            alert('Profile data has been reset.');
+            alert(i18n.t('auth.settings.profileDataResetSuccess'));
             window.location.href = new URL('.', document.baseURI).href;
         } catch (e: any) {
             console.error('Failed to reset profile data', e);
-            alert('Failed to reset profile data: ' + (e.message || 'Unknown error'));
+            alert(i18n.t('auth.settings.profileDataResetFailed') + ': ' + (e.message || i18n.t('common.unknown_error')));
         }
     }
 
     async handleDeleteProfile() {
         if (!this.deleteProfilePin) {
-            alert('Please enter your PIN to confirm profile deletion');
+            alert(i18n.t('auth.settings.deleteProfilePinRequired'));
             return;
         }
 
         try {
             await api.delete('/auth/profile', { pin: this.deleteProfilePin });
-            alert('Profile deleted successfully.');
+            alert(i18n.t('auth.settings.profileDeletedSuccess'));
             this.showDeleteProfileModal = false;
             this.deleteProfilePin = '';
             // Redirect to login
             window.location.href = new URL('login', document.baseURI).href;
         } catch (e: any) {
-            alert('Failed to delete profile: ' + (e.message || 'Unknown error'));
+            alert(i18n.t('auth.settings.deleteProfileFailed') + ': ' + (e.message || i18n.t('common.unknown_error')));
         }
     }
 
     async handleDeleteAllData() {
         if (this.deleteAllDataConfirmText !== 'DELETE ALL') {
-            alert('Please type "DELETE ALL" to confirm');
+            alert(i18n.t('auth.settings.deleteAllConfirmError'));
             return;
         }
 
         try {
             await api.delete('/admin/reset-all');
             localStorage.clear();
-            alert('All data from all profiles has been deleted.');
+            alert(i18n.t('auth.settings.deleteAllSuccess'));
             this.showDeleteAllDataModal = false;
             this.deleteAllDataConfirmText = '';
             window.location.href = new URL('setup', document.baseURI).href;
         } catch (e: any) {
-            alert('Failed to delete all data: ' + (e.message || 'Unknown error'));
+            alert(i18n.t('auth.settings.deleteAllFailed') + ': ' + (e.message || i18n.t('common.unknown_error')));
         }
     }
 
@@ -307,25 +307,25 @@ export class ViewSettings extends LitElement {
         }
 
         if (this.changePinForm.newPin.length < 4 || this.changePinForm.newPin.length > 6) {
-            alert('PIN must be 4-6 digits');
+            alert(i18n.t('auth.settings.pinLengthError'));
             return;
         }
 
         try {
             await authApi.changePin(this.changePinForm.oldPin, this.changePinForm.newPin);
-            alert('PIN changed successfully. Please log in again.');
+            alert(i18n.t('auth.settings.pinChangedSuccess'));
             this.showChangePinModal = false;
             this.changePinForm = { oldPin: '', newPin: '', confirmPin: '' };
             // User will be logged out automatically by the backend
             window.location.href = new URL('login', document.baseURI).href;
         } catch (e: any) {
-            alert('Failed to change PIN: ' + (e.message || 'Unknown error'));
+            alert(i18n.t('auth.settings.changePinFailed') + ': ' + (e.message || i18n.t('common.unknown_error')));
         }
     }
 
     async handleCreateProfile() {
         if (!this.createProfileForm.name || this.createProfileForm.name.length < 3) {
-            alert('Profile name must be at least 3 characters');
+            alert(i18n.t('auth.settings.profileNameLengthError'));
             return;
         }
 
@@ -335,18 +335,18 @@ export class ViewSettings extends LitElement {
         }
 
         if (this.createProfileForm.pin.length < 4 || this.createProfileForm.pin.length > 6) {
-            alert('PIN must be 4-6 digits');
+            alert(i18n.t('auth.settings.pinLengthError'));
             return;
         }
 
         try {
             await authApi.createProfile(this.createProfileForm.name, this.createProfileForm.pin);
-            alert(`Profile "${this.createProfileForm.name}" created successfully!`);
+            alert(i18n.t('auth.settings.createProfileSuccess').replace('{name}', this.createProfileForm.name));
             this.showCreateProfileModal = false;
             this.createProfileForm = { name: '', pin: '', confirmPin: '' };
             await this.loadData(); // Reload profiles list
         } catch (e: any) {
-            alert('Failed to create profile: ' + (e.message || 'Unknown error'));
+            alert(i18n.t('auth.settings.createProfileFailed') + ': ' + (e.message || i18n.t('common.unknown_error')));
         }
     }
 
@@ -789,32 +789,6 @@ export class ViewSettings extends LitElement {
             </select>
           </div>
           
-          <div style="border-top: 1px solid var(--md-sys-color-outline-variant); padding-top: 1.5rem; margin-top: 1.5rem;">
-            <label style="color: var(--md-sys-color-error); margin-bottom: 0.5rem;">⚠️ Danger Zone</label>
-            
-            <div style="display: flex; flex-direction: column; gap: 12px;">
-              <div>
-                <button class="btn-danger" @click="${() => this.deleteProfileData()}">Delete Profile Data</button>
-                <p style="font-size: 0.8rem; color: var(--md-sys-color-on-surface-variant); margin-top: 0.5rem;">
-                  Delete all data in your current profile (transactions, accounts, categories, rules). The profile itself remains.
-                </p>
-              </div>
-
-              <div>
-                <button class="btn-danger" @click="${() => this.showDeleteProfileModal = true}">Delete This Profile</button>
-                <p style="font-size: 0.8rem; color: var(--md-sys-color-on-surface-variant); margin-top: 0.5rem;">
-                  Delete the current profile and all its data. You will be logged out.
-                </p>
-              </div>
-
-              <div>
-                <button class="btn-danger" @click="${() => this.showDeleteAllDataModal = true}">Delete ALL Data (All Profiles)</button>
-                <p style="font-size: 0.8rem; color: var(--md-sys-color-on-surface-variant); margin-top: 0.5rem;">
-                  ⚠️ EXTREME DANGER: Delete ALL profiles and ALL data from the entire application. This resets everything.
-                </p>
-              </div>
-            </div>
-          </div>
       </div>
 
       <div class="section-title">👤 ${i18n.t('auth.settings.title')}</div>
@@ -837,7 +811,7 @@ export class ViewSettings extends LitElement {
           ` : ''}
 
           <div class="form-group" style="margin-top: 16px;">
-            <label>Profile Actions</label>
+            <label>${i18n.t('auth.settings.profileActions')}</label>
             <div style="display: flex; gap: 8px; flex-wrap: wrap;">
               <button class="btn-primary" @click="${() => this.showChangePinModal = true}">
                 🔒 ${i18n.t('auth.settings.changePin')}
@@ -853,7 +827,7 @@ export class ViewSettings extends LitElement {
 
           ${this.profiles.length > 1 ? html`
             <div class="form-group" style="margin-top: 24px;">
-              <label>All Profiles (${this.profiles.length})</label>
+              <label>${i18n.t('auth.settings.allProfiles')} (${this.profiles.length})</label>
               <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px;">
                 ${this.profiles.map(p => html`
                   <div style="
@@ -868,7 +842,7 @@ export class ViewSettings extends LitElement {
                 `)}
               </div>
               <p style="font-size: 0.75rem; color: var(--md-sys-color-on-surface-variant); margin-top: 8px;">
-                To switch profiles, log out and select a different profile on the login screen.
+                ${i18n.t('auth.settings.switchProfileHint')}
               </p>
             </div>
           ` : ''}
@@ -879,36 +853,36 @@ export class ViewSettings extends LitElement {
           <div class="modal" @click="${(e: Event) => e.stopPropagation()}">
             <h3>${i18n.t('auth.settings.changePin')}</h3>
             <div class="form-group">
-              <label>Current PIN</label>
+              <label>${i18n.t('auth.settings.currentPin')}</label>
               <input 
                 type="password" 
                 inputmode="numeric"
                 maxlength="6"
                 .value="${this.changePinForm.oldPin}"
                 @input="${(e: any) => this.changePinForm = { ...this.changePinForm, oldPin: e.target.value }}"
-                placeholder="Enter current PIN"
+                placeholder="${i18n.t('auth.settings.currentPinPlaceholder')}"
               />
             </div>
             <div class="form-group">
-              <label>New PIN (4-6 digits)</label>
+              <label>${i18n.t('auth.settings.newPinLabel')}</label>
               <input 
                 type="password" 
                 inputmode="numeric"
                 maxlength="6"
                 .value="${this.changePinForm.newPin}"
                 @input="${(e: any) => this.changePinForm = { ...this.changePinForm, newPin: e.target.value }}"
-                placeholder="Enter new PIN"
+                placeholder="${i18n.t('auth.settings.newPinPlaceholder')}"
               />
             </div>
             <div class="form-group">
-              <label>Confirm New PIN</label>
+              <label>${i18n.t('auth.settings.confirmNewPin')}</label>
               <input 
                 type="password" 
                 inputmode="numeric"
                 maxlength="6"
                 .value="${this.changePinForm.confirmPin}"
                 @input="${(e: any) => this.changePinForm = { ...this.changePinForm, confirmPin: e.target.value }}"
-                placeholder="Confirm new PIN"
+                placeholder="${i18n.t('auth.settings.confirmNewPinPlaceholder')}"
               />
             </div>
             <div class="modal-actions">
@@ -928,34 +902,34 @@ export class ViewSettings extends LitElement {
           <div class="modal" @click="${(e: Event) => e.stopPropagation()}">
             <h3>${i18n.t('auth.settings.createProfile')}</h3>
             <div class="form-group">
-              <label>Profile Name</label>
+              <label>${i18n.t('auth.settings.profileName')}</label>
               <input 
                 type="text"
                 .value="${this.createProfileForm.name}"
                 @input="${(e: any) => this.createProfileForm = { ...this.createProfileForm, name: e.target.value }}"
-                placeholder="e.g., Personal, Spouse, Shared"
+                placeholder="${i18n.t('auth.settings.profileNamePlaceholder')}"
               />
             </div>
             <div class="form-group">
-              <label>PIN (4-6 digits)</label>
+              <label>${i18n.t('auth.settings.pinLabel')}</label>
               <input 
                 type="password" 
                 inputmode="numeric"
                 maxlength="6"
                 .value="${this.createProfileForm.pin}"
                 @input="${(e: any) => this.createProfileForm = { ...this.createProfileForm, pin: e.target.value }}"
-                placeholder="Enter PIN"
+                placeholder="${i18n.t('auth.settings.pinPlaceholder')}"
               />
             </div>
             <div class="form-group">
-              <label>Confirm PIN</label>
+              <label>${i18n.t('auth.settings.confirmPin')}</label>
               <input 
                 type="password" 
                 inputmode="numeric"
                 maxlength="6"
                 .value="${this.createProfileForm.confirmPin}"
                 @input="${(e: any) => this.createProfileForm = { ...this.createProfileForm, confirmPin: e.target.value }}"
-                placeholder="Confirm PIN"
+                placeholder="${i18n.t('auth.settings.confirmPinPlaceholder')}"
               />
             </div>
             <div class="modal-actions">
@@ -1138,28 +1112,27 @@ export class ViewSettings extends LitElement {
       ${this.showDeleteProfileModal ? html`
         <div class="modal-overlay" @click="${() => this.showDeleteProfileModal = false}">
           <div class="modal" @click="${(e: Event) => e.stopPropagation()}">
-            <h3 style="color: var(--md-sys-color-error);">⚠️ Delete Profile</h3>
+            <h3 style="color: var(--md-sys-color-error);">⚠️ ${i18n.t('settings.delete_profile_confirm')}</h3>
             <p style="margin-bottom: 16px; color: var(--md-sys-color-on-surface);">
-              This will permanently delete your profile "<strong>${this.currentProfile?.name}</strong>" and ALL its data 
-              (transactions, accounts, categories, rules, etc.). This action cannot be undone.
+              ${i18n.t('settings.delete_profile_modal_warning')} "<strong>${this.currentProfile?.name}</strong>" ${i18n.t('settings.delete_profile_modal_suffix')}
             </p>
             <div class="form-group">
-              <label>Enter your PIN to confirm</label>
+              <label>${i18n.t('settings.enter_pin_to_confirm')}</label>
               <input 
                 type="password" 
                 inputmode="numeric"
                 maxlength="6"
                 .value="${this.deleteProfilePin}"
                 @input="${(e: any) => this.deleteProfilePin = e.target.value}"
-                placeholder="Enter PIN"
+                placeholder="${i18n.t('settings.enter_pin')}"
               />
             </div>
             <div class="modal-actions">
               <button @click="${() => { this.showDeleteProfileModal = false; this.deleteProfilePin = ''; }}">
-                Cancel
+                ${i18n.t('common.cancel')}
               </button>
               <button class="btn-danger" @click="${this.handleDeleteProfile}">
-                Delete Profile
+                ${i18n.t('settings.delete_profile_confirm')}
               </button>
             </div>
           </div>
@@ -1169,33 +1142,33 @@ export class ViewSettings extends LitElement {
       ${this.showDeleteAllDataModal ? html`
         <div class="modal-overlay" @click="${() => this.showDeleteAllDataModal = false}">
           <div class="modal" @click="${(e: Event) => e.stopPropagation()}">
-            <h3 style="color: var(--md-sys-color-error);">🚨 DELETE ALL DATA FROM ALL PROFILES</h3>
+            <h3 style="color: var(--md-sys-color-error);">🚨 ${i18n.t('settings.delete_all_modal_title')}</h3>
             <p style="margin-bottom: 16px; color: var(--md-sys-color-error); font-weight: bold;">
-              ⚠️ EXTREME DANGER ZONE ⚠️
+              ⚠️ ${i18n.t('settings.extreme_danger_zone')} ⚠️
             </p>
             <p style="margin-bottom: 16px; color: var(--md-sys-color-on-surface);">
-              This will permanently delete:<br/>
-              • ALL profiles<br/>
-              • ALL transactions, accounts, and categories from ALL profiles<br/>
-              • ALL settings and rules<br/>
+              ${i18n.t('settings.delete_all_modal_intro')}<br/>
+              • ${i18n.t('settings.delete_all_modal_item_profiles')}<br/>
+              • ${i18n.t('settings.delete_all_modal_item_data')}<br/>
+              • ${i18n.t('settings.delete_all_modal_item_settings')}<br/>
               <br/>
-              The application will be reset to initial setup state. This action CANNOT be undone.
+              ${i18n.t('settings.delete_all_modal_outro')}
             </p>
             <div class="form-group">
-              <label>Type "DELETE ALL" to confirm</label>
+              <label>${i18n.t('settings.type_delete_all_confirm')}</label>
               <input 
                 type="text"
                 .value="${this.deleteAllDataConfirmText}"
                 @input="${(e: any) => this.deleteAllDataConfirmText = e.target.value}"
-                placeholder="Type DELETE ALL"
+                placeholder="${i18n.t('settings.type_delete_all_placeholder')}"
               />
             </div>
             <div class="modal-actions">
               <button @click="${() => { this.showDeleteAllDataModal = false; this.deleteAllDataConfirmText = ''; }}">
-                Cancel
+                ${i18n.t('common.cancel')}
               </button>
               <button class="btn-danger" @click="${this.handleDeleteAllData}">
-                Delete Everything
+                ${i18n.t('settings.delete_everything')}
               </button>
             </div>
           </div>
@@ -1271,6 +1244,32 @@ export class ViewSettings extends LitElement {
             />
             ${this.restoreLoading ? html`<p style="color: var(--md-sys-color-primary);">⏳ ${i18n.t('common.loading')}</p>` : ''}
           </div>
+      </div>
+
+      <div class="section-title">⚠️ ${i18n.t('settings.danger_zone')}</div>
+      <div class="settings-group">
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+          <div>
+            <button class="btn-danger" @click="${() => this.deleteProfileData()}">${i18n.t('settings.delete_profile_data')}</button>
+            <p style="font-size: 0.8rem; color: var(--md-sys-color-on-surface-variant); margin-top: 0.5rem;">
+              ${i18n.t('settings.delete_profile_data_desc')}
+            </p>
+          </div>
+
+          <div>
+            <button class="btn-danger" @click="${() => this.showDeleteProfileModal = true}">${i18n.t('settings.delete_this_profile')}</button>
+            <p style="font-size: 0.8rem; color: var(--md-sys-color-on-surface-variant); margin-top: 0.5rem;">
+              ${i18n.t('settings.delete_this_profile_desc')}
+            </p>
+          </div>
+
+          <div>
+            <button class="btn-danger" @click="${() => this.showDeleteAllDataModal = true}">${i18n.t('settings.delete_all_profiles_data')}</button>
+            <p style="font-size: 0.8rem; color: var(--md-sys-color-on-surface-variant); margin-top: 0.5rem;">
+              ⚠️ ${i18n.t('settings.delete_all_profiles_data_desc')}
+            </p>
+          </div>
+        </div>
       </div>
     `;
     }

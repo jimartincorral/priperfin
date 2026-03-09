@@ -12,6 +12,16 @@ describe('I18nService', () => {
     // Since I18nService uses singleton, we need to access it fresh
     // We'll test through the static getInstance method
     (I18nService as any).instance = undefined;
+
+    Object.defineProperty(navigator, 'language', {
+      value: 'en-US',
+      configurable: true,
+    });
+    Object.defineProperty(navigator, 'languages', {
+      value: ['en-US'],
+      configurable: true,
+    });
+
     i18n = I18nService.getInstance();
   });
 
@@ -72,9 +82,25 @@ describe('I18nService', () => {
       expect(newI18n.getLocale()).toBe('es');
     });
 
-    it('should default to English if no saved locale', () => {
-      // localStorage is empty (cleared in beforeEach)
+    it('should use browser locale if no saved locale', () => {
       expect(i18n.getLocale()).toBe('en');
+    });
+
+    it('should prefer Spanish when browser locale is Spanish', () => {
+      (I18nService as any).instance = undefined;
+      localStorage.clear();
+      Object.defineProperty(navigator, 'language', {
+        value: 'es-ES',
+        configurable: true,
+      });
+      Object.defineProperty(navigator, 'languages', {
+        value: ['es-ES', 'en-US'],
+        configurable: true,
+      });
+
+      const newI18n = I18nService.getInstance();
+
+      expect(newI18n.getLocale()).toBe('es');
     });
 
     it('should ignore invalid saved locale', () => {
