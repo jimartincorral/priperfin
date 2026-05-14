@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -70,19 +74,18 @@ export class AccountBalancesService {
     accountId?: string | null,
     notes?: string,
   ) {
-    if (accountId) {
-      // Verify account belongs to profile
-      const account = await this.prisma.account.findFirst({
-        where: { id: accountId, profileId },
-      });
-      if (!account) {
-        throw new NotFoundException('Account not found or access denied');
-      }
-    } else {
-      // If we are strict, we shouldn't allow creating balances without account as they can't be retrieved by profile
-      // But for now we just follow the pattern. If they create it, they lose it (it becomes invisible).
-      // Or better, assume it's an error?
-      // existing implementation allowed it.
+    // Reject writes without an account: such rows can never be retrieved
+    // because every read joins on account.profileId, so they would silently
+    // disappear from the user's view.
+    if (!accountId) {
+      throw new BadRequestException('accountId is required');
+    }
+
+    const account = await this.prisma.account.findFirst({
+      where: { id: accountId, profileId },
+    });
+    if (!account) {
+      throw new NotFoundException('Account not found or access denied');
     }
 
     const existing = await this.findByDate(asOfDate, profileId, accountId);
@@ -99,7 +102,7 @@ export class AccountBalancesService {
       data: {
         asOfDate,
         balance,
-        accountId: accountId || null,
+        accountId,
         notes,
       },
       include: { account: true },

@@ -564,9 +564,9 @@ export class RulesService {
     }
 
     // Amount similarity (recurring amount)
-    const amountStr = Number(transaction.amount).toFixed(2);
+    const amountStr = transaction.amount.toFixed(2);
     const sameAmountCount = similarTransactions.filter(
-      (t) => Number(t.amount).toFixed(2) === amountStr,
+      (t) => t.amount.toFixed(2) === amountStr,
     ).length;
     amountScore = (sameAmountCount / similarTransactions.length) * 100;
 
