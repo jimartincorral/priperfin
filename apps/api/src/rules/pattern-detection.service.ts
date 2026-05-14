@@ -292,7 +292,7 @@ export class PatternDetectionService {
         descTokens.forEach((t) => pattern.descTokens.add(t));
         noteTokens.forEach((t) => pattern.noteTokens.add(t));
 
-        const amountKey = Number(tx.amount).toFixed(2);
+        const amountKey = tx.amount.toFixed(2);
         pattern.amounts.set(
           amountKey,
           (pattern.amounts.get(amountKey) || 0) + 1,
