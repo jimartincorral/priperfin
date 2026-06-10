@@ -53,7 +53,7 @@ export function getApiBaseUrl(): string {
         console.log('[getApiBaseUrl] Current URL:', currentUrl);
         
         // Check if we're in Home Assistant Ingress (URL contains /api/hassio_ingress/)
-        const ingressMatch = currentUrl.match(/(.*\/api\/hassio_ingress\/[^\/]+)\//);
+        const ingressMatch = currentUrl.match(/(.*\/api\/hassio_ingress\/[^\/]+)(?:\/|$)/);
         if (ingressMatch) {
             // We're in HA Ingress - use the ingress path
             const ingressBase = ingressMatch[1];
@@ -281,3 +281,4 @@ export const authApi = {
         return response;
     },
 };
+

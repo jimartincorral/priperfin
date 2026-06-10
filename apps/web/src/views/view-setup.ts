@@ -2,6 +2,7 @@ import { LitElement, html, css } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import { authApi } from '../api/client';
 import { i18n } from '../i18n/i18n';
+import { getAppBasePath } from '../utils/router-paths';
 
 @customElement('view-setup')
 export class ViewSetup extends LitElement {
@@ -19,7 +20,8 @@ export class ViewSetup extends LitElement {
       const status = await authApi.getStatus();
       if (status.setupComplete) {
         // Redirect to login if setup is already complete
-        window.location.href = new URL('login', document.baseURI).href;
+        const basePath = getAppBasePath(document.baseURI);
+        window.location.href = new URL(basePath + 'login', window.location.origin).href;
       }
     } catch (e) {
       // If check fails, allow user to proceed with setup
@@ -168,7 +170,8 @@ export class ViewSetup extends LitElement {
       await authApi.setup(this.profileName, pinDigits);
       // Auto-login after setup
       await authApi.login(this.profileName, pinDigits);
-      window.location.href = new URL('.', document.baseURI).href;
+      const basePath = getAppBasePath(document.baseURI);
+      window.location.href = new URL(basePath, window.location.origin).href;
     } catch (e: any) {
       this.loading = false;
       this.error = e.message || 'Setup failed';

@@ -12,6 +12,7 @@ import './views/view-setup';
 
 import { i18n } from './i18n/i18n';
 import { api } from './api/client';
+import { getAppBasePath, getAppPath, getCanonicalAppUrl } from './utils/router-paths';
 
 @customElement('priperfin-app')
 export class PriPerFinApp extends LitElement {
@@ -294,8 +295,23 @@ export class PriPerFinApp extends LitElement {
 
   @property({ type: String }) currentPath = '/';
 
+  private syncCurrentPath(pathname = window.location.pathname) {
+    this.currentPath = getAppPath(pathname, document.baseURI);
+  }
+
   connectedCallback() {
     super.connectedCallback();
+
+    const canonicalUrl = getCanonicalAppUrl(
+      window.location.href,
+      document.baseURI,
+    );
+    if (canonicalUrl) {
+      console.log('[PriPerFin] Normalizing ingress root URL:', canonicalUrl);
+      window.history.replaceState(window.history.state, '', canonicalUrl);
+    }
+
+    this.syncCurrentPath();
     
     console.log('[PriPerFin] App initialization started');
     console.log('[PriPerFin] Current location:', window.location.href);
@@ -319,13 +335,15 @@ export class PriPerFinApp extends LitElement {
     // Listen for session expiry
     window.addEventListener('session-expired', () => {
       console.log('[PriPerFin] Session expired, redirecting to login');
-      window.location.href = new URL('login', document.baseURI).href;
+      const basePath = getAppBasePath(document.baseURI);
+      window.location.href = new URL(basePath + 'login', window.location.origin).href;
     });
     
     // Listen for URL changes (including replaceState) to update navigation links
     const originalReplaceState = window.history.replaceState;
     window.history.replaceState = (...args) => {
       originalReplaceState.apply(window.history, args);
+      this.syncCurrentPath();
       this.requestUpdate(); // Re-render navigation links with new query params
     };
     
@@ -363,9 +381,13 @@ export class PriPerFinApp extends LitElement {
 
   // Auth guard helper
   private authGuard(_context: any, commands: any) {
-    if (!api.hasSession()) {
+    const hasSession = api.hasSession();
+    console.log('[AuthGuard] Checking session. hasSession =', hasSession, 'token =', localStorage.getItem('session_token'));
+    if (!hasSession) {
+      console.log('[AuthGuard] Redirecting to /login');
       return commands.redirect('/login');
     }
+    console.log('[AuthGuard] Allowing navigation to protected route');
   }
 
   async firstUpdated() {
@@ -384,6 +406,7 @@ export class PriPerFinApp extends LitElement {
       { path: '/setup', component: 'view-setup' },
       { path: '/login', component: 'view-login' },
       // Protected routes (auth required)
+      { path: '', action: this.authGuard.bind(this), component: 'view-expenses' },
       { path: '/', action: this.authGuard.bind(this), component: 'view-expenses' },
       { path: '/goals', action: this.authGuard.bind(this), component: 'view-goals' },
       { path: '/reports', action: this.authGuard.bind(this), component: 'view-reports' },
@@ -397,7 +420,7 @@ export class PriPerFinApp extends LitElement {
     // Listen to route changes to update active state and query params
     window.addEventListener('vaadin-router-location-changed', (e: any) => {
       console.log('[PriPerFin] Route changed to:', e.detail.location.pathname);
-      this.currentPath = e.detail.location.pathname;
+      this.syncCurrentPath(e.detail.location.pathname);
       this.requestUpdate(); // This will cause links to rebuild with new query params
     });
   }

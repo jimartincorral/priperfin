@@ -4,6 +4,7 @@ import { authApi } from '../api/client';
 import { i18n } from '../i18n/i18n';
 import '../components/filterable-select';
 import type { SelectOption } from '../components/filterable-select';
+import { getAppBasePath } from '../utils/router-paths';
 
 @customElement('view-login')
 export class ViewLogin extends LitElement {
@@ -187,10 +188,16 @@ export class ViewLogin extends LitElement {
     this.error = '';
 
     try {
-      await authApi.login(this.selectedProfile, this.pin);
-      // Successful login - redirect will be handled by router
-      window.location.href = new URL('.', document.baseURI).href;
+      console.log('[Login] Attempting login for:', this.selectedProfile);
+      const res = await authApi.login(this.selectedProfile, this.pin);
+      console.log('[Login] Login successful. Response:', res);
+      
+      const basePath = getAppBasePath(document.baseURI);
+      const redirectUrl = new URL(basePath, window.location.origin).href;
+      console.log('[Login] Redirecting to:', redirectUrl);
+      window.location.href = redirectUrl;
     } catch (e: any) {
+      console.error('[Login] Login failed:', e);
       this.loading = false;
       if (e.message.includes('429') || e.message.includes('Rate limit')) {
         this.rateLimited = true;

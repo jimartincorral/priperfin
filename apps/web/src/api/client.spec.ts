@@ -1,89 +1,74 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { getApiBaseUrl, ApiClient } from './client';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+type ClientModule = typeof import('./client');
+
+function setLocation(href: string) {
+  const url = new URL(href);
+
+  Object.defineProperty(globalThis, 'location', {
+    value: {
+      hostname: url.hostname,
+      pathname: url.pathname,
+      href: url.href,
+      origin: url.origin,
+    },
+    writable: true,
+  });
+}
+
+async function loadClientModule(): Promise<ClientModule> {
+  vi.resetModules();
+  return import('./client');
+}
 
 describe('API Client', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    setLocation('http://localhost:3000/');
   });
 
-  // ============================================
-  // getApiBaseUrl() Tests
-  // ============================================
   describe('getApiBaseUrl', () => {
-    it('should return ingress path when in Home Assistant ingress', () => {
-      Object.defineProperty(globalThis, 'location', {
-        value: {
-          pathname: '/api/hassio_ingress/abc123xyz/expenses',
-          hostname: 'homeassistant.local',
-        },
-        writable: true,
-      });
+    it('should return ingress path when in Home Assistant ingress', async () => {
+      setLocation('http://homeassistant.local/api/hassio_ingress/abc123xyz/expenses');
+      const { getApiBaseUrl } = await loadClientModule();
 
-      const result = getApiBaseUrl();
-
-      expect(result).toBe('/api/hassio_ingress/abc123xyz/api');
+      expect(getApiBaseUrl()).toBe(
+        'http://homeassistant.local/api/hassio_ingress/abc123xyz/api',
+      );
     });
 
-    it('should return direct port path for development', () => {
-      Object.defineProperty(globalThis, 'location', {
-        value: {
-          pathname: '/',
-          hostname: 'localhost',
-        },
-        writable: true,
-      });
+    it('should return direct port path for development', async () => {
+      const { getApiBaseUrl } = await loadClientModule();
 
-      const result = getApiBaseUrl();
-
-      expect(result).toBe('/api');
+      expect(getApiBaseUrl()).toBe('http://localhost:3000/api');
     });
 
-    it('should handle various pathname patterns', () => {
-      Object.defineProperty(globalThis, 'location', {
-        value: {
-          pathname: '/api/hassio_ingress/token_here_123',
-          hostname: 'home.local',
-        },
-        writable: true,
-      });
+    it('should handle ingress root paths without a trailing slash', async () => {
+      setLocation('http://home.local/api/hassio_ingress/token_here_123');
+      const { getApiBaseUrl } = await loadClientModule();
 
-      const result = getApiBaseUrl();
-
-      expect(result).toBe('/api/hassio_ingress/token_here_123/api');
+      expect(getApiBaseUrl()).toBe(
+        'http://home.local/api/hassio_ingress/token_here_123/api',
+      );
     });
 
-    it('should fall back to direct API for non-ingress paths', () => {
-      Object.defineProperty(globalThis, 'location', {
-        value: {
-          pathname: '/expenses',
-          hostname: '192.168.1.100',
-        },
-        writable: true,
-      });
+    it('should fall back to direct API for non-ingress paths', async () => {
+      setLocation('http://192.168.1.100/expenses');
+      const { getApiBaseUrl } = await loadClientModule();
 
-      const result = getApiBaseUrl();
-
-      expect(result).toBe('/api');
+      expect(getApiBaseUrl()).toBe('http://192.168.1.100/api');
     });
   });
 
-  // ============================================
-  // ApiClient Class Tests
-  // ============================================
   describe('ApiClient', () => {
-    let client: ApiClient;
+    let client: InstanceType<ClientModule['ApiClient']>;
+    let ApiClientClass: ClientModule['ApiClient'];
 
-    beforeEach(() => {
-      Object.defineProperty(globalThis, 'location', {
-        value: {
-          pathname: '/',
-          hostname: 'localhost',
-          origin: 'http://localhost:3000',
-        },
-        writable: true,
-      });
-
-      client = new ApiClient();
+    beforeEach(async () => {
+      setLocation('http://localhost:3000/');
+      const module = await loadClientModule();
+      ApiClientClass = module.ApiClient;
+      client = new ApiClientClass();
     });
 
     describe('get', () => {

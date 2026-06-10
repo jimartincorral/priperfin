@@ -2,6 +2,7 @@ import { LitElement, html, css } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import { api, getApiBaseUrl, authApi } from '../api/client';
 import { i18n } from '../i18n/i18n';
+import { getAppBasePath } from '../utils/router-paths';
 
 import 'emoji-picker-element';
 
@@ -256,7 +257,8 @@ export class ViewSettings extends LitElement {
             await api.delete('/admin/reset');
             localStorage.removeItem('priperfin_total_savings');
             alert(i18n.t('auth.settings.profileDataResetSuccess'));
-            window.location.href = new URL('.', document.baseURI).href;
+            const basePath = getAppBasePath(document.baseURI);
+            window.location.href = new URL(basePath, window.location.origin).href;
         } catch (e: any) {
             console.error('Failed to reset profile data', e);
             alert(i18n.t('auth.settings.profileDataResetFailed') + ': ' + (e.message || i18n.t('common.unknown_error')));
@@ -275,7 +277,8 @@ export class ViewSettings extends LitElement {
             this.showDeleteProfileModal = false;
             this.deleteProfilePin = '';
             // Redirect to login
-            window.location.href = new URL('login', document.baseURI).href;
+            const basePath = getAppBasePath(document.baseURI);
+            window.location.href = new URL(basePath + 'login', window.location.origin).href;
         } catch (e: any) {
             alert(i18n.t('auth.settings.deleteProfileFailed') + ': ' + (e.message || i18n.t('common.unknown_error')));
         }
@@ -293,7 +296,8 @@ export class ViewSettings extends LitElement {
             alert(i18n.t('auth.settings.deleteAllSuccess'));
             this.showDeleteAllDataModal = false;
             this.deleteAllDataConfirmText = '';
-            window.location.href = new URL('setup', document.baseURI).href;
+            const basePath = getAppBasePath(document.baseURI);
+            window.location.href = new URL(basePath + 'setup', window.location.origin).href;
         } catch (e: any) {
             alert(i18n.t('auth.settings.deleteAllFailed') + ': ' + (e.message || i18n.t('common.unknown_error')));
         }
@@ -317,7 +321,8 @@ export class ViewSettings extends LitElement {
             this.showChangePinModal = false;
             this.changePinForm = { oldPin: '', newPin: '', confirmPin: '' };
             // User will be logged out automatically by the backend
-            window.location.href = new URL('login', document.baseURI).href;
+            const basePath = getAppBasePath(document.baseURI);
+            window.location.href = new URL(basePath + 'login', window.location.origin).href;
         } catch (e: any) {
             alert(i18n.t('auth.settings.changePinFailed') + ': ' + (e.message || i18n.t('common.unknown_error')));
         }
@@ -353,12 +358,14 @@ export class ViewSettings extends LitElement {
     async handleLogout() {
         try {
             await authApi.logout();
-            window.location.href = new URL('login', document.baseURI).href;
+            const basePath = getAppBasePath(document.baseURI);
+            window.location.href = new URL(basePath + 'login', window.location.origin).href;
         } catch (e: any) {
             console.error('Logout failed:', e);
             // Clear session anyway and redirect
             api.clearSession();
-            window.location.href = new URL('login', document.baseURI).href;
+            const basePath = getAppBasePath(document.baseURI);
+            window.location.href = new URL(basePath + 'login', window.location.origin).href;
         }
     }
 

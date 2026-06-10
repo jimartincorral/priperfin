@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { TransactionsController } from './transactions.controller';
 import { TransactionsService } from './transactions.service';
-import { CategorizationService } from './categorization.service';
+import { AuthService } from '../auth/auth.service';
 
 describe('TransactionsController', () => {
   let controller: TransactionsController;
@@ -19,9 +19,8 @@ describe('TransactionsController', () => {
     updateSplits: jest.fn(),
     removeSplits: jest.fn(),
   };
-  const mockCategorizationService = {
-    predict: jest.fn(),
-    trainModel: jest.fn(),
+  const mockAuthService = {
+    validateSession: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -29,7 +28,7 @@ describe('TransactionsController', () => {
       controllers: [TransactionsController],
       providers: [
         { provide: TransactionsService, useValue: mockTransactionsService },
-        { provide: CategorizationService, useValue: mockCategorizationService },
+        { provide: AuthService, useValue: mockAuthService },
       ],
     }).compile();
 

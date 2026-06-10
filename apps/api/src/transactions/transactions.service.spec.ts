@@ -53,14 +53,14 @@ describe('TransactionsService', () => {
         description: 'Test Create',
       };
 
-      await service.create(dto as any);
+      await service.create(dto as any, 'profile-1');
 
       expect(prismaMock.transaction.create).toHaveBeenCalled();
       expect(prismaMock.transaction.update).toHaveBeenCalledWith({
         where: { id: 'new-tx' },
         data: {
-          suggestedByRuleId: 'rule-1',
-          categoryId: 'cat-1',
+          suggestedRule: { connect: { id: 'rule-1' } },
+          category: { connect: { id: 'cat-1' } },
         },
       });
     });
@@ -81,13 +81,13 @@ describe('TransactionsService', () => {
         description: 'Test Create',
       };
 
-      await service.create(dto as any);
+      await service.create(dto as any, 'profile-1');
 
       expect(prismaMock.transaction.create).toHaveBeenCalled();
       expect(prismaMock.transaction.update).toHaveBeenCalledWith({
         where: { id: 'new-tx' },
         data: {
-          suggestedByRuleId: 'rule-1',
+          suggestedRule: { connect: { id: 'rule-1' } },
         },
       });
     });
@@ -104,12 +104,12 @@ describe('TransactionsService', () => {
         initialBalance: new Decimal(1000),
       });
 
-      prismaMock.account.findUnique.mockResolvedValue(account);
+      prismaMock.account.findFirst.mockResolvedValue(account);
       prismaMock.transaction.aggregate.mockResolvedValue({
         _sum: { amount: new Decimal(-200) },
       });
 
-      const result = await service.getAccountBalance('acc-1');
+      const result = await service.getAccountBalance('acc-1', 'profile-1');
 
       // DEBIT: balance = initialBalance + txSum = 1000 + (-200) = 800
       expect(result.balance).toBe(800);
@@ -125,12 +125,12 @@ describe('TransactionsService', () => {
         initialBalance: new Decimal(0),
       });
 
-      prismaMock.account.findUnique.mockResolvedValue(account);
+      prismaMock.account.findFirst.mockResolvedValue(account);
       prismaMock.transaction.aggregate.mockResolvedValue({
         _sum: { amount: new Decimal(-500) },
       });
 
-      const result = await service.getAccountBalance('acc-2');
+      const result = await service.getAccountBalance('acc-2', 'profile-1');
 
       // CREDIT: owed = initialBalance - txSum = 0 - (-500) = 500 (owed)
       expect(result.balance).toBe(500);
@@ -139,9 +139,9 @@ describe('TransactionsService', () => {
     });
 
     it('should return zero balance for non-existent account', async () => {
-      prismaMock.account.findUnique.mockResolvedValue(null);
+      prismaMock.account.findFirst.mockResolvedValue(null);
 
-      const result = await service.getAccountBalance('non-existent');
+      const result = await service.getAccountBalance('non-existent', 'profile-1');
 
       expect(result.balance).toBe(0);
       expect(result.type).toBe('DEBIT');
@@ -153,12 +153,12 @@ describe('TransactionsService', () => {
         initialBalance: new Decimal(500),
       });
 
-      prismaMock.account.findUnique.mockResolvedValue(account);
+      prismaMock.account.findFirst.mockResolvedValue(account);
       prismaMock.transaction.aggregate.mockResolvedValue({
         _sum: { amount: null },
       });
 
-      const result = await service.getAccountBalance('acc-1');
+      const result = await service.getAccountBalance('acc-1', 'profile-1');
 
       // No transactions: balance = initialBalance = 500
       expect(result.balance).toBe(500);
@@ -171,13 +171,13 @@ describe('TransactionsService', () => {
         initialBalance: new Decimal(1000),
       });
 
-      prismaMock.account.findUnique.mockResolvedValue(account);
+      prismaMock.account.findFirst.mockResolvedValue(account);
       // Net: +500 income, -300 expense = +200
       prismaMock.transaction.aggregate.mockResolvedValue({
         _sum: { amount: new Decimal(200) },
       });
 
-      const result = await service.getAccountBalance('acc-1');
+      const result = await service.getAccountBalance('acc-1', 'profile-1');
 
       expect(result.balance).toBe(1200); // 1000 + 200
     });
@@ -198,7 +198,7 @@ describe('TransactionsService', () => {
       const hash2 = service.generateHash(dto as any);
 
       expect(hash1).toBe(hash2);
-      expect(hash1).toHaveLength(32); // MD5 hex length
+      expect(hash1).toHaveLength(64); // SHA-256 hex length
     });
 
     it('should generate different hash for different amounts', () => {
@@ -232,7 +232,7 @@ describe('TransactionsService', () => {
         splits: [],
       });
 
-      prismaMock.transaction.findUnique.mockResolvedValue(transaction);
+      prismaMock.transaction.findFirst.mockResolvedValue(transaction);
       prismaMock.$transaction.mockImplementation(async (callback) => {
         const txMock = {
           transactionSplit: { createMany: jest.fn() },
@@ -256,7 +256,7 @@ describe('TransactionsService', () => {
         ],
       };
 
-      const result = await service.createSplits('tx-1', dto);
+      const result = await service.createSplits('tx-1', dto, 'profile-1');
       expect(result.splits).toHaveLength(2);
     });
 
@@ -267,7 +267,7 @@ describe('TransactionsService', () => {
         splits: [],
       });
 
-      prismaMock.transaction.findUnique.mockResolvedValue(transaction);
+      prismaMock.transaction.findFirst.mockResolvedValue(transaction);
 
       const dto = {
         splits: [
@@ -276,7 +276,7 @@ describe('TransactionsService', () => {
         ],
       };
 
-      await expect(service.createSplits('tx-1', dto)).rejects.toThrow(
+      await expect(service.createSplits('tx-1', dto, 'profile-1')).rejects.toThrow(
         BadRequestException,
       );
     });
@@ -288,7 +288,7 @@ describe('TransactionsService', () => {
         splits: [],
       });
 
-      prismaMock.transaction.findUnique.mockResolvedValue(transaction);
+      prismaMock.transaction.findFirst.mockResolvedValue(transaction);
       prismaMock.$transaction.mockImplementation(async (callback) => {
         const txMock = {
           transactionSplit: { createMany: jest.fn() },
@@ -305,15 +305,15 @@ describe('TransactionsService', () => {
       };
 
       // Should not throw - within tolerance
-      await expect(service.createSplits('tx-1', dto)).resolves.toBeDefined();
+      await expect(service.createSplits('tx-1', dto, 'profile-1')).resolves.toBeDefined();
     });
 
     it('should throw NotFoundException for non-existent transaction', async () => {
-      prismaMock.transaction.findUnique.mockResolvedValue(null);
+      prismaMock.transaction.findFirst.mockResolvedValue(null);
 
       const dto = { splits: [{ amount: -50, categoryId: 'cat-1' }] };
 
-      await expect(service.createSplits('non-existent', dto)).rejects.toThrow(
+      await expect(service.createSplits('non-existent', dto, 'profile-1')).rejects.toThrow(
         NotFoundException,
       );
     });
@@ -325,11 +325,11 @@ describe('TransactionsService', () => {
         splits: [{ id: 'existing-split', amount: new Decimal(-100) }],
       });
 
-      prismaMock.transaction.findUnique.mockResolvedValue(transaction);
+      prismaMock.transaction.findFirst.mockResolvedValue(transaction);
 
       const dto = { splits: [{ amount: -100, categoryId: 'cat-1' }] };
 
-      await expect(service.createSplits('tx-1', dto)).rejects.toThrow(
+      await expect(service.createSplits('tx-1', dto, 'profile-1')).rejects.toThrow(
         BadRequestException,
       );
     });
@@ -345,7 +345,7 @@ describe('TransactionsService', () => {
         amount: new Decimal(-100),
       });
 
-      prismaMock.transaction.findUnique.mockResolvedValue(transaction);
+      prismaMock.transaction.findFirst.mockResolvedValue(transaction);
       prismaMock.$transaction.mockImplementation(async (callback) => {
         const txMock = {
           transactionSplit: {
@@ -364,7 +364,7 @@ describe('TransactionsService', () => {
 
       const dto = { splits: [{ amount: -100, categoryId: 'cat-new' }] };
 
-      const result = await service.updateSplits('tx-1', dto);
+      const result = await service.updateSplits('tx-1', dto, 'profile-1');
       expect(result.splits).toHaveLength(1);
     });
 
@@ -374,21 +374,21 @@ describe('TransactionsService', () => {
         amount: new Decimal(-100),
       });
 
-      prismaMock.transaction.findUnique.mockResolvedValue(transaction);
+      prismaMock.transaction.findFirst.mockResolvedValue(transaction);
 
       const dto = { splits: [{ amount: -50, categoryId: 'cat-1' }] };
 
-      await expect(service.updateSplits('tx-1', dto)).rejects.toThrow(
+      await expect(service.updateSplits('tx-1', dto, 'profile-1')).rejects.toThrow(
         BadRequestException,
       );
     });
 
     it('should throw NotFoundException for non-existent transaction', async () => {
-      prismaMock.transaction.findUnique.mockResolvedValue(null);
+      prismaMock.transaction.findFirst.mockResolvedValue(null);
 
       const dto = { splits: [{ amount: -100, categoryId: 'cat-1' }] };
 
-      await expect(service.updateSplits('non-existent', dto)).rejects.toThrow(
+      await expect(service.updateSplits('non-existent', dto, 'profile-1')).rejects.toThrow(
         NotFoundException,
       );
     });
@@ -411,7 +411,7 @@ describe('TransactionsService', () => {
         },
       ];
 
-      const result = await service.createMany(dtos as any, true);
+      const result = await service.createMany(dtos as any, true, [], 'profile-1');
 
       expect(result.newCount).toBe(1);
     });
@@ -430,7 +430,7 @@ describe('TransactionsService', () => {
         },
       ];
 
-      const result = await service.createMany(dtos as any, false);
+      const result = await service.createMany(dtos as any, false, [], 'profile-1');
 
       expect(result.duplicateCount).toBe(1);
       expect(result.duplicates).toHaveLength(1);
@@ -444,7 +444,7 @@ describe('TransactionsService', () => {
     it('should filter by month and year', async () => {
       prismaMock.transaction.findMany.mockResolvedValue([]);
 
-      await service.findAll({ month: 1, year: 2025 });
+      await service.findAll({ month: 1, year: 2025 }, 'profile-1');
 
       expect(prismaMock.transaction.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -465,17 +465,17 @@ describe('TransactionsService', () => {
   describe('findOne', () => {
     it('should return transaction by id', async () => {
       const tx = createMockTransaction({ id: 'tx-1' });
-      prismaMock.transaction.findUnique.mockResolvedValue(tx);
+      prismaMock.transaction.findFirst.mockResolvedValue(tx);
 
-      const result = await service.findOne('tx-1');
+      const result = await service.findOne('tx-1', 'profile-1');
 
       expect(result.id).toBe('tx-1');
     });
 
     it('should throw NotFoundException for non-existent transaction', async () => {
-      prismaMock.transaction.findUnique.mockResolvedValue(null);
+      prismaMock.transaction.findFirst.mockResolvedValue(null);
 
-      await expect(service.findOne('non-existent')).rejects.toThrow(
+      await expect(service.findOne('non-existent', 'profile-1')).rejects.toThrow(
         NotFoundException,
       );
     });
@@ -486,12 +486,12 @@ describe('TransactionsService', () => {
   // ============================================
   describe('remove', () => {
     it('should delete transaction', async () => {
-      prismaMock.transaction.delete.mockResolvedValue({ id: 'tx-1' });
+      prismaMock.transaction.deleteMany.mockResolvedValue({ count: 1 });
 
-      await service.remove('tx-1');
+      await service.remove('tx-1', 'profile-1');
 
-      expect(prismaMock.transaction.delete).toHaveBeenCalledWith({
-        where: { id: 'tx-1' },
+      expect(prismaMock.transaction.deleteMany).toHaveBeenCalledWith({
+        where: { id: 'tx-1', profileId: 'profile-1' },
       });
     });
   });
@@ -506,6 +506,7 @@ describe('TransactionsService', () => {
       const result = await service.propagateCategory(
         'Walmart',
         'cat-groceries',
+        'profile-1',
       );
 
       expect(result.count).toBe(5);
@@ -513,6 +514,7 @@ describe('TransactionsService', () => {
         where: {
           description: { equals: 'Walmart' },
           categoryId: null,
+          profileId: 'profile-1',
         },
         data: { categoryId: 'cat-groceries' },
       });
