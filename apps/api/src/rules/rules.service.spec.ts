@@ -60,6 +60,10 @@ describe('RulesService', () => {
 
     // Reset all mocks before each test
     jest.clearAllMocks();
+
+    // Default empty results for lookups performed by dedup/rejection checks
+    mockPrismaService.categorizationRule.findMany.mockResolvedValue([]);
+    mockPrismaService.ruleSuggestion.findMany.mockResolvedValue([]);
   });
 
   describe('applyToExisting', () => {
@@ -72,6 +76,7 @@ describe('RulesService', () => {
         enabled: true,
         priority: 0,
         categoryId: 'cat-1',
+        profileId: 'profile-1',
         mode: RuleMode.AUTO_APPLY,
         conditionsJson: JSON.stringify({
           operator: 'AND',
@@ -407,11 +412,17 @@ describe('RulesService', () => {
         ...createDto,
       });
 
-      const result = await service.create(createDto as any);
+      const result = await service.create(createDto as any, 'profile-1');
 
       expect(result.id).toBe('rule-1');
+      expect(mockPrismaService.categorizationRule.findMany).toHaveBeenCalledWith(
+        {
+          where: { profileId: 'profile-1', categoryId: 'cat-1' },
+          select: { id: true, name: true, conditionsJson: true },
+        },
+      );
       expect(mockPrismaService.categorizationRule.create).toHaveBeenCalledWith({
-        data: createDto,
+        data: { ...createDto, profileId: 'profile-1' },
       });
     });
   });

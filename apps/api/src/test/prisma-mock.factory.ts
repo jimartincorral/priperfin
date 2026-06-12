@@ -1,6 +1,7 @@
-import { jest } from '@jest/globals';
-import { MockContext, Context, createMockContext } from './context';
-import { Decimal } from '../generated/client';
+import { Prisma } from '../generated/client';
+
+type Decimal = Prisma.Decimal;
+const Decimal = Prisma.Decimal;
 
 /**
  * Creates a deep mock of the PrismaService for unit testing.
@@ -129,12 +130,14 @@ export function createPrismaMock() {
     $disconnect: jest.fn(),
     $executeRawUnsafe: jest.fn(),
     $queryRawUnsafe: jest.fn(),
-    $transaction: jest.fn(
-      (callback: (tx: typeof prismaMock) => Promise<unknown>) => {
-        return callback(prismaMock);
-      },
-    ),
+    $transaction: jest.fn(),
   };
+
+  prismaMock.$transaction.mockImplementation(
+    (callback: (tx: typeof prismaMock) => Promise<unknown>) => {
+      return callback(prismaMock);
+    },
+  );
 
   return prismaMock;
 }

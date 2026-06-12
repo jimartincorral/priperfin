@@ -61,6 +61,7 @@ jest.mock('stream/promises', () => ({
 }));
 
 import { promises as fs } from 'fs';
+import * as path from 'path';
 
 describe('BackupService', () => {
   let service: BackupService;
@@ -177,12 +178,21 @@ describe('BackupService', () => {
   // getBackupFileStream() Tests
   // ============================================
   describe('getBackupFileStream', () => {
-    it('should throw BadRequestException when file does not exist', async () => {
-      (fs.stat as jest.Mock).mockRejectedValue(new Error('ENOENT'));
+    it('should return a read stream without pre-checking file existence', async () => {
+      // The service does not stat the file; createReadStream is lazy and
+      // any missing-file error surfaces on the stream itself.
+      const mockStream = { pipe: jest.fn() };
+      const createReadStreamMock = jest.requireMock('fs').createReadStream;
+      createReadStreamMock.mockReturnValue(mockStream);
 
-      await expect(
-        service.getBackupFileStream('nonexistent.tar'),
-      ).rejects.toThrow(BadRequestException);
+      const [stream, mimeType] =
+        await service.getBackupFileStream('nonexistent.tar');
+
+      expect(stream).toBe(mockStream);
+      expect(mimeType).toBe('application/octet-stream');
+      expect(createReadStreamMock).toHaveBeenCalledWith(
+        path.join('/test/backups', 'nonexistent.tar'),
+      );
     });
 
     // ============================================
@@ -195,7 +205,7 @@ describe('BackupService', () => {
         ).rejects.toThrow(BadRequestException);
         await expect(
           service.getBackupFileStream('../../../etc/passwd'),
-        ).rejects.toThrow('Invalid filename format');
+        ).rejects.toThrow('Invalid filename.');
       });
 
       it('should reject filenames with forward slashes', async () => {
@@ -204,7 +214,7 @@ describe('BackupService', () => {
         ).rejects.toThrow(BadRequestException);
         await expect(
           service.getBackupFileStream('path/to/file.tar'),
-        ).rejects.toThrow('Invalid filename format');
+        ).rejects.toThrow('Invalid filename.');
       });
 
       it('should reject filenames with backslashes', async () => {
@@ -213,7 +223,7 @@ describe('BackupService', () => {
         ).rejects.toThrow(BadRequestException);
         await expect(
           service.getBackupFileStream('path\\to\\file.tar'),
-        ).rejects.toThrow('Invalid filename format');
+        ).rejects.toThrow('Invalid filename.');
       });
 
       it('should reject filenames with invalid characters', async () => {
@@ -222,7 +232,7 @@ describe('BackupService', () => {
         ).rejects.toThrow(BadRequestException);
         await expect(
           service.getBackupFileStream('file<script>.tar'),
-        ).rejects.toThrow('Invalid filename format');
+        ).rejects.toThrow('Invalid filename.');
       });
 
       it('should reject filenames with invalid extensions', async () => {
@@ -230,7 +240,7 @@ describe('BackupService', () => {
           BadRequestException,
         );
         await expect(service.getBackupFileStream('backup.sql')).rejects.toThrow(
-          'Invalid backup file extension',
+          'Invalid filename.',
         );
       });
 
@@ -276,12 +286,12 @@ describe('BackupService', () => {
   describe('restoreBackup', () => {
     it('should throw BadRequestException when confirmOverwrite is false', async () => {
       await expect(
-        service.restoreBackup('/path/to/backup.tar', false),
+        service.restoreBackup('/path/to/backup.tar', false, 'profile-1'),
       ).rejects.toThrow(BadRequestException);
       await expect(
-        service.restoreBackup('/path/to/backup.tar', false),
+        service.restoreBackup('/path/to/backup.tar', false, 'profile-1'),
       ).rejects.toThrow(
-        'Confirmation to overwrite existing data is required for restore operation.',
+        'Confirmation to overwrite existing data is required.',
       );
     });
 
@@ -295,10 +305,8 @@ describe('BackupService', () => {
       (fs.rm as jest.Mock).mockResolvedValue(undefined);
 
       await expect(
-        service.restoreBackup('/path/to/backup.tar.enc', true),
-      ).rejects.toThrow(
-        'Backup is encrypted, but no decryption key was provided.',
-      );
+        service.restoreBackup('/path/to/backup.tar.enc', true, 'profile-1'),
+      ).rejects.toThrow('Decryption key required.');
     });
   });
 

@@ -75,15 +75,27 @@ async function main() {
     } else {
       console.log('No transactions found. Attempting to create one...');
       try {
-        const newTx = await prisma.transaction.create({
-          data: {
-            date: new Date(),
-            amount: -10.5,
-            description: 'Debug Transaction',
-            categoryId: null,
-          },
+        // Transactions require a profile; use the first (oldest) profile,
+        // matching the convention from scripts/migrate-profile-isolation.sh.
+        const profile = await prisma.profile.findFirst({
+          orderBy: { createdAt: 'asc' },
         });
-        console.log('Created debug transaction:', newTx);
+        if (!profile) {
+          console.error(
+            'Cannot create debug transaction: no profiles exist. Create a profile via the app setup first.',
+          );
+        } else {
+          const newTx = await prisma.transaction.create({
+            data: {
+              date: new Date(),
+              amount: -10.5,
+              description: 'Debug Transaction',
+              categoryId: null,
+              profileId: profile.id,
+            },
+          });
+          console.log('Created debug transaction:', newTx);
+        }
       } catch (e) {
         console.error('Failed to create transaction:', e);
       }

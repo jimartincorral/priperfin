@@ -40,6 +40,7 @@ describe('RuleEvaluatorService', () => {
     enabled: true,
     priority: 0,
     categoryId: 'cat-1',
+    profileId: 'profile-1',
     mode: RuleMode.SUGGEST,
     conditionsJson,
     matchCount: 0,

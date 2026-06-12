@@ -4,8 +4,14 @@ import { RulesService } from '../rules/rules.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotFoundException, BadRequestException } from '@nestjs/common';
 import { createPrismaMock, PrismaMock } from '../test/prisma-mock.factory';
-import { createMockTransaction, createMockAccount } from '../test/fixtures';
-import { Decimal, RuleMode } from '../generated/client';
+import {
+  createMockTransaction,
+  createMockAccount,
+  createMockTransactionSplit,
+} from '../test/fixtures';
+import { Prisma, RuleMode } from '../generated/client';
+
+const Decimal = Prisma.Decimal;
 
 describe('TransactionsService', () => {
   let service: TransactionsService;
@@ -233,21 +239,23 @@ describe('TransactionsService', () => {
       });
 
       prismaMock.transaction.findFirst.mockResolvedValue(transaction);
-      prismaMock.$transaction.mockImplementation(async (callback) => {
-        const txMock = {
-          transactionSplit: { createMany: jest.fn() },
-          transaction: {
-            findUnique: jest.fn().mockResolvedValue({
-              ...transaction,
-              splits: [
-                { id: 's1', amount: new Decimal(-60) },
-                { id: 's2', amount: new Decimal(-40) },
-              ],
-            }),
-          },
-        };
-        return callback(txMock);
-      });
+      prismaMock.$transaction.mockImplementation(
+        async (callback: (tx: any) => Promise<unknown>) => {
+          const txMock = {
+            transactionSplit: { createMany: jest.fn() },
+            transaction: {
+              findUnique: jest.fn().mockResolvedValue({
+                ...transaction,
+                splits: [
+                  { id: 's1', amount: new Decimal(-60) },
+                  { id: 's2', amount: new Decimal(-40) },
+                ],
+              }),
+            },
+          };
+          return callback(txMock);
+        },
+      );
 
       const dto = {
         splits: [
@@ -257,7 +265,8 @@ describe('TransactionsService', () => {
       };
 
       const result = await service.createSplits('tx-1', dto, 'profile-1');
-      expect(result.splits).toHaveLength(2);
+      expect(result).not.toBeNull();
+      expect(result!.splits).toHaveLength(2);
     });
 
     it('should reject splits that do not sum correctly', async () => {
@@ -289,13 +298,17 @@ describe('TransactionsService', () => {
       });
 
       prismaMock.transaction.findFirst.mockResolvedValue(transaction);
-      prismaMock.$transaction.mockImplementation(async (callback) => {
-        const txMock = {
-          transactionSplit: { createMany: jest.fn() },
-          transaction: { findUnique: jest.fn().mockResolvedValue(transaction) },
-        };
-        return callback(txMock);
-      });
+      prismaMock.$transaction.mockImplementation(
+        async (callback: (tx: any) => Promise<unknown>) => {
+          const txMock = {
+            transactionSplit: { createMany: jest.fn() },
+            transaction: {
+              findUnique: jest.fn().mockResolvedValue(transaction),
+            },
+          };
+          return callback(txMock);
+        },
+      );
 
       const dto = {
         splits: [
@@ -322,7 +335,13 @@ describe('TransactionsService', () => {
       const transaction = createMockTransaction({
         id: 'tx-1',
         amount: new Decimal(-100),
-        splits: [{ id: 'existing-split', amount: new Decimal(-100) }],
+        splits: [
+          createMockTransactionSplit({
+            id: 'existing-split',
+            parentId: 'tx-1',
+            amount: new Decimal(-100),
+          }),
+        ],
       });
 
       prismaMock.transaction.findFirst.mockResolvedValue(transaction);
@@ -346,26 +365,29 @@ describe('TransactionsService', () => {
       });
 
       prismaMock.transaction.findFirst.mockResolvedValue(transaction);
-      prismaMock.$transaction.mockImplementation(async (callback) => {
-        const txMock = {
-          transactionSplit: {
-            deleteMany: jest.fn(),
-            createMany: jest.fn(),
-          },
-          transaction: {
-            findUnique: jest.fn().mockResolvedValue({
-              ...transaction,
-              splits: [{ id: 's1', amount: new Decimal(-100) }],
-            }),
-          },
-        };
-        return callback(txMock);
-      });
+      prismaMock.$transaction.mockImplementation(
+        async (callback: (tx: any) => Promise<unknown>) => {
+          const txMock = {
+            transactionSplit: {
+              deleteMany: jest.fn(),
+              createMany: jest.fn(),
+            },
+            transaction: {
+              findUnique: jest.fn().mockResolvedValue({
+                ...transaction,
+                splits: [{ id: 's1', amount: new Decimal(-100) }],
+              }),
+            },
+          };
+          return callback(txMock);
+        },
+      );
 
       const dto = { splits: [{ amount: -100, categoryId: 'cat-new' }] };
 
       const result = await service.updateSplits('tx-1', dto, 'profile-1');
-      expect(result.splits).toHaveLength(1);
+      expect(result).not.toBeNull();
+      expect(result!.splits).toHaveLength(1);
     });
 
     it('should reject updates with incorrect sum', async () => {
