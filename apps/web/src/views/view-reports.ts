@@ -1,13 +1,14 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, state, query } from 'lit/decorators.js';
 import { Chart, registerables } from 'chart.js';
+import { SankeyController, Flow } from 'chartjs-chart-sankey';
 import { api } from '../api/client';
 import '../components/filterable-select';
 import type { SelectOption } from '../components/filterable-select';
 
 import { i18n } from '../i18n/i18n';
 
-Chart.register(...registerables);
+Chart.register(...registerables, SankeyController, Flow);
 
 // Helper function to get text color from CSS variables for dark mode support
 function getTextColor(): string {
@@ -45,10 +46,18 @@ export class ViewReports extends LitElement {
   @state() groupByCategory = false; // Toggle for parent category grouping
   @state() breakdownData: any[] = []; // Store raw API response
   @state() legendItems: any[] = []; // For custom legend rendering
+  @state() sankeyData: { nodes: { id: string }[]; links: { source: string; target: string; value: number }[] } | null = null;
+  @state() costObjectData: any[] = [];
 
   @query('#breakdownChart') breakdownCanvas!: HTMLCanvasElement;
+  @query('#sankeyChart') sankeyCanvas!: HTMLCanvasElement;
+  @query('#budgetChart') budgetCanvas!: HTMLCanvasElement;
+  @query('#costObjectChart') costObjectCanvas!: HTMLCanvasElement;
 
   private breakdownChart: Chart | null = null;
+  private sankeyChart: Chart | null = null;
+  private budgetChart: Chart | null = null;
+  private costObjectChart: Chart | null = null;
 
   static styles = css`
     :host { display: block; }
@@ -265,11 +274,17 @@ export class ViewReports extends LitElement {
     .eye-icon:hover { 
       opacity: 1; 
     }
-    .nav-icon { 
-      opacity: 0.5; 
+    .nav-icon {
+      opacity: 0.5;
     }
     .nav-icon:hover {
       opacity: 1;
+    }
+    .empty-hint {
+      color: var(--md-sys-color-on-surface-variant);
+      font: var(--md-sys-typescale-body-medium);
+      margin: 0;
+      padding: 16px 0;
     }
   `;
 
@@ -396,12 +411,24 @@ export class ViewReports extends LitElement {
         params.accountId = this.selectedAccountId;
       }
 
-      const breakdown = await api.get('/reports/category-breakdown', params);
+      const [breakdown, sankey, costObjects] = await Promise.all([
+        api.get('/reports/category-breakdown', params),
+        api.get('/reports/sankey', params),
+        // Backend only computes cost objects for a specific account
+        this.selectedAccountId
+          ? api.get('/reports/cost-object-breakdown', params)
+          : Promise.resolve([]),
+      ]);
 
       this.breakdownData = breakdown;
-      
+      this.sankeyData = sankey;
+      this.costObjectData = costObjects;
+
       await this.updateComplete; // Ensure DOM is ready
       this.renderBreakdown();
+      this.renderSankey();
+      this.renderBudget();
+      this.renderCostObjects();
     } catch (e: any) {
       console.error(e);
       alert('Failed to load reports: ' + (e.message || e));
@@ -415,7 +442,8 @@ export class ViewReports extends LitElement {
       if (this.breakdownChart) this.breakdownChart.destroy();
       if (!this.breakdownCanvas) return;
 
-      let data = this.breakdownData || [];
+      // Zero-spend categories may be present for the budget report; skip them here
+      let data = (this.breakdownData || []).filter((d: any) => d.spent > 0);
 
       // Aggregation Logic
       if (this.groupByCategory) {
@@ -554,6 +582,207 @@ export class ViewReports extends LitElement {
       });
     } catch (e: any) {
       console.error('Breakdown Chart Error', e);
+    }
+  }
+
+  private formatAmount(value: number): string {
+    return value.toLocaleString(i18n.getLocale(), { maximumFractionDigits: 2 });
+  }
+
+  // Budget is a monthly amount; scale it to the selected period.
+  // Only month/year modes map cleanly to a number of months.
+  getBudgetItems(): { id: string; name: string; spent: number; budget: number; color: string }[] {
+    if (this.dateFilterMode !== 'month' && this.dateFilterMode !== 'year') return [];
+    const factor = this.dateFilterMode === 'year' ? 12 : 1;
+
+    return (this.breakdownData || [])
+      .filter((d: any) => d.budget > 0)
+      .map((d: any, i: number) => ({
+        id: d.id,
+        name: `${d.icon || ''} ${d.name}`.trim(),
+        spent: d.spent,
+        budget: d.budget * factor,
+        color: d.color && d.color !== '#000000' && d.color !== '#000'
+          ? d.color
+          : CHART_PALETTE[i % CHART_PALETTE.length],
+      }))
+      .sort((a: any, b: any) => b.spent / b.budget - a.spent / a.budget);
+  }
+
+  renderBudget() {
+    try {
+      if (this.budgetChart) {
+        this.budgetChart.destroy();
+        this.budgetChart = null;
+      }
+      if (!this.budgetCanvas) return;
+
+      const items = this.getBudgetItems();
+      if (items.length === 0) return;
+
+      const textColor = getTextColor();
+      this.budgetChart = new Chart(this.budgetCanvas, {
+        type: 'bar',
+        data: {
+          labels: items.map(i => i.name),
+          datasets: [
+            {
+              label: i18n.t('reports.spent'),
+              data: items.map(i => i.spent),
+              backgroundColor: items.map(i => (i.spent > i.budget ? '#ef4444' : i.color)),
+            },
+            {
+              label: i18n.t('reports.budget'),
+              data: items.map(i => i.budget),
+              backgroundColor: 'rgba(148, 163, 184, 0.45)',
+            },
+          ],
+        },
+        options: {
+          indexAxis: 'y',
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            x: {
+              beginAtZero: true,
+              ticks: { color: textColor },
+              grid: { color: 'rgba(148, 163, 184, 0.2)' },
+            },
+            y: {
+              ticks: { color: textColor },
+              grid: { display: false },
+            },
+          },
+          plugins: {
+            legend: { labels: { color: textColor } },
+            tooltip: {
+              bodyColor: textColor,
+              titleColor: textColor,
+              callbacks: {
+                label: (context: any) =>
+                  `${context.dataset.label}: ${this.formatAmount(context.parsed.x)}`,
+              },
+            },
+          },
+        },
+      });
+    } catch (e: any) {
+      console.error('Budget Chart Error', e);
+    }
+  }
+
+  renderSankey() {
+    try {
+      if (this.sankeyChart) {
+        this.sankeyChart.destroy();
+        this.sankeyChart = null;
+      }
+      if (!this.sankeyCanvas) return;
+
+      const links = this.sankeyData?.links || [];
+      if (links.length === 0) return;
+
+      // Stable color per node: fixed colors for the hub nodes, palette for the rest
+      const nodeColors = new Map<string, string>([
+        ['Income', '#16a34a'],
+        ['Savings', '#0ea5e9'],
+      ]);
+      let colorIndex = 0;
+      links.forEach(link => {
+        [link.source, link.target].forEach(id => {
+          if (!nodeColors.has(id)) {
+            nodeColors.set(id, CHART_PALETTE[colorIndex % CHART_PALETTE.length]);
+            colorIndex++;
+          }
+        });
+      });
+
+      this.sankeyChart = new Chart(this.sankeyCanvas, {
+        type: 'sankey',
+        data: {
+          datasets: [
+            {
+              data: links.map(l => ({ from: l.source, to: l.target, flow: l.value })),
+              colorFrom: (c: any) => nodeColors.get(c.dataset.data[c.dataIndex].from) || '#94a3b8',
+              colorTo: (c: any) => nodeColors.get(c.dataset.data[c.dataIndex].to) || '#94a3b8',
+              colorMode: 'gradient',
+              color: getTextColor(),
+            } as any,
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              bodyColor: getTextColor(),
+              titleColor: getTextColor(),
+              callbacks: {
+                label: (context: any) => {
+                  const item = context.dataset.data[context.dataIndex];
+                  return `${item.from} → ${item.to}: ${this.formatAmount(item.flow)}`;
+                },
+              },
+            },
+          },
+        },
+      });
+    } catch (e: any) {
+      console.error('Sankey Chart Error', e);
+    }
+  }
+
+  renderCostObjects() {
+    try {
+      if (this.costObjectChart) {
+        this.costObjectChart.destroy();
+        this.costObjectChart = null;
+      }
+      if (!this.costObjectCanvas) return;
+
+      const data = this.costObjectData || [];
+      if (data.length === 0) return;
+
+      const textColor = getTextColor();
+      this.costObjectChart = new Chart(this.costObjectCanvas, {
+        type: 'doughnut',
+        data: {
+          labels: data.map((d: any) => `${d.icon || ''} ${d.name}`.trim()),
+          datasets: [
+            {
+              data: data.map((d: any) => d.total),
+              backgroundColor: data.map(
+                (d: any, i: number) => d.color || CHART_PALETTE[i % CHART_PALETTE.length],
+              ),
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              position: 'right',
+              labels: { color: textColor },
+            },
+            tooltip: {
+              bodyColor: textColor,
+              titleColor: textColor,
+              callbacks: {
+                label: (context: any) => {
+                  const item = data[context.dataIndex];
+                  const total = context.chart._metasets[context.datasetIndex].total;
+                  const percentage = ((context.parsed / total) * 100).toFixed(1) + '%';
+                  return `${this.formatAmount(context.parsed)} (${percentage}) · ${item.count} ${i18n.t('reports.transactions')}`;
+                },
+              },
+            },
+          },
+        },
+      });
+    } catch (e: any) {
+      console.error('Cost Object Chart Error', e);
     }
   }
 
@@ -838,6 +1067,44 @@ export class ViewReports extends LitElement {
                     })}
                 </div>
             </div>
+        </div>
+
+        <div class="chart-card">
+            <h3>${i18n.t('reports.budget_vs_actual')}</h3>
+            ${(() => {
+              const budgetItems = this.getBudgetItems();
+              if (this.dateFilterMode !== 'month' && this.dateFilterMode !== 'year') {
+                return html`<p class="empty-hint">${i18n.t('reports.budget_hint_period')}</p>`;
+              }
+              if (budgetItems.length === 0) {
+                return html`<p class="empty-hint">${i18n.t('reports.budget_empty')}</p>`;
+              }
+              return html`
+                <div style="position: relative; height: ${Math.min(800, Math.max(180, budgetItems.length * 44 + 80))}px;">
+                    <canvas id="budgetChart"></canvas>
+                </div>
+              `;
+            })()}
+        </div>
+
+        <div class="chart-card">
+            <h3>${i18n.t('reports.sankey_chart')}</h3>
+            ${this.sankeyData && this.sankeyData.links.length > 0 ? html`
+                <div style="position: relative; height: 460px;">
+                    <canvas id="sankeyChart"></canvas>
+                </div>
+            ` : html`<p class="empty-hint">${i18n.t('reports.no_data')}</p>`}
+        </div>
+
+        <div class="chart-card">
+            <h3>${i18n.t('reports.cost_object_breakdown')}</h3>
+            ${!this.selectedAccountId
+              ? html`<p class="empty-hint">${i18n.t('reports.cost_object_hint')}</p>`
+              : this.costObjectData.length > 0 ? html`
+                <div style="position: relative; height: 400px;">
+                    <canvas id="costObjectChart"></canvas>
+                </div>
+              ` : html`<p class="empty-hint">${i18n.t('reports.no_data')}</p>`}
         </div>
       </div>
     `;
