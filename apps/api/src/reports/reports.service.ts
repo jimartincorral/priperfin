@@ -216,8 +216,9 @@ export class ReportsService {
     });
 
     // Sort by Family ID, then by Name
+    // Keep zero-spend categories that have a budget so budget reports can show them
     return Array.from(categoryMap.values())
-      .filter((c) => c.spent > 0)
+      .filter((c) => c.spent > 0 || c.budget > 0)
       .sort((a, b) => {
         const famA = a.familyId || '';
         const famB = b.familyId || '';

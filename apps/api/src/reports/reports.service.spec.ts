@@ -264,8 +264,40 @@ describe('ReportsService', () => {
         year: 2025,
       });
 
+      // Parent has a budget (fixture default) so it's included despite zero spend
+      expect(result).toHaveLength(2);
+      result.forEach((c) => expect(c.color).toMatch(/^#[0-9a-f]{6}$/i));
+    });
+
+    it('should include zero-spend categories with a budget and exclude those without', async () => {
+      const budgetedCategory = createMockCategory({
+        id: 'budgeted-cat',
+        name: 'Groceries',
+        type: 'EXPENSE',
+        budget: new Decimal(300),
+      });
+      const unbudgetedCategory = createMockCategory({
+        id: 'unbudgeted-cat',
+        name: 'Misc',
+        type: 'EXPENSE',
+        budget: null,
+      });
+
+      prismaMock.transaction.findMany.mockResolvedValue([]);
+      prismaMock.category.findMany.mockResolvedValue([
+        budgetedCategory,
+        unbudgetedCategory,
+      ]);
+
+      const result = await service.getCategoryBreakdown({
+        month: 1,
+        year: 2025,
+      });
+
       expect(result).toHaveLength(1);
-      expect(result[0].color).toMatch(/^#[0-9a-f]{6}$/i);
+      expect(result[0].id).toBe('budgeted-cat');
+      expect(result[0].spent).toBe(0);
+      expect(result[0].budget).toBe(300);
     });
   });
 
