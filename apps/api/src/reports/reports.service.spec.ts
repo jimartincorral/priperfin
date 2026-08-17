@@ -8,7 +8,9 @@ import {
   createMockCostObject,
   createMockTransactionSplit,
 } from '../test/fixtures';
-import { Decimal } from '../generated/client';
+import { Prisma } from '../generated/client';
+
+const Decimal = Prisma.Decimal;
 
 describe('ReportsService', () => {
   let service: ReportsService;
@@ -35,25 +37,36 @@ describe('ReportsService', () => {
   // getDateRange() Tests
   // ============================================
   describe('getDateRange', () => {
+    // Freeze the clock so tests are deterministic regardless of the real date.
+    beforeEach(() => {
+      jest.useFakeTimers();
+      jest.setSystemTime(new Date(2025, 5, 15, 12, 0, 0)); // June 15, 2025 (local time)
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
     it('should return correct date range for month and year', () => {
-      const result = (service as any).getDateRange(1, 2025);
+      const result = (service as any).getDateRange({ month: 1, year: 2025 });
 
       expect(result.startDate).toEqual(new Date(2025, 0, 1));
       expect(result.endDate).toEqual(new Date(2025, 1, 1));
     });
 
     it('should handle December correctly (year rollover)', () => {
-      const result = (service as any).getDateRange(12, 2025);
+      const result = (service as any).getDateRange({ month: 12, year: 2025 });
 
       expect(result.startDate).toEqual(new Date(2025, 11, 1));
       expect(result.endDate).toEqual(new Date(2026, 0, 1)); // Jan 2026
     });
 
     it('should use current date when no month/year provided', () => {
-      const result = (service as any).getDateRange();
-      const now = new Date();
+      const result = (service as any).getDateRange({});
 
-      expect(result.startDate.getFullYear()).toBe(now.getFullYear());
+      // Frozen "now" is June 15, 2025 -> default month filter is June 2025
+      expect(result.startDate).toEqual(new Date(2025, 5, 1));
+      expect(result.endDate).toEqual(new Date(2025, 6, 1));
     });
   });
 
@@ -124,10 +137,10 @@ describe('ReportsService', () => {
       prismaMock.transaction.findMany.mockResolvedValue(transactions);
       prismaMock.category.findMany.mockResolvedValue([category]);
 
-      const result = await service.getCategoryBreakdown({
-        month: 1,
-        year: 2025,
-      });
+      const result = await service.getCategoryBreakdown(
+        { month: 1, year: 2025 },
+        'profile-1',
+      );
 
       expect(result).toHaveLength(1);
       expect(result[0].name).toBe('Groceries');
@@ -166,10 +179,10 @@ describe('ReportsService', () => {
       prismaMock.transaction.findMany.mockResolvedValue([transaction]);
       prismaMock.category.findMany.mockResolvedValue([category1, category2]);
 
-      const result = await service.getCategoryBreakdown({
-        month: 1,
-        year: 2025,
-      });
+      const result = await service.getCategoryBreakdown(
+        { month: 1, year: 2025 },
+        'profile-1',
+      );
 
       expect(result).toHaveLength(2);
       const cat1Result = result.find((c) => c.name === 'Category 1');
@@ -190,10 +203,10 @@ describe('ReportsService', () => {
       prismaMock.transaction.findMany.mockResolvedValue([transaction]);
       prismaMock.category.findMany.mockResolvedValue([]);
 
-      const result = await service.getCategoryBreakdown({
-        month: 1,
-        year: 2025,
-      });
+      const result = await service.getCategoryBreakdown(
+        { month: 1, year: 2025 },
+        'profile-1',
+      );
 
       expect(result).toHaveLength(1);
       expect(result[0].name).toBe('Uncategorized');
@@ -204,17 +217,19 @@ describe('ReportsService', () => {
       prismaMock.transaction.findMany.mockResolvedValue([]);
       prismaMock.category.findMany.mockResolvedValue([]);
 
-      await service.getCategoryBreakdown({
-        month: 1,
-        year: 2025,
-        accountId: 'acc-1',
-      });
+      await service.getCategoryBreakdown(
+        { month: 1, year: 2025, accountId: 'acc-1' },
+        'profile-1',
+      );
 
       expect(prismaMock.transaction.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: expect.objectContaining({
+          where: {
+            profileId: 'profile-1',
+            amount: { lt: 0 },
+            date: { gte: new Date(2025, 0, 1), lt: new Date(2025, 1, 1) },
             accountId: 'acc-1',
-          }),
+          },
         }),
       );
     });
@@ -223,10 +238,10 @@ describe('ReportsService', () => {
       prismaMock.transaction.findMany.mockResolvedValue([]);
       prismaMock.category.findMany.mockResolvedValue([]);
 
-      const result = await service.getCategoryBreakdown({
-        month: 1,
-        year: 2025,
-      });
+      const result = await service.getCategoryBreakdown(
+        { month: 1, year: 2025 },
+        'profile-1',
+      );
 
       expect(result).toEqual([]);
     });
@@ -259,10 +274,10 @@ describe('ReportsService', () => {
         childCategory,
       ]);
 
-      const result = await service.getCategoryBreakdown({
-        month: 1,
-        year: 2025,
-      });
+      const result = await service.getCategoryBreakdown(
+        { month: 1, year: 2025 },
+        'profile-1',
+      );
 
       // Parent has a budget (fixture default) so it's included despite zero spend
       expect(result).toHaveLength(2);
@@ -289,10 +304,10 @@ describe('ReportsService', () => {
         unbudgetedCategory,
       ]);
 
-      const result = await service.getCategoryBreakdown({
-        month: 1,
-        year: 2025,
-      });
+      const result = await service.getCategoryBreakdown(
+        { month: 1, year: 2025 },
+        'profile-1',
+      );
 
       expect(result).toHaveLength(1);
       expect(result[0].id).toBe('budgeted-cat');
@@ -336,7 +351,10 @@ describe('ReportsService', () => {
 
       prismaMock.transaction.findMany.mockResolvedValue(transactions);
 
-      const result = await service.getSankeyData({ month: 1, year: 2025 });
+      const result = await service.getSankeyData(
+        { month: 1, year: 2025 },
+        'profile-1',
+      );
 
       expect(result.nodes).toContainEqual({ id: 'Income' });
       expect(result.nodes).toContainEqual({ id: 'Salary' });
@@ -361,7 +379,10 @@ describe('ReportsService', () => {
 
       prismaMock.transaction.findMany.mockResolvedValue([transaction]);
 
-      const result = await service.getSankeyData({ month: 1, year: 2025 });
+      const result = await service.getSankeyData(
+        { month: 1, year: 2025 },
+        'profile-1',
+      );
 
       const incomeLink = result.links.find(
         (l) => l.source === 'Salary' && l.target === 'Income',
@@ -399,7 +420,10 @@ describe('ReportsService', () => {
 
       prismaMock.transaction.findMany.mockResolvedValue(transactions);
 
-      const result = await service.getSankeyData({ month: 1, year: 2025 });
+      const result = await service.getSankeyData(
+        { month: 1, year: 2025 },
+        'profile-1',
+      );
 
       const savingsLink = result.links.find(
         (l) => l.source === 'Income' && l.target === 'Savings',
@@ -424,7 +448,10 @@ describe('ReportsService', () => {
 
       prismaMock.transaction.findMany.mockResolvedValue([transaction]);
 
-      const result = await service.getSankeyData({ month: 1, year: 2025 });
+      const result = await service.getSankeyData(
+        { month: 1, year: 2025 },
+        'profile-1',
+      );
 
       const savingsLink = result.links.find(
         (l) => l.source === 'Income' && l.target === 'Savings',
@@ -453,7 +480,10 @@ describe('ReportsService', () => {
 
       prismaMock.transaction.findMany.mockResolvedValue([transaction]);
 
-      const result = await service.getSankeyData({ month: 1, year: 2025 });
+      const result = await service.getSankeyData(
+        { month: 1, year: 2025 },
+        'profile-1',
+      );
 
       const expenseLink = result.links.find(
         (l) => l.source === 'Income' && l.target === 'Food',
@@ -468,10 +498,10 @@ describe('ReportsService', () => {
   // ============================================
   describe('getCostObjectBreakdown', () => {
     it('should return empty array when no accountId provided', async () => {
-      const result = await service.getCostObjectBreakdown({
-        month: 1,
-        year: 2025,
-      });
+      const result = await service.getCostObjectBreakdown(
+        { month: 1, year: 2025 },
+        'profile-1',
+      );
       expect(result).toEqual([]);
     });
 
@@ -501,11 +531,10 @@ describe('ReportsService', () => {
 
       prismaMock.transaction.findMany.mockResolvedValue(transactions);
 
-      const result = await service.getCostObjectBreakdown({
-        month: 1,
-        year: 2025,
-        accountId: 'acc-1',
-      });
+      const result = await service.getCostObjectBreakdown(
+        { month: 1, year: 2025, accountId: 'acc-1' },
+        'profile-1',
+      );
 
       expect(result).toHaveLength(1);
       expect(result[0].name).toBe('Project A');
@@ -524,11 +553,10 @@ describe('ReportsService', () => {
 
       prismaMock.transaction.findMany.mockResolvedValue([transaction]);
 
-      const result = await service.getCostObjectBreakdown({
-        month: 1,
-        year: 2025,
-        accountId: 'acc-1',
-      });
+      const result = await service.getCostObjectBreakdown(
+        { month: 1, year: 2025, accountId: 'acc-1' },
+        'profile-1',
+      );
 
       expect(result).toHaveLength(1);
       expect(result[0].name).toBe('Unassigned');
@@ -560,11 +588,10 @@ describe('ReportsService', () => {
 
       prismaMock.transaction.findMany.mockResolvedValue(transactions);
 
-      const result = await service.getCostObjectBreakdown({
-        month: 1,
-        year: 2025,
-        accountId: 'acc-1',
-      });
+      const result = await service.getCostObjectBreakdown(
+        { month: 1, year: 2025, accountId: 'acc-1' },
+        'profile-1',
+      );
 
       expect(result).toHaveLength(1);
       expect(result[0].total).toBe(100); // Only expense counted
@@ -590,15 +617,236 @@ describe('ReportsService', () => {
 
       prismaMock.transaction.findMany.mockResolvedValue([transaction]);
 
-      const result = await service.getCostObjectBreakdown({
-        month: 1,
-        year: 2025,
-        accountId: 'acc-1',
-      });
+      const result = await service.getCostObjectBreakdown(
+        { month: 1, year: 2025, accountId: 'acc-1' },
+        'profile-1',
+      );
 
       expect(result).toHaveLength(1);
       expect(result[0].name).toBe('Project A');
       expect(result[0].total).toBe(100);
+    });
+  });
+
+  // ============================================
+  // getPeriodMonths() Tests
+  // ============================================
+  describe('getPeriodMonths', () => {
+    beforeEach(() => {
+      jest.useFakeTimers();
+      jest.setSystemTime(new Date(2025, 7, 17, 12, 0, 0)); // Aug 17, 2025
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it('should return 1 for a single month', async () => {
+      const months = await service.getPeriodMonths(
+        { filterMode: 'month' as any, month: 3, year: 2025 },
+        'profile-1',
+      );
+
+      expect(months).toBe(1);
+    });
+
+    it('should return 12 for a past full year', async () => {
+      const months = await service.getPeriodMonths(
+        { filterMode: 'year' as any, year: 2024 },
+        'profile-1',
+      );
+
+      expect(months).toBe(12);
+    });
+
+    it('should not count future months for the current year', async () => {
+      const months = await service.getPeriodMonths(
+        { filterMode: 'year' as any, year: 2025 },
+        'profile-1',
+      );
+
+      // Jan through the current (August) month
+      expect(months).toBe(8);
+    });
+
+    it('should count every calendar month a custom range touches', async () => {
+      const months = await service.getPeriodMonths(
+        {
+          filterMode: 'custom' as any,
+          startDate: '2025-01-20',
+          endDate: '2025-03-05',
+        },
+        'profile-1',
+      );
+
+      expect(months).toBe(3); // January, February, March
+    });
+
+    it('should derive the span from the data in all_time mode', async () => {
+      prismaMock.transaction.findFirst
+        .mockResolvedValueOnce({ date: new Date(2024, 10, 5) }) // Nov 2024
+        .mockResolvedValueOnce({ date: new Date(2025, 1, 20) }); // Feb 2025
+
+      const months = await service.getPeriodMonths(
+        { filterMode: 'all_time' as any },
+        'profile-1',
+      );
+
+      expect(months).toBe(4); // Nov, Dec, Jan, Feb
+    });
+
+    it('should return 1 when the profile has no transactions', async () => {
+      prismaMock.transaction.findFirst.mockResolvedValue(null);
+
+      const months = await service.getPeriodMonths(
+        { filterMode: 'all_time' as any },
+        'profile-1',
+      );
+
+      expect(months).toBe(1);
+    });
+  });
+
+  // ============================================
+  // averageMonthly Tests
+  // ============================================
+  describe('averageMonthly', () => {
+    beforeEach(() => {
+      jest.useFakeTimers();
+      jest.setSystemTime(new Date(2025, 7, 17, 12, 0, 0)); // Aug 17, 2025
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it('should divide category spend by the months in the period', async () => {
+      const category = createMockCategory({
+        id: 'cat-1',
+        name: 'Groceries',
+        type: 'EXPENSE',
+        budget: new Decimal(500),
+      });
+
+      prismaMock.transaction.findMany.mockResolvedValue([
+        createMockTransaction({
+          id: 'tx-1',
+          amount: new Decimal(-1200),
+          category,
+          categoryId: 'cat-1',
+          splits: [],
+        }),
+      ]);
+      prismaMock.category.findMany.mockResolvedValue([category]);
+
+      const result = await service.getCategoryBreakdown(
+        { filterMode: 'year' as any, year: 2024, averageMonthly: true },
+        'profile-1',
+      );
+
+      expect(result[0].spent).toBe(100); // 1200 / 12
+      expect(result[0].budget).toBe(500); // Budget is already monthly
+    });
+
+    it('should leave amounts untouched when averageMonthly is not set', async () => {
+      const category = createMockCategory({
+        id: 'cat-1',
+        name: 'Groceries',
+        type: 'EXPENSE',
+      });
+
+      prismaMock.transaction.findMany.mockResolvedValue([
+        createMockTransaction({
+          id: 'tx-1',
+          amount: new Decimal(-1200),
+          category,
+          categoryId: 'cat-1',
+          splits: [],
+        }),
+      ]);
+      prismaMock.category.findMany.mockResolvedValue([category]);
+
+      const result = await service.getCategoryBreakdown(
+        { filterMode: 'year' as any, year: 2024 },
+        'profile-1',
+      );
+
+      expect(result[0].spent).toBe(1200);
+    });
+
+    it('should average sankey flows', async () => {
+      const category = createMockCategory({
+        id: 'cat-1',
+        name: 'Rent',
+        type: 'EXPENSE',
+      });
+
+      prismaMock.transaction.findMany.mockResolvedValue([
+        createMockTransaction({
+          id: 'tx-income',
+          amount: new Decimal(2400),
+          category: null,
+          categoryId: null,
+          splits: [],
+        }),
+        createMockTransaction({
+          id: 'tx-expense',
+          amount: new Decimal(-1200),
+          category,
+          categoryId: 'cat-1',
+          splits: [],
+        }),
+      ]);
+
+      const result = await service.getSankeyData(
+        { filterMode: 'year' as any, year: 2024, averageMonthly: true },
+        'profile-1',
+      );
+
+      const income = result.links.find((l) => l.target === 'Income');
+      const rent = result.links.find((l) => l.target === 'Rent');
+      const savings = result.links.find((l) => l.target === 'Savings');
+
+      expect(income?.value).toBe(200); // 2400 / 12
+      expect(rent?.value).toBe(100); // 1200 / 12
+      expect(savings?.value).toBe(100); // (2400 - 1200) / 12
+    });
+
+    it('should average cost object totals and counts', async () => {
+      const costObject = createMockCostObject({
+        id: 'cost-1',
+        name: 'Project A',
+      });
+
+      prismaMock.transaction.findMany.mockResolvedValue([
+        createMockTransaction({
+          id: 'tx-1',
+          amount: new Decimal(-600),
+          costObject,
+          costObjectId: 'cost-1',
+          splits: [],
+        }),
+        createMockTransaction({
+          id: 'tx-2',
+          amount: new Decimal(-600),
+          costObject,
+          costObjectId: 'cost-1',
+          splits: [],
+        }),
+      ]);
+
+      const result = await service.getCostObjectBreakdown(
+        {
+          filterMode: 'year' as any,
+          year: 2024,
+          accountId: 'acc-1',
+          averageMonthly: true,
+        },
+        'profile-1',
+      );
+
+      expect(result[0].total).toBe(100); // 1200 / 12
+      expect(result[0].count).toBe(0.2); // 2 / 12, rounded to 1 decimal
     });
   });
 });

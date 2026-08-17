@@ -1,12 +1,16 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { NotFoundException } from '@nestjs/common';
 import { MonthlyBalancesService } from './monthly-balances.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { createPrismaMock, PrismaMock } from '../test/prisma-mock.factory';
-import { Decimal } from '../generated/client';
+import { Prisma } from '../generated/client';
+
+const Decimal = Prisma.Decimal;
 
 describe('MonthlyBalancesService', () => {
   let service: MonthlyBalancesService;
   let prismaMock: PrismaMock;
+  const profileId = 'profile-1';
 
   beforeEach(async () => {
     prismaMock = createPrismaMock();
@@ -29,7 +33,7 @@ describe('MonthlyBalancesService', () => {
   // findOne() Tests
   // ============================================
   describe('findOne', () => {
-    it('should find balance by month and accountId', async () => {
+    it('should find balance by month and accountId scoped to profile', async () => {
       const mockBalance = {
         id: 'balance-1',
         month: '2025-01',
@@ -38,13 +42,14 @@ describe('MonthlyBalancesService', () => {
       };
       prismaMock.monthlyBalance.findFirst.mockResolvedValue(mockBalance);
 
-      const result = await service.findOne('2025-01', 'acc-1');
+      const result = await service.findOne('2025-01', profileId, 'acc-1');
 
       expect(result?.balance.toNumber()).toBe(5000);
       expect(prismaMock.monthlyBalance.findFirst).toHaveBeenCalledWith({
         where: {
           month: '2025-01',
           accountId: 'acc-1',
+          account: { profileId },
         },
       });
     });
@@ -58,13 +63,14 @@ describe('MonthlyBalancesService', () => {
       };
       prismaMock.monthlyBalance.findFirst.mockResolvedValue(mockBalance);
 
-      const result = await service.findOne('2025-01', null);
+      const result = await service.findOne('2025-01', profileId, null);
 
       expect(result?.accountId).toBeNull();
       expect(prismaMock.monthlyBalance.findFirst).toHaveBeenCalledWith({
         where: {
           month: '2025-01',
           accountId: null,
+          account: { profileId },
         },
       });
     });
@@ -72,7 +78,7 @@ describe('MonthlyBalancesService', () => {
     it('should return null when balance not found', async () => {
       prismaMock.monthlyBalance.findFirst.mockResolvedValue(null);
 
-      const result = await service.findOne('2030-12', 'nonexistent');
+      const result = await service.findOne('2030-12', profileId, 'nonexistent');
 
       expect(result).toBeNull();
     });
@@ -83,6 +89,10 @@ describe('MonthlyBalancesService', () => {
   // ============================================
   describe('upsert', () => {
     it('should create new balance when none exists', async () => {
+      prismaMock.account.findFirst.mockResolvedValue({
+        id: 'acc-1',
+        profileId,
+      });
       prismaMock.monthlyBalance.findFirst.mockResolvedValue(null);
       const newBalance = {
         id: 'balance-new',
@@ -92,9 +102,12 @@ describe('MonthlyBalancesService', () => {
       };
       prismaMock.monthlyBalance.create.mockResolvedValue(newBalance);
 
-      const result = await service.upsert('2025-02', 3000, 'acc-1');
+      const result = await service.upsert('2025-02', 3000, profileId, 'acc-1');
 
       expect(result.id).toBe('balance-new');
+      expect(prismaMock.account.findFirst).toHaveBeenCalledWith({
+        where: { id: 'acc-1', profileId },
+      });
       expect(prismaMock.monthlyBalance.create).toHaveBeenCalledWith({
         data: {
           month: '2025-02',
@@ -111,6 +124,10 @@ describe('MonthlyBalancesService', () => {
         balance: new Decimal(5000),
         accountId: 'acc-1',
       };
+      prismaMock.account.findFirst.mockResolvedValue({
+        id: 'acc-1',
+        profileId,
+      });
       prismaMock.monthlyBalance.findFirst.mockResolvedValue(existingBalance);
       const updatedBalance = {
         ...existingBalance,
@@ -118,7 +135,7 @@ describe('MonthlyBalancesService', () => {
       };
       prismaMock.monthlyBalance.update.mockResolvedValue(updatedBalance);
 
-      const result = await service.upsert('2025-01', 6000, 'acc-1');
+      const result = await service.upsert('2025-01', 6000, profileId, 'acc-1');
 
       expect(result.balance.toNumber()).toBe(6000);
       expect(prismaMock.monthlyBalance.update).toHaveBeenCalledWith({
@@ -127,7 +144,18 @@ describe('MonthlyBalancesService', () => {
       });
     });
 
-    it('should handle null accountId for upsert', async () => {
+    it('should throw NotFoundException when account does not belong to profile', async () => {
+      prismaMock.account.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.upsert('2025-02', 3000, profileId, 'acc-other'),
+      ).rejects.toThrow(NotFoundException);
+
+      expect(prismaMock.monthlyBalance.create).not.toHaveBeenCalled();
+      expect(prismaMock.monthlyBalance.update).not.toHaveBeenCalled();
+    });
+
+    it('should handle null accountId for upsert without ownership check', async () => {
       prismaMock.monthlyBalance.findFirst.mockResolvedValue(null);
       const newBalance = {
         id: 'balance-new',
@@ -137,9 +165,10 @@ describe('MonthlyBalancesService', () => {
       };
       prismaMock.monthlyBalance.create.mockResolvedValue(newBalance);
 
-      const result = await service.upsert('2025-03', 15000, null);
+      const result = await service.upsert('2025-03', 15000, profileId, null);
 
       expect(result.accountId).toBeNull();
+      expect(prismaMock.account.findFirst).not.toHaveBeenCalled();
       expect(prismaMock.monthlyBalance.create).toHaveBeenCalledWith({
         data: {
           month: '2025-03',
@@ -158,7 +187,7 @@ describe('MonthlyBalancesService', () => {
         accountId: null,
       });
 
-      await service.upsert('2025-04', 2000, undefined);
+      await service.upsert('2025-04', 2000, profileId, undefined);
 
       expect(prismaMock.monthlyBalance.create).toHaveBeenCalledWith({
         data: {

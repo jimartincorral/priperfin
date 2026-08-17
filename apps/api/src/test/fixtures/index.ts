@@ -1,4 +1,7 @@
-import { Decimal } from '../../generated/client';
+import { Prisma } from '../../generated/client';
+
+type Decimal = Prisma.Decimal;
+const Decimal = Prisma.Decimal;
 
 /**
  * Test fixture factories for creating mock data.

@@ -9,14 +9,16 @@ import {
   subMonths,
 } from 'date-fns';
 import { GetTransactionsDto } from '../transactions/get-transactions.dto';
+import { GetReportsDto } from './dto/get-reports.dto';
 
 @Injectable()
 export class ReportsService {
   constructor(private prisma: PrismaService) {}
 
-  async getCategoryBreakdown(query: GetTransactionsDto, profileId: string) {
+  async getCategoryBreakdown(query: GetReportsDto, profileId: string) {
     const { accountId } = query;
     const { startDate, endDate } = this.getDateRange(query);
+    const divisor = await this.getAveragingDivisor(query, profileId);
 
     // Build where clause
     const where: any = {
@@ -217,7 +219,9 @@ export class ReportsService {
 
     // Sort by Family ID, then by Name
     // Keep zero-spend categories that have a budget so budget reports can show them
+    // `budget` is already a monthly figure, so only `spent` gets averaged.
     return Array.from(categoryMap.values())
+      .map((c) => ({ ...c, spent: this.average(c.spent, divisor) }))
       .filter((c) => c.spent > 0 || c.budget > 0)
       .sort((a, b) => {
         const famA = a.familyId || '';
@@ -249,9 +253,10 @@ export class ReportsService {
     return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
   }
 
-  async getSankeyData(query: GetTransactionsDto, profileId: string) {
+  async getSankeyData(query: GetReportsDto, profileId: string) {
     const { accountId } = query;
     const { startDate, endDate } = this.getDateRange(query);
+    const divisor = await this.getAveragingDivisor(query, profileId);
 
     // Build where clause
     const where: any = { profileId };
@@ -352,31 +357,45 @@ export class ReportsService {
 
     // Income Sources -> "Income" node
     incomeSources.forEach((val, source) => {
-      links.push({ source: source, target: 'Income', value: val });
+      links.push({
+        source: source,
+        target: 'Income',
+        value: this.average(val, divisor),
+      });
     });
 
     let totalExpenses = 0;
     // "Income" node -> Expense Categories
     expenseByCategory.forEach((val, target) => {
       totalExpenses += val;
-      links.push({ source: 'Income', target: target, value: val });
+      links.push({
+        source: 'Income',
+        target: target,
+        value: this.average(val, divisor),
+      });
     });
 
     // Remainder -> Savings
     const savings = totalIncome - totalExpenses;
     if (savings > 0) {
-      links.push({ source: 'Income', target: 'Savings', value: savings });
+      links.push({
+        source: 'Income',
+        target: 'Savings',
+        value: this.average(savings, divisor),
+      });
     }
 
     return { nodes: uniqueNodes, links };
   }
 
-  async getCostObjectBreakdown(query: GetTransactionsDto, profileId: string) {
+  async getCostObjectBreakdown(query: GetReportsDto, profileId: string) {
     const { accountId } = query;
 
     if (!accountId) {
       return [];
     }
+
+    const divisor = await this.getAveragingDivisor(query, profileId);
 
     // Build where clause for credit account transactions
     const where: any = { profileId, accountId };
@@ -485,9 +504,96 @@ export class ReportsService {
     });
 
     // Return sorted by total (descending), filter out zero totals
+    // Both total and count are averaged so every figure in the chart reads per month
     return Array.from(costObjectMap.values())
       .filter((c) => c.total > 0)
+      .map((c) => ({
+        ...c,
+        total: this.average(c.total, divisor),
+        count:
+          divisor > 1 ? Math.round((c.count / divisor) * 10) / 10 : c.count,
+      }))
       .sort((a, b) => b.total - a.total);
+  }
+
+  /**
+   * Number of calendar months covered by the requested period. Used as the
+   * divisor for the "monthly average" view.
+   *
+   * Future months never count towards the divisor, so asking for the current
+   * year in August averages over 8 months, not 12. For `all_time` (or a custom
+   * range with an open end) the span is taken from the profile's own data.
+   */
+  async getPeriodMonths(
+    query: GetReportsDto,
+    profileId: string,
+  ): Promise<number> {
+    const { startDate, endDate } = this.getDateRange(query);
+
+    let rangeStart = startDate;
+    let rangeEnd = endDate; // exclusive
+
+    if (!rangeStart || !rangeEnd) {
+      const where: Prisma.TransactionWhereInput = { profileId };
+      if (query.accountId) {
+        where.accountId = query.accountId;
+      }
+
+      const [first, last] = await Promise.all([
+        this.prisma.transaction.findFirst({
+          where,
+          orderBy: { date: 'asc' },
+          select: { date: true },
+        }),
+        this.prisma.transaction.findFirst({
+          where,
+          orderBy: { date: 'desc' },
+          select: { date: true },
+        }),
+      ]);
+
+      if (!first || !last) return 1;
+
+      rangeStart = rangeStart ?? first.date;
+      if (!rangeEnd) {
+        const lastMonth = startOfMonth(last.date);
+        rangeEnd = new Date(
+          lastMonth.getFullYear(),
+          lastMonth.getMonth() + 1,
+          1,
+        );
+      }
+    }
+
+    // Don't let months that haven't happened yet dilute the average
+    const now = new Date();
+    const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    if (rangeEnd > nextMonth) {
+      rangeEnd = nextMonth;
+    }
+
+    const firstMonth = startOfMonth(rangeStart);
+    // endDate is exclusive, so step back a millisecond to get the last day covered
+    const lastMonth = startOfMonth(new Date(rangeEnd.getTime() - 1));
+    const months =
+      (lastMonth.getFullYear() - firstMonth.getFullYear()) * 12 +
+      (lastMonth.getMonth() - firstMonth.getMonth()) +
+      1;
+
+    return Math.max(1, months);
+  }
+
+  private async getAveragingDivisor(
+    query: GetReportsDto,
+    profileId: string,
+  ): Promise<number> {
+    if (!query.averageMonthly) return 1;
+    return this.getPeriodMonths(query, profileId);
+  }
+
+  private average(value: number, divisor: number): number {
+    if (divisor <= 1) return value;
+    return Math.round((value / divisor) * 100) / 100;
   }
 
   private getDateRange(query: GetTransactionsDto): {

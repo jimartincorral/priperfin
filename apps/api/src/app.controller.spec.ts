@@ -14,10 +14,14 @@ describe('AppController', () => {
     appController = app.get<AppController>(AppController);
   });
 
-  describe('root', () => {
-    it('should return "Hello from API"', () => {
-      const result = appController.getHello() as any;
-      expect(result.message).toBe('Hello from API');
+  it('should be defined', () => {
+    expect(appController).toBeDefined();
+  });
+
+  describe('health', () => {
+    it('should return ok status', () => {
+      const result = appController.getHealth() as { status: string };
+      expect(result.status).toBe('ok');
     });
   });
 });

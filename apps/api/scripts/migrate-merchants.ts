@@ -23,7 +23,21 @@ async function migrate() {
   const prisma = new PrismaClient({ adapter });
   
   console.log('Starting migration of merchants to rules...');
-  
+
+  // Resolve the profile to operate on: the first (oldest) profile, matching
+  // the convention used by scripts/migrate-profile-isolation.sh.
+  const profile = await prisma.profile.findFirst({
+    orderBy: { createdAt: 'asc' },
+  });
+
+  if (!profile) {
+    throw new Error(
+      'No profiles found in the database. Create a profile via the app setup before running this migration.',
+    );
+  }
+
+  console.log(`Operating on profile: ${profile.name} (${profile.id})`);
+
   // Find common patterns: same merchant assigned to same category >= 3 times
   // SQLite doesn't support extensive aggregation in the way we might want with Prisma's groupBy sometimes,
   // but let's try Prisma's groupBy.
@@ -35,7 +49,8 @@ async function migrate() {
     },
     where: {
       merchant: { not: null },
-      categoryId: { not: null }
+      categoryId: { not: null },
+      profileId: profile.id
     },
     having: {
       merchant: {
@@ -57,7 +72,8 @@ async function migrate() {
     // (We construct a unique name or check conditions, simplistic check here)
     const existing = await prisma.categorizationRule.findFirst({
       where: {
-        name: `Auto-migrated: ${p.merchant}`
+        name: `Auto-migrated: ${p.merchant}`,
+        profileId: profile.id
       }
     });
 
@@ -69,6 +85,7 @@ async function migrate() {
     await prisma.categorizationRule.create({
       data: {
         name: `Auto-migrated: ${p.merchant}`,
+        profileId: profile.id,
         categoryId: p.categoryId,
         mode: RuleMode.SUGGEST, // Safe default
         priority: 0,

@@ -1,13 +1,17 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { NotFoundException } from '@nestjs/common';
 import { AccountsService } from './accounts.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { createPrismaMock, PrismaMock } from '../test/prisma-mock.factory';
 import { createMockAccount } from '../test/fixtures';
-import { Decimal } from '../generated/client';
+import { Prisma } from '../generated/client';
+
+const Decimal = Prisma.Decimal;
 
 describe('AccountsService', () => {
   let service: AccountsService;
   let prismaMock: PrismaMock;
+  const profileId = 'profile-1';
 
   beforeEach(async () => {
     prismaMock = createPrismaMock();
@@ -44,11 +48,11 @@ describe('AccountsService', () => {
       });
       prismaMock.account.create.mockResolvedValue(mockResult);
 
-      const result = await service.create(dto as any);
+      const result = await service.create(dto as any, profileId);
 
       expect(result.name).toBe('Main Checking');
       expect(prismaMock.account.create).toHaveBeenCalledWith({
-        data: dto,
+        data: { ...dto, profileId },
       });
     });
 
@@ -66,7 +70,7 @@ describe('AccountsService', () => {
       });
       prismaMock.account.create.mockResolvedValue(mockResult);
 
-      const result = await service.create(dto as any);
+      const result = await service.create(dto as any, profileId);
 
       expect(result.type).toBe('CREDIT');
     });
@@ -83,10 +87,11 @@ describe('AccountsService', () => {
       ];
       prismaMock.account.findMany.mockResolvedValue(mockAccounts);
 
-      const result = await service.findAll();
+      const result = await service.findAll(profileId);
 
       expect(result).toHaveLength(2);
       expect(prismaMock.account.findMany).toHaveBeenCalledWith({
+        where: { profileId },
         orderBy: { name: 'asc' },
       });
     });
@@ -94,7 +99,7 @@ describe('AccountsService', () => {
     it('should return empty array when no accounts exist', async () => {
       prismaMock.account.findMany.mockResolvedValue([]);
 
-      const result = await service.findAll();
+      const result = await service.findAll(profileId);
 
       expect(result).toEqual([]);
     });
@@ -109,22 +114,22 @@ describe('AccountsService', () => {
         id: 'acc-1',
         name: 'Test Account',
       });
-      prismaMock.account.findUnique.mockResolvedValue(mockAccount);
+      prismaMock.account.findFirst.mockResolvedValue(mockAccount);
 
-      const result = await service.findOne('acc-1');
+      const result = await service.findOne('acc-1', profileId);
 
       expect(result?.id).toBe('acc-1');
-      expect(prismaMock.account.findUnique).toHaveBeenCalledWith({
-        where: { id: 'acc-1' },
+      expect(prismaMock.account.findFirst).toHaveBeenCalledWith({
+        where: { id: 'acc-1', profileId },
       });
     });
 
-    it('should return null when account not found', async () => {
-      prismaMock.account.findUnique.mockResolvedValue(null);
+    it('should throw NotFoundException when account not found', async () => {
+      prismaMock.account.findFirst.mockResolvedValue(null);
 
-      const result = await service.findOne('nonexistent');
-
-      expect(result).toBeNull();
+      await expect(service.findOne('nonexistent', profileId)).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 
@@ -133,19 +138,35 @@ describe('AccountsService', () => {
   // ============================================
   describe('update', () => {
     it('should update account with new values', async () => {
+      const existingAccount = createMockAccount({ id: 'acc-1' });
       const updatedAccount = createMockAccount({
         id: 'acc-1',
         name: 'Updated Name',
       });
+      prismaMock.account.findFirst.mockResolvedValue(existingAccount);
       prismaMock.account.update.mockResolvedValue(updatedAccount);
 
-      const result = await service.update('acc-1', { name: 'Updated Name' });
+      const result = await service.update('acc-1', profileId, {
+        name: 'Updated Name',
+      });
 
       expect(result.name).toBe('Updated Name');
+      expect(prismaMock.account.findFirst).toHaveBeenCalledWith({
+        where: { id: 'acc-1', profileId },
+      });
       expect(prismaMock.account.update).toHaveBeenCalledWith({
         where: { id: 'acc-1' },
         data: { name: 'Updated Name' },
       });
+    });
+
+    it('should throw NotFoundException when account does not belong to profile', async () => {
+      prismaMock.account.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.update('acc-1', profileId, { name: 'Updated Name' }),
+      ).rejects.toThrow(NotFoundException);
+      expect(prismaMock.account.update).not.toHaveBeenCalled();
     });
   });
 
@@ -154,13 +175,22 @@ describe('AccountsService', () => {
   // ============================================
   describe('remove', () => {
     it('should delete account by id', async () => {
-      prismaMock.account.delete.mockResolvedValue({ id: 'acc-1' });
+      prismaMock.account.deleteMany.mockResolvedValue({ count: 1 });
 
-      await service.remove('acc-1');
+      const result = await service.remove('acc-1', profileId);
 
-      expect(prismaMock.account.delete).toHaveBeenCalledWith({
-        where: { id: 'acc-1' },
+      expect(result).toEqual({ success: true });
+      expect(prismaMock.account.deleteMany).toHaveBeenCalledWith({
+        where: { id: 'acc-1', profileId },
       });
+    });
+
+    it('should throw NotFoundException when nothing was deleted', async () => {
+      prismaMock.account.deleteMany.mockResolvedValue({ count: 0 });
+
+      await expect(service.remove('acc-1', profileId)).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 });

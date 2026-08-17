@@ -7,7 +7,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ReportsService } from './reports.service';
-import { GetTransactionsDto } from '../transactions/get-transactions.dto';
+import { GetReportsDto } from './dto/get-reports.dto';
 import { SessionAuthGuard } from '../auth/guards/session-auth.guard';
 import { CurrentProfile } from '../auth/decorators/current-profile.decorator';
 import { Profile } from '../generated/client';
@@ -20,7 +20,7 @@ export class ReportsController {
   @Get('category-breakdown')
   @UsePipes(new ValidationPipe({ transform: true }))
   getCategoryBreakdown(
-    @Query() query: GetTransactionsDto,
+    @Query() query: GetReportsDto,
     @CurrentProfile() profile: Profile,
   ) {
     return this.reportsService.getCategoryBreakdown(query, profile.id);
@@ -29,7 +29,7 @@ export class ReportsController {
   @Get('sankey')
   @UsePipes(new ValidationPipe({ transform: true }))
   getSankeyData(
-    @Query() query: GetTransactionsDto,
+    @Query() query: GetReportsDto,
     @CurrentProfile() profile: Profile,
   ) {
     return this.reportsService.getSankeyData(query, profile.id);
@@ -38,9 +38,21 @@ export class ReportsController {
   @Get('cost-object-breakdown')
   @UsePipes(new ValidationPipe({ transform: true }))
   getCostObjectBreakdown(
-    @Query() query: GetTransactionsDto,
+    @Query() query: GetReportsDto,
     @CurrentProfile() profile: Profile,
   ) {
     return this.reportsService.getCostObjectBreakdown(query, profile.id);
+  }
+
+  // Number of months the selected period covers, used to label the monthly average view
+  @Get('period-months')
+  @UsePipes(new ValidationPipe({ transform: true }))
+  async getPeriodMonths(
+    @Query() query: GetReportsDto,
+    @CurrentProfile() profile: Profile,
+  ) {
+    return {
+      months: await this.reportsService.getPeriodMonths(query, profile.id),
+    };
   }
 }

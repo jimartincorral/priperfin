@@ -3,7 +3,9 @@ import { SavingsGoalsService } from './savings-goals.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { createPrismaMock, PrismaMock } from '../test/prisma-mock.factory';
 import { createMockSavingsGoal, createMockCategory } from '../test/fixtures';
-import { Decimal } from '../generated/client';
+import { Prisma } from '../generated/client';
+
+const Decimal = Prisma.Decimal;
 
 describe('SavingsGoalsService', () => {
   let service: SavingsGoalsService;
@@ -188,7 +190,7 @@ describe('SavingsGoalsService', () => {
 
       prismaMock.savingsGoal.create.mockResolvedValue(mockGoal);
 
-      const result = await service.create(dto as any);
+      const result = await service.create(dto as any, 'profile-1');
 
       expect(result.id).toBe('goal-new');
       expect(prismaMock.savingsGoal.create).toHaveBeenCalledWith(
@@ -196,6 +198,7 @@ describe('SavingsGoalsService', () => {
           data: expect.objectContaining({
             name: 'Vacation Fund',
             targetAmount: 5000,
+            profileId: 'profile-1',
           }),
         }),
       );
@@ -212,7 +215,7 @@ describe('SavingsGoalsService', () => {
         createMockSavingsGoal({ savedAmount: new Decimal(0) }),
       );
 
-      await service.create(dto as any);
+      await service.create(dto as any, 'profile-1');
 
       expect(prismaMock.savingsGoal.create).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -229,13 +232,19 @@ describe('SavingsGoalsService', () => {
       const id = 'goal-1';
       const dto = { savedAmount: 2500 };
 
+      prismaMock.savingsGoal.findFirst.mockResolvedValue(
+        createMockSavingsGoal({ id }),
+      );
       prismaMock.savingsGoal.update.mockResolvedValue(
         createMockSavingsGoal({ savedAmount: new Decimal(2500) }),
       );
 
-      const result = await service.update(id, dto as any);
+      const result = await service.update(id, 'profile-1', dto as any);
 
       expect(result.savedAmount.toNumber()).toBe(2500);
+      expect(prismaMock.savingsGoal.findFirst).toHaveBeenCalledWith({
+        where: { id, profileId: 'profile-1' },
+      });
       expect(prismaMock.savingsGoal.update).toHaveBeenCalledWith({
         where: { id },
         data: expect.objectContaining({ savedAmount: 2500 }),
@@ -246,11 +255,14 @@ describe('SavingsGoalsService', () => {
       const id = 'goal-1';
       const dto = { targetDate: '2026-06-15' };
 
+      prismaMock.savingsGoal.findFirst.mockResolvedValue(
+        createMockSavingsGoal({ id }),
+      );
       prismaMock.savingsGoal.update.mockResolvedValue(
         createMockSavingsGoal({ targetDate: new Date('2026-06-15') }),
       );
 
-      await service.update(id, dto as any);
+      await service.update(id, 'profile-1', dto as any);
 
       expect(prismaMock.savingsGoal.update).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -281,7 +293,7 @@ describe('SavingsGoalsService', () => {
 
       prismaMock.savingsGoal.findMany.mockResolvedValue(mockGoals);
 
-      const result = await service.findAll();
+      const result = await service.findAll('profile-1');
 
       expect(result).toHaveLength(1);
       expect(result[0]).toHaveProperty('monthlySavingsNeeded');
@@ -302,19 +314,20 @@ describe('SavingsGoalsService', () => {
 
       prismaMock.savingsGoal.findMany.mockResolvedValue([mockGoal]);
 
-      const result = await service.findAll();
+      const result = await service.findAll('profile-1');
 
       expect(result[0].category).toBeDefined();
-      expect(result[0].category.name).toBe('Travel');
+      expect(result[0].category?.name).toBe('Travel');
     });
 
     it('should order goals by targetDate ascending', async () => {
       prismaMock.savingsGoal.findMany.mockResolvedValue([]);
 
-      await service.findAll();
+      await service.findAll('profile-1');
 
       expect(prismaMock.savingsGoal.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
+          where: { profileId: 'profile-1' },
           orderBy: { targetDate: 'asc' },
         }),
       );
@@ -323,13 +336,22 @@ describe('SavingsGoalsService', () => {
 
   describe('remove', () => {
     it('should delete savings goal by id', async () => {
-      prismaMock.savingsGoal.delete.mockResolvedValue({ id: 'goal-1' });
+      prismaMock.savingsGoal.deleteMany.mockResolvedValue({ count: 1 });
 
-      await service.remove('goal-1');
+      const result = await service.remove('goal-1', 'profile-1');
 
-      expect(prismaMock.savingsGoal.delete).toHaveBeenCalledWith({
-        where: { id: 'goal-1' },
+      expect(result).toEqual({ success: true });
+      expect(prismaMock.savingsGoal.deleteMany).toHaveBeenCalledWith({
+        where: { id: 'goal-1', profileId: 'profile-1' },
       });
+    });
+
+    it('should throw when goal not found or not owned by profile', async () => {
+      prismaMock.savingsGoal.deleteMany.mockResolvedValue({ count: 0 });
+
+      await expect(service.remove('goal-x', 'profile-1')).rejects.toThrow(
+        'Savings goal not found or access denied',
+      );
     });
   });
 });

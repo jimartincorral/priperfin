@@ -44,6 +44,8 @@ export class ViewReports extends LitElement {
   @state() accounts: any[] = [];
   @state() selectedAccountId = '';
   @state() groupByCategory = false; // Toggle for parent category grouping
+  @state() monthlyAverage = false; // Divide amounts by the months in the period
+  @state() periodMonths = 1; // Months covered by the current period (for labels)
   @state() breakdownData: any[] = []; // Store raw API response
   @state() legendItems: any[] = []; // For custom legend rendering
   @state() sankeyData: { nodes: { id: string }[]; links: { source: string; target: string; value: number }[] } | null = null;
@@ -315,6 +317,9 @@ export class ViewReports extends LitElement {
     if (params.has('accountId')) {
       this.selectedAccountId = params.get('accountId')!;
     }
+    if (params.has('avg')) {
+      this.monthlyAverage = params.get('avg') === '1';
+    }
   }
 
   updateURL() {
@@ -335,7 +340,11 @@ export class ViewReports extends LitElement {
     if (this.selectedAccountId) {
       params.set('accountId', this.selectedAccountId);
     }
-    
+
+    if (this.monthlyAverage) {
+      params.set('avg', '1');
+    }
+
     const newURL = `${window.location.pathname}?${params.toString()}`;
     window.history.replaceState({}, '', newURL);
   }
@@ -411,18 +420,27 @@ export class ViewReports extends LitElement {
         params.accountId = this.selectedAccountId;
       }
 
-      const [breakdown, sankey, costObjects] = await Promise.all([
+      if (this.monthlyAverage) {
+        params.averageMonthly = true;
+      }
+
+      const [breakdown, sankey, costObjects, periodMonths] = await Promise.all([
         api.get('/reports/category-breakdown', params),
         api.get('/reports/sankey', params),
         // Backend only computes cost objects for a specific account
         this.selectedAccountId
           ? api.get('/reports/cost-object-breakdown', params)
           : Promise.resolve([]),
+        // Only needed to label the averaged charts
+        this.monthlyAverage
+          ? api.get('/reports/period-months', params)
+          : Promise.resolve({ months: 1 }),
       ]);
 
       this.breakdownData = breakdown;
       this.sankeyData = sankey;
       this.costObjectData = costObjects;
+      this.periodMonths = periodMonths?.months || 1;
 
       await this.updateComplete; // Ensure DOM is ready
       this.renderBreakdown();
@@ -589,11 +607,25 @@ export class ViewReports extends LitElement {
     return value.toLocaleString(i18n.getLocale(), { maximumFractionDigits: 2 });
   }
 
+  // Suffix appended to chart titles while the monthly average view is active
+  private averageSuffix(): string {
+    if (!this.monthlyAverage || this.periodMonths <= 1) return '';
+    return ` · ${i18n.t('reports.monthly_average_of')} ${this.periodMonths} ${i18n.t('reports.months')}`;
+  }
+
+  // Budget comparison needs spending and budget on the same time scale.
+  private canCompareBudget(): boolean {
+    // Averaged spending is already monthly, so it lines up with the monthly budget in any mode
+    if (this.monthlyAverage) return true;
+    return this.dateFilterMode === 'month' || this.dateFilterMode === 'year';
+  }
+
   // Budget is a monthly amount; scale it to the selected period.
   // Only month/year modes map cleanly to a number of months.
   getBudgetItems(): { id: string; name: string; spent: number; budget: number; color: string }[] {
-    if (this.dateFilterMode !== 'month' && this.dateFilterMode !== 'year') return [];
-    const factor = this.dateFilterMode === 'year' ? 12 : 1;
+    if (!this.canCompareBudget()) return [];
+    // Averaged spending is per month, so the monthly budget needs no scaling
+    const factor = !this.monthlyAverage && this.dateFilterMode === 'year' ? 12 : 1;
 
     return (this.breakdownData || [])
       .filter((d: any) => d.budget > 0)
@@ -974,7 +1006,12 @@ export class ViewReports extends LitElement {
               @change="${(e: CustomEvent) => { this.selectedAccountId = e.detail.value; this.loadData(); }}"
               width="200px">
             </filterable-select>
-            <select @change="${(e: any) => { this.dateFilterMode = e.target.value as DateFilterMode; this.loadData(); }}" .value="${this.dateFilterMode}">
+            <select @change="${(e: any) => {
+                this.dateFilterMode = e.target.value as DateFilterMode;
+                // A single month has nothing to average
+                if (this.dateFilterMode === 'month') this.monthlyAverage = false;
+                this.loadData();
+            }}" .value="${this.dateFilterMode}">
                 <option value="month">${i18n.t('filters.mode_month')}</option>
                 <option value="year">${i18n.t('filters.mode_year')}</option>
                 <option value="custom">${i18n.t('filters.mode_custom')}</option>
@@ -1003,13 +1040,21 @@ export class ViewReports extends LitElement {
                 <input type="checkbox" .checked="${this.groupByCategory}" @change="${(e: any) => { this.groupByCategory = e.target.checked; this.renderBreakdown(); }}" />
                 ${i18n.t('reports.group_by_parent') || 'Group by Parent'}
             </label>
+            ${this.dateFilterMode !== 'month' ? html`
+                <label
+                  style="display: flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer; color: var(--md-sys-color-on-surface);"
+                  title="${i18n.t('reports.monthly_average_hint')}">
+                    <input type="checkbox" .checked="${this.monthlyAverage}" @change="${(e: any) => { this.monthlyAverage = e.target.checked; this.loadData(); }}" />
+                    ${i18n.t('reports.monthly_average')}
+                </label>
+            ` : ''}
             <button @click="${this.loadData}">${i18n.t('reports.refresh')}</button>
         </div>
       </div>
       
       <div class="charts-container">
         <div class="chart-card">
-            <h3>${i18n.t('reports.category_breakdown')}</h3>
+            <h3>${i18n.t('reports.category_breakdown')}${this.averageSuffix()}</h3>
             <div class="chart-with-legend" style="height: 500px;">
                 <div class="chart-canvas" style="position: relative; height: 100%;">
                     <canvas id="breakdownChart"></canvas>
@@ -1070,10 +1115,10 @@ export class ViewReports extends LitElement {
         </div>
 
         <div class="chart-card">
-            <h3>${i18n.t('reports.budget_vs_actual')}</h3>
+            <h3>${i18n.t('reports.budget_vs_actual')}${this.averageSuffix()}</h3>
             ${(() => {
               const budgetItems = this.getBudgetItems();
-              if (this.dateFilterMode !== 'month' && this.dateFilterMode !== 'year') {
+              if (!this.canCompareBudget()) {
                 return html`<p class="empty-hint">${i18n.t('reports.budget_hint_period')}</p>`;
               }
               if (budgetItems.length === 0) {
@@ -1088,7 +1133,7 @@ export class ViewReports extends LitElement {
         </div>
 
         <div class="chart-card">
-            <h3>${i18n.t('reports.sankey_chart')}</h3>
+            <h3>${i18n.t('reports.sankey_chart')}${this.averageSuffix()}</h3>
             ${this.sankeyData && this.sankeyData.links.length > 0 ? html`
                 <div style="position: relative; height: 460px;">
                     <canvas id="sankeyChart"></canvas>
@@ -1097,7 +1142,7 @@ export class ViewReports extends LitElement {
         </div>
 
         <div class="chart-card">
-            <h3>${i18n.t('reports.cost_object_breakdown')}</h3>
+            <h3>${i18n.t('reports.cost_object_breakdown')}${this.averageSuffix()}</h3>
             ${!this.selectedAccountId
               ? html`<p class="empty-hint">${i18n.t('reports.cost_object_hint')}</p>`
               : this.costObjectData.length > 0 ? html`
