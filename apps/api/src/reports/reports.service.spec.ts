@@ -226,7 +226,6 @@ describe('ReportsService', () => {
         expect.objectContaining({
           where: {
             profileId: 'profile-1',
-            amount: { lt: 0 },
             date: { gte: new Date(2025, 0, 1), lt: new Date(2025, 1, 1) },
             accountId: 'acc-1',
           },
@@ -282,6 +281,165 @@ describe('ReportsService', () => {
       // Parent has a budget (fixture default) so it's included despite zero spend
       expect(result).toHaveLength(2);
       result.forEach((c) => expect(c.color).toMatch(/^#[0-9a-f]{6}$/i));
+    });
+
+    it('should net refunds in an expense category against what was spent', async () => {
+      const category = createMockCategory({
+        id: 'cat-restaurants',
+        name: 'Restaurants',
+        type: 'EXPENSE',
+        budget: null,
+      });
+
+      prismaMock.transaction.findMany.mockResolvedValue([
+        createMockTransaction({
+          id: 'tx-meal',
+          amount: new Decimal(-400),
+          category,
+          categoryId: 'cat-restaurants',
+          splits: [],
+        }),
+        createMockTransaction({
+          id: 'tx-reimbursement',
+          amount: new Decimal(100),
+          category,
+          categoryId: 'cat-restaurants',
+          splits: [],
+        }),
+      ]);
+      prismaMock.category.findMany.mockResolvedValue([category]);
+
+      const result = await service.getCategoryBreakdown(
+        { month: 1, year: 2025 },
+        'profile-1',
+      );
+
+      expect(result).toHaveLength(1);
+      expect(result[0].spent).toBe(300); // 400 spent - 100 reimbursed
+    });
+
+    it('should net refunds inside split lines', async () => {
+      const category = createMockCategory({
+        id: 'cat-restaurants',
+        name: 'Restaurants',
+        type: 'EXPENSE',
+        budget: null,
+      });
+
+      prismaMock.transaction.findMany.mockResolvedValue([
+        createMockTransaction({
+          id: 'tx-1',
+          amount: new Decimal(-150),
+          category: null,
+          categoryId: null,
+          splits: [
+            {
+              ...createMockTransactionSplit({ amount: new Decimal(-200) }),
+              category,
+            },
+            {
+              ...createMockTransactionSplit({
+                id: 'split-2',
+                amount: new Decimal(50),
+              }),
+              category,
+            },
+          ],
+        }),
+      ]);
+      prismaMock.category.findMany.mockResolvedValue([category]);
+
+      const result = await service.getCategoryBreakdown(
+        { month: 1, year: 2025 },
+        'profile-1',
+      );
+
+      expect(result).toHaveLength(1);
+      expect(result[0].spent).toBe(150); // 200 spent - 50 refunded
+    });
+
+    it('should ignore income that is not a refund of an expense category', async () => {
+      const expenseCategory = createMockCategory({
+        id: 'cat-groceries',
+        name: 'Groceries',
+        type: 'EXPENSE',
+        budget: null,
+      });
+      const incomeCategory = createMockCategory({
+        id: 'cat-salary',
+        name: 'Salary',
+        type: 'INCOME',
+        budget: null,
+      });
+
+      prismaMock.transaction.findMany.mockResolvedValue([
+        createMockTransaction({
+          id: 'tx-groceries',
+          amount: new Decimal(-80),
+          category: expenseCategory,
+          categoryId: 'cat-groceries',
+          splits: [],
+        }),
+        createMockTransaction({
+          id: 'tx-salary',
+          amount: new Decimal(3000),
+          category: incomeCategory,
+          categoryId: 'cat-salary',
+          splits: [],
+        }),
+        createMockTransaction({
+          id: 'tx-mystery-inflow',
+          amount: new Decimal(500),
+          category: null,
+          categoryId: null,
+          splits: [],
+        }),
+      ]);
+      prismaMock.category.findMany.mockResolvedValue([expenseCategory]);
+
+      const result = await service.getCategoryBreakdown(
+        { month: 1, year: 2025 },
+        'profile-1',
+      );
+
+      // Neither the salary nor the uncategorized inflow touches the expense report
+      expect(result).toHaveLength(1);
+      expect(result[0].name).toBe('Groceries');
+      expect(result[0].spent).toBe(80);
+    });
+
+    it('should clamp a category refunded more than it was charged to zero', async () => {
+      const category = createMockCategory({
+        id: 'cat-1',
+        name: 'Travel',
+        type: 'EXPENSE',
+        budget: new Decimal(200),
+      });
+
+      prismaMock.transaction.findMany.mockResolvedValue([
+        createMockTransaction({
+          id: 'tx-charge',
+          amount: new Decimal(-100),
+          category,
+          categoryId: 'cat-1',
+          splits: [],
+        }),
+        createMockTransaction({
+          id: 'tx-refund',
+          amount: new Decimal(250),
+          category,
+          categoryId: 'cat-1',
+          splits: [],
+        }),
+      ]);
+      prismaMock.category.findMany.mockResolvedValue([category]);
+
+      const result = await service.getCategoryBreakdown(
+        { month: 1, year: 2025 },
+        'profile-1',
+      );
+
+      expect(result[0].spent).toBe(0);
     });
 
     it('should include zero-spend categories with a budget and exclude those without', async () => {
@@ -459,6 +617,125 @@ describe('ReportsService', () => {
       expect(savingsLink).toBeUndefined();
     });
 
+    it('should net a refund against its expense flow instead of adding income', async () => {
+      const incomeCategory = createMockCategory({
+        id: 'cat-income',
+        name: 'Salary',
+        type: 'INCOME',
+      });
+      const expenseCategory = createMockCategory({
+        id: 'cat-restaurants',
+        name: 'Restaurants',
+        type: 'EXPENSE',
+      });
+
+      prismaMock.transaction.findMany.mockResolvedValue([
+        createMockTransaction({
+          id: 'tx-income',
+          amount: new Decimal(1000),
+          category: incomeCategory,
+          splits: [],
+        }),
+        createMockTransaction({
+          id: 'tx-meal',
+          amount: new Decimal(-400),
+          category: expenseCategory,
+          splits: [],
+        }),
+        createMockTransaction({
+          id: 'tx-reimbursement',
+          amount: new Decimal(100),
+          category: expenseCategory,
+          splits: [],
+        }),
+      ]);
+
+      const result = await service.getSankeyData(
+        { month: 1, year: 2025 },
+        'profile-1',
+      );
+
+      const restaurants = result.links.find((l) => l.target === 'Restaurants');
+      const salary = result.links.find((l) => l.source === 'Salary');
+      const savings = result.links.find((l) => l.target === 'Savings');
+
+      expect(restaurants?.value).toBe(300); // 400 - 100 reimbursed
+      expect(salary?.value).toBe(1000); // Reimbursement is not an income source
+      expect(result.nodes).not.toContainEqual({ id: 'Other Income' });
+      expect(savings?.value).toBe(700); // 1000 - 300
+    });
+
+    it('should drop an expense flow that was refunded in full', async () => {
+      const expenseCategory = createMockCategory({
+        id: 'cat-restaurants',
+        name: 'Restaurants',
+        type: 'EXPENSE',
+      });
+
+      prismaMock.transaction.findMany.mockResolvedValue([
+        createMockTransaction({
+          id: 'tx-meal',
+          amount: new Decimal(-100),
+          category: expenseCategory,
+          splits: [],
+        }),
+        createMockTransaction({
+          id: 'tx-refund',
+          amount: new Decimal(100),
+          category: expenseCategory,
+          splits: [],
+        }),
+      ]);
+
+      const result = await service.getSankeyData(
+        { month: 1, year: 2025 },
+        'profile-1',
+      );
+
+      expect(
+        result.links.find((l) => l.target === 'Restaurants'),
+      ).toBeUndefined();
+      expect(result.nodes).not.toContainEqual({ id: 'Restaurants' });
+    });
+
+    it('should net a refund on a child category against its parent flow', async () => {
+      const parent = createMockCategory({
+        id: 'cat-food',
+        name: 'Food',
+        type: 'EXPENSE',
+      });
+      const child = createMockCategory({
+        id: 'cat-restaurants',
+        name: 'Restaurants',
+        type: 'EXPENSE',
+        parentId: 'cat-food',
+        parent,
+      });
+
+      prismaMock.transaction.findMany.mockResolvedValue([
+        createMockTransaction({
+          id: 'tx-meal',
+          amount: new Decimal(-400),
+          category: child,
+          splits: [],
+        }),
+        createMockTransaction({
+          id: 'tx-reimbursement',
+          amount: new Decimal(100),
+          category: child,
+          splits: [],
+        }),
+      ]);
+
+      const result = await service.getSankeyData(
+        { month: 1, year: 2025 },
+        'profile-1',
+      );
+
+      const food = result.links.find((l) => l.target === 'Food');
+      expect(food?.value).toBe(300);
+    });
+
     it('should handle split transactions correctly', async () => {
       const category = createMockCategory({
         id: 'cat-food',
@@ -595,6 +872,85 @@ describe('ReportsService', () => {
 
       expect(result).toHaveLength(1);
       expect(result[0].total).toBe(100); // Only expense counted
+    });
+
+    it('should net a refund on an expense category against the cost object', async () => {
+      const costObject = createMockCostObject({
+        id: 'cost-1',
+        name: 'Project A',
+      });
+      const category = createMockCategory({
+        id: 'cat-1',
+        name: 'Materials',
+        type: 'EXPENSE',
+      });
+
+      prismaMock.transaction.findMany.mockResolvedValue([
+        createMockTransaction({
+          id: 'tx-charge',
+          amount: new Decimal(-400),
+          costObject,
+          costObjectId: 'cost-1',
+          category,
+          splits: [],
+        }),
+        createMockTransaction({
+          id: 'tx-refund',
+          amount: new Decimal(100),
+          costObject,
+          costObjectId: 'cost-1',
+          category,
+          splits: [],
+        }),
+      ]);
+
+      const result = await service.getCostObjectBreakdown(
+        { month: 1, year: 2025, accountId: 'acc-1' },
+        'profile-1',
+      );
+
+      expect(result).toHaveLength(1);
+      expect(result[0].total).toBe(300); // 400 charged - 100 refunded
+      expect(result[0].count).toBe(1); // The refund adjusts the charge, not a new one
+    });
+
+    it('should ignore inflows that are not refunds of an expense category', async () => {
+      const costObject = createMockCostObject({
+        id: 'cost-1',
+        name: 'Project A',
+      });
+      const incomeCategory = createMockCategory({
+        id: 'cat-income',
+        name: 'Salary',
+        type: 'INCOME',
+      });
+
+      prismaMock.transaction.findMany.mockResolvedValue([
+        createMockTransaction({
+          id: 'tx-charge',
+          amount: new Decimal(-100),
+          costObject,
+          costObjectId: 'cost-1',
+          category: null,
+          splits: [],
+        }),
+        createMockTransaction({
+          id: 'tx-income',
+          amount: new Decimal(200),
+          costObject,
+          costObjectId: 'cost-1',
+          category: incomeCategory,
+          splits: [],
+        }),
+      ]);
+
+      const result = await service.getCostObjectBreakdown(
+        { month: 1, year: 2025, accountId: 'acc-1' },
+        'profile-1',
+      );
+
+      expect(result).toHaveLength(1);
+      expect(result[0].total).toBe(100);
     });
 
     it('should handle split transactions', async () => {
