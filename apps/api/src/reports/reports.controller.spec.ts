@@ -10,6 +10,7 @@ describe('ReportsController', () => {
     getCategoryBreakdown: jest.fn(),
     getSankeyData: jest.fn(),
     getCostObjectBreakdown: jest.fn(),
+    getPeriodMonths: jest.fn(),
   };
   const mockAuthService = {
     validateSession: jest.fn(),
@@ -59,6 +60,19 @@ describe('ReportsController', () => {
     controller.getCostObjectBreakdown(query, mockProfile);
 
     expect(mockReportsService.getCostObjectBreakdown).toHaveBeenCalledWith(
+      query,
+      'profile-1',
+    );
+  });
+
+  it('should wrap the period month count in an object', async () => {
+    const query = { filterMode: 'year' as any, year: 2024 };
+    mockReportsService.getPeriodMonths.mockResolvedValue(12);
+
+    await expect(
+      controller.getPeriodMonths(query, mockProfile),
+    ).resolves.toEqual({ months: 12 });
+    expect(mockReportsService.getPeriodMonths).toHaveBeenCalledWith(
       query,
       'profile-1',
     );
