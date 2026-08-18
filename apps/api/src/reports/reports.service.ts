@@ -11,6 +11,13 @@ import {
 import { GetTransactionsDto } from '../transactions/get-transactions.dto';
 import { GetReportsDto } from './dto/get-reports.dto';
 
+/** The category fields the sankey aggregation reads off each loaded line. */
+type SankeyCategory = {
+  name: string;
+  type: string;
+  parent: { name: string } | null;
+} | null;
+
 @Injectable()
 export class ReportsService {
   constructor(private prisma: PrismaService) {}
@@ -21,10 +28,11 @@ export class ReportsService {
     const divisor = await this.getAveragingDivisor(query, profileId);
 
     // Build where clause
-    const where: any = {
-      profileId,
-      amount: { lt: 0 }, // Expenses
-    };
+    // Incoming amounts are fetched too, not just expenses: money that comes
+    // back into an expense category (a refund or a reimbursement) offsets what
+    // was spent there, so a 400 restaurant bill with a 100 reimbursement counts
+    // as 300 spent.
+    const where: any = { profileId };
 
     // Only add date filter if dates are provided (not all_time mode)
     if (startDate && endDate) {
@@ -35,7 +43,6 @@ export class ReportsService {
       where.accountId = accountId;
     }
 
-    // Get expenses only
     const transactions = await this.prisma.transaction.findMany({
       where,
       include: {
@@ -176,52 +183,47 @@ export class ReportsService {
       familyName: 'Uncategorized',
     });
 
-    // Aggregate
+    // Aggregate. Outgoing amounts add to what was spent; incoming amounts that
+    // land on an expense category are refunds and net against it.
+    const applyLine = (amount: number, categoryId?: string | null) => {
+      // `categoryMap` only holds this profile's expense categories (plus the
+      // uncategorized bucket), so a hit here means "this is an expense category"
+      const known =
+        categoryId && categoryMap.has(categoryId) ? categoryId : null;
+
+      if (amount > 0) {
+        // Only refunds inside an expense category belong in an expense report.
+        // Real income, and any inflow without a category, is left out.
+        if (known) {
+          const current = categoryMap.get(known);
+          if (current) current.spent -= amount;
+        }
+        return;
+      }
+
+      const current = categoryMap.get(known ?? 'uncategorized');
+      if (current) current.spent += Math.abs(amount);
+    };
+
     transactions.forEach((t) => {
       // If transaction has splits, aggregate each split separately
       if (t.splits && t.splits.length > 0) {
-        t.splits.forEach((split) => {
-          let targetId = 'uncategorized';
-
-          if (split.category) {
-            targetId = split.category.id;
-          }
-
-          if (categoryMap.has(targetId)) {
-            const current = categoryMap.get(targetId);
-            if (current) {
-              current.spent += Math.abs(split.amount.toNumber());
-            }
-          } else {
-            const current = categoryMap.get('uncategorized');
-            if (current) current.spent += Math.abs(split.amount.toNumber());
-          }
-        });
+        t.splits.forEach((split) =>
+          applyLine(split.amount.toNumber(), split.category?.id),
+        );
       } else {
         // No splits, use parent transaction category
-        let targetId = 'uncategorized';
-
-        if (t.category) {
-          targetId = t.category.id;
-        }
-
-        if (categoryMap.has(targetId)) {
-          const current = categoryMap.get(targetId);
-          if (current) {
-            current.spent += Math.abs(t.amount.toNumber());
-          }
-        } else {
-          const current = categoryMap.get('uncategorized');
-          if (current) current.spent += Math.abs(t.amount.toNumber());
-        }
+        applyLine(t.amount.toNumber(), t.category?.id);
       }
     });
 
     // Sort by Family ID, then by Name
     // Keep zero-spend categories that have a budget so budget reports can show them
     // `budget` is already a monthly figure, so only `spent` gets averaged.
+    // Refunds can exceed the spend they offset, so clamp at zero rather than
+    // hand the charts a negative slice.
     return Array.from(categoryMap.values())
-      .map((c) => ({ ...c, spent: this.average(c.spent, divisor) }))
+      .map((c) => ({ ...c, spent: this.average(Math.max(0, c.spent), divisor) }))
       .filter((c) => c.spent > 0 || c.budget > 0)
       .sort((a, b) => {
         const famA = a.familyId || '';
@@ -286,59 +288,48 @@ export class ReportsService {
     const expenseByCategory = new Map<string, number>();
     const incomeSources = new Map<string, number>();
 
+    const applyLine = (amount: number, category?: SankeyCategory) => {
+      // Money flowing back into an expense category is a refund, not income: it
+      // shrinks that category's outflow instead of adding a new source.
+      if (amount > 0 && category?.type !== 'EXPENSE') {
+        totalIncome += amount;
+        // Group income by category if present, else 'Other Income'
+        const sourceName = category ? category.name : 'Other Income';
+        incomeSources.set(
+          sourceName,
+          (incomeSources.get(sourceName) || 0) + amount,
+        );
+        return;
+      }
+
+      let targetName = 'Uncategorized';
+      if (category) {
+        targetName = category.parent ? category.parent.name : category.name;
+      }
+      // Outgoing amounts are negative, so subtracting adds to the outflow and a
+      // positive refund nets against it.
+      expenseByCategory.set(
+        targetName,
+        (expenseByCategory.get(targetName) || 0) - amount,
+      );
+    };
+
     transactions.forEach((t) => {
       // If transaction has splits, process each split separately
       if (t.splits && t.splits.length > 0) {
-        t.splits.forEach((split) => {
-          const amt = split.amount.toNumber();
-          if (amt > 0) {
-            totalIncome += amt;
-            const sourceName = split.category
-              ? split.category.name
-              : 'Other Income';
-            incomeSources.set(
-              sourceName,
-              (incomeSources.get(sourceName) || 0) + amt,
-            );
-          } else {
-            const absAmt = Math.abs(amt);
-            let targetName = 'Uncategorized';
-            if (split.category) {
-              targetName = split.category.parent
-                ? split.category.parent.name
-                : split.category.name;
-            }
-            expenseByCategory.set(
-              targetName,
-              (expenseByCategory.get(targetName) || 0) + absAmt,
-            );
-          }
-        });
+        t.splits.forEach((split) =>
+          applyLine(split.amount.toNumber(), split.category),
+        );
       } else {
         // No splits, use parent transaction
-        const amt = t.amount.toNumber();
-        if (amt > 0) {
-          totalIncome += amt;
-          // Group income by category if present, else 'Other Income'
-          const sourceName = t.category ? t.category.name : 'Other Income';
-          incomeSources.set(
-            sourceName,
-            (incomeSources.get(sourceName) || 0) + amt,
-          );
-        } else {
-          const absAmt = Math.abs(amt);
-          let targetName = 'Uncategorized';
-          if (t.category) {
-            targetName = t.category.parent
-              ? t.category.parent.name
-              : t.category.name;
-          }
-          expenseByCategory.set(
-            targetName,
-            (expenseByCategory.get(targetName) || 0) + absAmt,
-          );
-        }
+        applyLine(t.amount.toNumber(), t.category);
       }
+    });
+
+    // A category refunded more than it was charged has no outflow left to draw,
+    // so drop it before it becomes an orphan node.
+    expenseByCategory.forEach((val, target) => {
+      if (val <= 0) expenseByCategory.delete(target);
     });
 
     const nodes = [
@@ -405,14 +396,17 @@ export class ReportsService {
       where.date = { gte: startDate, lt: endDate };
     }
 
-    // Get all transactions for this account
+    // Get all transactions for this account. The category type is loaded to tell
+    // a refund on an expense category apart from real income.
     const transactions = await this.prisma.transaction.findMany({
       where,
       include: {
         costObject: true,
+        category: { select: { type: true } },
         splits: {
           include: {
             costObject: true,
+            category: { select: { type: true } },
           },
         },
       },
@@ -441,65 +435,55 @@ export class ReportsService {
       count: 0,
     });
 
+    const applyLine = (
+      amount: number,
+      costObject?: {
+        id: string;
+        name: string;
+        icon: string;
+        color: string | null;
+      } | null,
+      category?: { type: string } | null,
+    ) => {
+      const isRefund = amount > 0;
+      // A refund on an expense category nets against what that cost object was
+      // charged. Any other inflow (a card payment, a transfer, real income) has
+      // no place in a spend breakdown.
+      if (isRefund && category?.type !== 'EXPENSE') return;
+
+      let key = 'unassigned';
+      if (costObject) {
+        key = costObject.id;
+        if (!costObjectMap.has(key)) {
+          costObjectMap.set(key, {
+            id: costObject.id,
+            name: costObject.name,
+            icon: costObject.icon,
+            color: costObject.color || '#6366f1',
+            total: 0,
+            count: 0,
+          });
+        }
+      }
+
+      const entry = costObjectMap.get(key)!;
+      // Amounts spent are negative, so subtracting builds up the total and a
+      // positive refund nets against it.
+      entry.total -= amount;
+      // A refund adjusts a charge that was already counted, so it isn't a
+      // transaction of its own as far as the count goes.
+      if (!isRefund) entry.count += 1;
+    };
+
     transactions.forEach((t) => {
       // If transaction has splits, process each split separately
       if (t.splits && t.splits.length > 0) {
-        t.splits.forEach((split) => {
-          const amt = split.amount.toNumber();
-          // Only count expenses (negative amounts) for credit card breakdown
-          if (amt >= 0) return;
-
-          const absAmt = Math.abs(amt);
-
-          if (split.costObject) {
-            const key = split.costObject.id;
-            if (!costObjectMap.has(key)) {
-              costObjectMap.set(key, {
-                id: split.costObject.id,
-                name: split.costObject.name,
-                icon: split.costObject.icon,
-                color: split.costObject.color || '#6366f1',
-                total: 0,
-                count: 0,
-              });
-            }
-            const entry = costObjectMap.get(key)!;
-            entry.total += absAmt;
-            entry.count += 1;
-          } else {
-            const unassigned = costObjectMap.get('unassigned')!;
-            unassigned.total += absAmt;
-            unassigned.count += 1;
-          }
-        });
+        t.splits.forEach((split) =>
+          applyLine(split.amount.toNumber(), split.costObject, split.category),
+        );
       } else {
         // No splits, use parent transaction
-        const amt = t.amount.toNumber();
-        // Only count expenses (negative amounts) for credit card breakdown
-        if (amt >= 0) return;
-
-        const absAmt = Math.abs(amt);
-
-        if (t.costObject) {
-          const key = t.costObject.id;
-          if (!costObjectMap.has(key)) {
-            costObjectMap.set(key, {
-              id: t.costObject.id,
-              name: t.costObject.name,
-              icon: t.costObject.icon,
-              color: t.costObject.color || '#6366f1',
-              total: 0,
-              count: 0,
-            });
-          }
-          const entry = costObjectMap.get(key)!;
-          entry.total += absAmt;
-          entry.count += 1;
-        } else {
-          const unassigned = costObjectMap.get('unassigned')!;
-          unassigned.total += absAmt;
-          unassigned.count += 1;
-        }
+        applyLine(t.amount.toNumber(), t.costObject, t.category);
       }
     });
 

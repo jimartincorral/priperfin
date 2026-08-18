@@ -665,8 +665,11 @@ export class ViewExpenses extends LitElement {
           const splitCat = this.categories.find(c => c.id === split.categoryId);
           const splitAmt = Number(split.amount);
 
+          // Money back into an expense category is a refund, not income: it nets
+          // against that category's spend, matching the reports
+          const isRefund = splitAmt > 0 && splitCat?.type === 'EXPENSE';
           // Income if category type is INCOME OR amount is positive
-          const isIncome = (splitCat?.type === 'INCOME') || splitAmt > 0;
+          const isIncome = !isRefund && ((splitCat?.type === 'INCOME') || splitAmt > 0);
 
           if (isIncome) {
             income += splitAmt;
@@ -680,8 +683,11 @@ export class ViewExpenses extends LitElement {
         const cat = this.categories.find(c => c.id === t.categoryId);
         const amt = Number(t.amount);
 
+        // Money back into an expense category is a refund, not income: it nets
+        // against that category's spend, matching the reports
+        const isRefund = amt > 0 && cat?.type === 'EXPENSE';
         // Income if category type is INCOME OR amount is positive
-        const isIncome = (cat?.type === 'INCOME') || amt > 0;
+        const isIncome = !isRefund && ((cat?.type === 'INCOME') || amt > 0);
 
         if (isIncome) {
           income += amt;
