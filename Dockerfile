@@ -87,9 +87,6 @@ COPY --from=builder /app/apps/web/dist ./client
 COPY run.sh /run.sh
 RUN chmod +x /run.sh
 
-# Debug: show what we have
-RUN echo "=== Final container contents ===" && ls -la dist/ && ls -la dist/src/ || echo "Missing dist!"
-
 # Create data directory
 RUN mkdir -p /data
 

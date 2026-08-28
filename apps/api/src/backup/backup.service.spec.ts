@@ -290,9 +290,7 @@ describe('BackupService', () => {
       ).rejects.toThrow(BadRequestException);
       await expect(
         service.restoreBackup('/path/to/backup.tar', false, 'profile-1'),
-      ).rejects.toThrow(
-        'Confirmation to overwrite existing data is required.',
-      );
+      ).rejects.toThrow('Confirmation to overwrite existing data is required.');
     });
 
     it('should throw BadRequestException for encrypted backup without key', async () => {

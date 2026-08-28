@@ -277,8 +277,6 @@ export class RuleEditor extends LitElement {
       try {
           const matches = await api.post('/rules/test', { conditionsJson, limit: 10 });
           if (matches && matches.length > 0) {
-              // Import i18n
-              const { i18n } = await import('../i18n/i18n');
               const proceed = confirm(i18n.t('rules.priority_warning').replace('{count}', matches.length.toString()));
               if (!proceed) return;
           }

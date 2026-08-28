@@ -147,7 +147,10 @@ describe('TransactionsService', () => {
     it('should return zero balance for non-existent account', async () => {
       prismaMock.account.findFirst.mockResolvedValue(null);
 
-      const result = await service.getAccountBalance('non-existent', 'profile-1');
+      const result = await service.getAccountBalance(
+        'non-existent',
+        'profile-1',
+      );
 
       expect(result.balance).toBe(0);
       expect(result.type).toBe('DEBIT');
@@ -285,9 +288,9 @@ describe('TransactionsService', () => {
         ],
       };
 
-      await expect(service.createSplits('tx-1', dto, 'profile-1')).rejects.toThrow(
-        BadRequestException,
-      );
+      await expect(
+        service.createSplits('tx-1', dto, 'profile-1'),
+      ).rejects.toThrow(BadRequestException);
     });
 
     it('should allow splits within 0.01 tolerance', async () => {
@@ -318,7 +321,9 @@ describe('TransactionsService', () => {
       };
 
       // Should not throw - within tolerance
-      await expect(service.createSplits('tx-1', dto, 'profile-1')).resolves.toBeDefined();
+      await expect(
+        service.createSplits('tx-1', dto, 'profile-1'),
+      ).resolves.toBeDefined();
     });
 
     it('should throw NotFoundException for non-existent transaction', async () => {
@@ -326,9 +331,9 @@ describe('TransactionsService', () => {
 
       const dto = { splits: [{ amount: -50, categoryId: 'cat-1' }] };
 
-      await expect(service.createSplits('non-existent', dto, 'profile-1')).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(
+        service.createSplits('non-existent', dto, 'profile-1'),
+      ).rejects.toThrow(NotFoundException);
     });
 
     it('should reject if transaction already has splits', async () => {
@@ -348,9 +353,9 @@ describe('TransactionsService', () => {
 
       const dto = { splits: [{ amount: -100, categoryId: 'cat-1' }] };
 
-      await expect(service.createSplits('tx-1', dto, 'profile-1')).rejects.toThrow(
-        BadRequestException,
-      );
+      await expect(
+        service.createSplits('tx-1', dto, 'profile-1'),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 
@@ -400,9 +405,9 @@ describe('TransactionsService', () => {
 
       const dto = { splits: [{ amount: -50, categoryId: 'cat-1' }] };
 
-      await expect(service.updateSplits('tx-1', dto, 'profile-1')).rejects.toThrow(
-        BadRequestException,
-      );
+      await expect(
+        service.updateSplits('tx-1', dto, 'profile-1'),
+      ).rejects.toThrow(BadRequestException);
     });
 
     it('should throw NotFoundException for non-existent transaction', async () => {
@@ -410,9 +415,9 @@ describe('TransactionsService', () => {
 
       const dto = { splits: [{ amount: -100, categoryId: 'cat-1' }] };
 
-      await expect(service.updateSplits('non-existent', dto, 'profile-1')).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(
+        service.updateSplits('non-existent', dto, 'profile-1'),
+      ).rejects.toThrow(NotFoundException);
     });
   });
 
@@ -433,7 +438,12 @@ describe('TransactionsService', () => {
         },
       ];
 
-      const result = await service.createMany(dtos as any, true, [], 'profile-1');
+      const result = await service.createMany(
+        dtos as any,
+        true,
+        [],
+        'profile-1',
+      );
 
       expect(result.newCount).toBe(1);
     });
@@ -452,7 +462,12 @@ describe('TransactionsService', () => {
         },
       ];
 
-      const result = await service.createMany(dtos as any, false, [], 'profile-1');
+      const result = await service.createMany(
+        dtos as any,
+        false,
+        [],
+        'profile-1',
+      );
 
       expect(result.duplicateCount).toBe(1);
       expect(result.duplicates).toHaveLength(1);
@@ -497,9 +512,9 @@ describe('TransactionsService', () => {
     it('should throw NotFoundException for non-existent transaction', async () => {
       prismaMock.transaction.findFirst.mockResolvedValue(null);
 
-      await expect(service.findOne('non-existent', 'profile-1')).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(
+        service.findOne('non-existent', 'profile-1'),
+      ).rejects.toThrow(NotFoundException);
     });
   });
 

@@ -159,7 +159,7 @@ export function resetPrismaMock(mock: PrismaMock): void {
     if (typeof model === 'object' && model !== null) {
       Object.values(model).forEach((method) => {
         if (typeof method === 'function' && 'mockReset' in method) {
-          (method as jest.Mock).mockReset();
+          method.mockReset();
         }
       });
     }

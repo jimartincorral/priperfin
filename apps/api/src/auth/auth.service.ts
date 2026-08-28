@@ -239,7 +239,11 @@ export class AuthService {
     settings.forEach((setting) => {
       const profileId = setting.key.replace('pin_length_profile_', '');
       const parsedLength = parseInt(setting.value, 10);
-      if (!Number.isNaN(parsedLength) && parsedLength >= 4 && parsedLength <= 6) {
+      if (
+        !Number.isNaN(parsedLength) &&
+        parsedLength >= 4 &&
+        parsedLength <= 6
+      ) {
         pinLengthByProfileId.set(profileId, parsedLength);
       }
     });

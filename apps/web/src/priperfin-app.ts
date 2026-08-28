@@ -1,15 +1,6 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { Router } from '@vaadin/router';
-import './views/view-expenses';
-import './views/view-goals';
-import './views/view-reports';
-import './views/view-categories';
-import './views/view-rules';
-import './views/view-settings';
-import './views/view-login';
-import './views/view-setup';
-
 import { i18n } from './i18n/i18n';
 import { api } from './api/client';
 import { getAppBasePath, getAppPath, getCanonicalAppUrl } from './utils/router-paths';
@@ -403,16 +394,84 @@ export class PriPerFinApp extends LitElement {
     const router = new Router(outlet);
     router.setRoutes([
       // Public routes (no auth required)
-      { path: '/setup', component: 'view-setup' },
-      { path: '/login', component: 'view-login' },
+      {
+        path: '/setup',
+        action: async () => {
+          await import('./views/view-setup');
+        },
+        component: 'view-setup',
+      },
+      {
+        path: '/login',
+        action: async () => {
+          await import('./views/view-login');
+        },
+        component: 'view-login',
+      },
       // Protected routes (auth required)
-      { path: '', action: this.authGuard.bind(this), component: 'view-expenses' },
-      { path: '/', action: this.authGuard.bind(this), component: 'view-expenses' },
-      { path: '/goals', action: this.authGuard.bind(this), component: 'view-goals' },
-      { path: '/reports', action: this.authGuard.bind(this), component: 'view-reports' },
-      { path: '/categories', action: this.authGuard.bind(this), component: 'view-categories' },
-      { path: '/rules', action: this.authGuard.bind(this), component: 'view-rules' },
-      { path: '/settings', action: this.authGuard.bind(this), component: 'view-settings' },
+      {
+        path: '',
+        action: async (context, commands) => {
+          const auth = this.authGuard(context, commands);
+          if (auth) return auth;
+          await import('./views/view-expenses');
+        },
+        component: 'view-expenses',
+      },
+      {
+        path: '/',
+        action: async (context, commands) => {
+          const auth = this.authGuard(context, commands);
+          if (auth) return auth;
+          await import('./views/view-expenses');
+        },
+        component: 'view-expenses',
+      },
+      {
+        path: '/goals',
+        action: async (context, commands) => {
+          const auth = this.authGuard(context, commands);
+          if (auth) return auth;
+          await import('./views/view-goals');
+        },
+        component: 'view-goals',
+      },
+      {
+        path: '/reports',
+        action: async (context, commands) => {
+          const auth = this.authGuard(context, commands);
+          if (auth) return auth;
+          await import('./views/view-reports');
+        },
+        component: 'view-reports',
+      },
+      {
+        path: '/categories',
+        action: async (context, commands) => {
+          const auth = this.authGuard(context, commands);
+          if (auth) return auth;
+          await import('./views/view-categories');
+        },
+        component: 'view-categories',
+      },
+      {
+        path: '/rules',
+        action: async (context, commands) => {
+          const auth = this.authGuard(context, commands);
+          if (auth) return auth;
+          await import('./views/view-rules');
+        },
+        component: 'view-rules',
+      },
+      {
+        path: '/settings',
+        action: async (context, commands) => {
+          const auth = this.authGuard(context, commands);
+          if (auth) return auth;
+          await import('./views/view-settings');
+        },
+        component: 'view-settings',
+      },
     ]);
 
     console.log('[PriPerFin] Router configured successfully');

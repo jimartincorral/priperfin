@@ -1,4 +1,12 @@
-import { Controller, Get, Post, Body, Param, Query, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Param,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { MonthlyBalancesService } from './monthly-balances.service';
 import { SessionAuthGuard } from '../auth/guards/session-auth.guard';
 import { CurrentProfile } from '../auth/decorators/current-profile.decorator';

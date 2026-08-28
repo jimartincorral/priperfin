@@ -223,7 +223,10 @@ export class ReportsService {
     // Refunds can exceed the spend they offset, so clamp at zero rather than
     // hand the charts a negative slice.
     return Array.from(categoryMap.values())
-      .map((c) => ({ ...c, spent: this.average(Math.max(0, c.spent), divisor) }))
+      .map((c) => ({
+        ...c,
+        spent: this.average(Math.max(0, c.spent), divisor),
+      }))
       .filter((c) => c.spent > 0 || c.budget > 0)
       .sort((a, b) => {
         const famA = a.familyId || '';

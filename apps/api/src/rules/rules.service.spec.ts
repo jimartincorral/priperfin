@@ -415,12 +415,12 @@ describe('RulesService', () => {
       const result = await service.create(createDto as any, 'profile-1');
 
       expect(result.id).toBe('rule-1');
-      expect(mockPrismaService.categorizationRule.findMany).toHaveBeenCalledWith(
-        {
-          where: { profileId: 'profile-1', categoryId: 'cat-1' },
-          select: { id: true, name: true, conditionsJson: true },
-        },
-      );
+      expect(
+        mockPrismaService.categorizationRule.findMany,
+      ).toHaveBeenCalledWith({
+        where: { profileId: 'profile-1', categoryId: 'cat-1' },
+        select: { id: true, name: true, conditionsJson: true },
+      });
       expect(mockPrismaService.categorizationRule.create).toHaveBeenCalledWith({
         data: { ...createDto, profileId: 'profile-1' },
       });

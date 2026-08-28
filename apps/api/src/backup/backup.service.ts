@@ -537,7 +537,7 @@ export class BackupService {
   async getBackupFileStream(filename: string): Promise<[ReadStream, string]> {
     // Basic validation
     if (
-      !/^[a-zA-Z0-9_\-\.]+$/.test(filename) ||
+      !/^[a-zA-Z0-9_.-]+$/.test(filename) ||
       filename.includes('..') ||
       (!filename.endsWith('.tar') && !filename.endsWith('.tar.enc'))
     ) {
