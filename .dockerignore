@@ -1,0 +1,14 @@
+node_modules
+**/node_modules
+.git
+.github
+*.db
+*.db-journal
+*.db.backup*
+dist
+**/dist
+build-output.txt
+.vscode
+.idea
+*.log
+coverage

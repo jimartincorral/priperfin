@@ -39,8 +39,8 @@ FROM node:20-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 
-# Install runtime dependencies
-RUN apk add --no-cache bash curl jq python3 make g++
+# Install runtime dependencies (libstdc++ is needed by compiled C++ native modules)
+RUN apk add --no-cache bash curl jq libstdc++
 
 # Install bashio for Home Assistant
 RUN curl -J -L -o /tmp/bashio.tar.gz \
@@ -54,12 +54,20 @@ RUN curl -J -L -o /tmp/bashio.tar.gz \
 # Copy package.json for production install
 COPY apps/api/package.json ./
 
-# Remove postinstall script to prevent prisma generate (CLI not installed in prod)
-# This allows us to remove --ignore-scripts so better-sqlite3 can build
-RUN npm pkg delete scripts.postinstall
-
-# Install production dependencies with npm (legacy-peer-deps for NestJS 11 compatibility)
-RUN npm install --omit=dev --legacy-peer-deps
+# Install production dependencies:
+# 1. Install build tools in a virtual package (.build-deps)
+# 2. Delete postinstall script to skip prisma generate (CLI not in prod)
+# 3. Compile native modules (better-sqlite3, bcrypt)
+# 4. Clean npm cache, node-gyp caches, and intermediate .o files
+# 5. Remove .build-deps all in the SAME layer to keep the image lean
+RUN apk add --no-cache --virtual .build-deps python3 make g++ \
+    && npm pkg delete scripts.postinstall \
+    && npm install --omit=dev --legacy-peer-deps --no-audit --no-fund \
+    && npm cache clean --force \
+    && rm -rf /root/.npm /root/.node-gyp /tmp/* \
+    && find node_modules -type d -name "obj.target" -prune -exec rm -rf {} + \
+    && find node_modules -type f -name "*.o" -delete \
+    && apk del .build-deps
 
 # Copy built API (note: output is in dist/src/ due to tsconfig)
 COPY --from=builder /app/apps/api/dist ./dist
