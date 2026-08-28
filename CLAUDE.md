@@ -4,10 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-PriPerFin is a personal finance tracking application built as a pnpm monorepo with three apps:
+PriPerFin is a personal finance tracking application built as a pnpm monorepo with two main packages:
 - **api**: NestJS backend with Prisma ORM and SQLite database
 - **web**: Lit-based web frontend using Vite
-- **desktop**: Electron-based desktop application
 
 ## Commands
 
@@ -98,15 +97,7 @@ Lit web components with Material Design 3 theming:
 
 The add-on runs on port 3000 with Ingress support and is available on aarch64, amd64, and armv7 architectures.
 
-### Desktop (Windows/macOS/Linux)
-
-Run the app locally using the provided scripts:
-- **Windows**: Run `start.bat`
-- **macOS/Linux**: Run `./start.sh`
-
-The app stores its SQLite database locally in the user data directory.
-
-## Releasing New Versions
+### Releasing New Versions
 
 **IMPORTANT RULE**: Every time you push a new version to GitHub, you MUST ensure it is released as a GitHub Release. This is critical because Home Assistant only detects updates via GitHub Releases. Simply pushing to `main` is NOT sufficient for deployment.
 

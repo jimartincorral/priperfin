@@ -8,8 +8,7 @@ This file provides coding guidelines for AI agents working in the PriPerFin code
 priperfin/
 ├── apps/
 │   ├── api/          # NestJS backend (TypeScript, Prisma, SQLite)
-│   ├── web/          # Lit frontend (TypeScript, Vite)
-│   └── desktop/      # Electron app
+│   └── web/          # Lit frontend (TypeScript, Vite)
 ├── config.yaml       # Home Assistant add-on config (VERSION SOURCE OF TRUTH)
 └── CLAUDE.md         # Project-specific context for Claude
 ```

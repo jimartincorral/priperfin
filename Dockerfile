@@ -90,4 +90,8 @@ RUN chmod +x /run.sh
 # Create data directory
 RUN mkdir -p /data
 
+# Health check
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD curl -f http://localhost:3000/health || exit 1
+
 CMD ["/run.sh"]

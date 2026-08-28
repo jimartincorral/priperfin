@@ -73,6 +73,14 @@ export class PrismaService
 
   async onModuleInit() {
     await this.$connect();
+    try {
+      await this.$executeRawUnsafe('PRAGMA journal_mode = WAL;');
+      await this.$executeRawUnsafe('PRAGMA busy_timeout = 5000;');
+      await this.$executeRawUnsafe('PRAGMA synchronous = NORMAL;');
+      await this.$executeRawUnsafe('PRAGMA foreign_keys = ON;');
+    } catch {
+      // Non-critical if pragma fails on non-sqlite drivers in tests
+    }
     await this.validateSchema();
   }
 
