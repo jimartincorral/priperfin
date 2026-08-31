@@ -85,7 +85,10 @@ COPY --from=builder /app/apps/web/dist ./client
 
 # Copy startup script
 COPY run.sh /run.sh
-RUN chmod +x /run.sh
+RUN sed -i -e 's/\r$//' /run.sh \
+    && chmod 755 /run.sh \
+    && cp /run.sh /usr/local/bin/docker-entrypoint.sh \
+    && chmod 755 /usr/local/bin/docker-entrypoint.sh
 
 # Create data directory
 RUN mkdir -p /data
