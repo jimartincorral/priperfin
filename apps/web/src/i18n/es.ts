@@ -499,6 +499,13 @@ export const es = {
         not_configured: 'No Configurado',
         auto_sync_label: 'Sincronización automática diaria (06:00 AM)',
         auto_sync_desc: 'Sincroniza e importa automáticamente los movimientos bancarios una vez al día en segundo plano sin intervención manual.',
+        initial_lookback_label: 'Historial inicial de sincronización',
+        initial_lookback_desc: 'Determina cuántos días de movimientos históricos solicitar al banco la primera vez que se sincroniza una cuenta.',
+        lookback_30: '30 días (1 mes)',
+        lookback_90: '90 días (3 meses - Estándar PSD2)',
+        lookback_180: '180 días (6 meses)',
+        lookback_365: '365 días (1 año)',
+        lookback_730: '730 días (2 años - Máximo)',
         
         connections_title: 'Bancos Conectados',
         connect_bank_btn: '+ Conectar Banco',

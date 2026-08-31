@@ -288,7 +288,13 @@ export const bankSyncApi = {
         return api.get('/bank-sync/settings');
     },
 
-    async saveSettings(data: { appId?: string; key?: string; redirectUrl?: string; autoSyncEnabled?: boolean }) {
+    async saveSettings(data: {
+        appId?: string;
+        key?: string;
+        redirectUrl?: string;
+        autoSyncEnabled?: boolean;
+        initialLookbackDays?: number;
+    }) {
         return api.post('/bank-sync/settings', data);
     },
 
