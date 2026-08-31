@@ -2,9 +2,8 @@
 FROM --platform=$BUILDPLATFORM node:20-alpine AS builder
 WORKDIR /app
 
-# Install pnpm and build tools
+# Install pnpm
 RUN corepack enable && corepack prepare pnpm@9.0.0 --activate
-RUN apk add --no-cache python3 make g++
 
 # Copy package files
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
