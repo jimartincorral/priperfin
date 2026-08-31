@@ -23,7 +23,8 @@ export class BankSyncService {
   private readonly SETTING_APP_ID = 'enable_banking_app_id';
   private readonly SETTING_KEY = 'enable_banking_key';
   private readonly SETTING_REDIRECT_URL = 'enable_banking_redirect_url';
-  private readonly SETTING_AUTO_SYNC_ENABLED = 'enable_banking_auto_sync_enabled';
+  private readonly SETTING_AUTO_SYNC_ENABLED =
+    'enable_banking_auto_sync_enabled';
 
   constructor(
     private prisma: PrismaService,
@@ -43,11 +44,16 @@ export class BankSyncService {
       return;
     }
 
-    this.logger.log('Executing daily automated bank synchronization across all profiles...');
+    this.logger.log(
+      'Executing daily automated bank synchronization across all profiles...',
+    );
     try {
       await this.syncAllProfiles();
     } catch (err) {
-      this.logger.error('Daily automated bank synchronization encountered an error:', err);
+      this.logger.error(
+        'Daily automated bank synchronization encountered an error:',
+        err,
+      );
     }
   }
 
@@ -59,12 +65,16 @@ export class BankSyncService {
       select: { id: true, name: true },
     });
 
-    this.logger.log(`Found ${profiles.length} profile(s) with active bank connections to auto-sync`);
+    this.logger.log(
+      `Found ${profiles.length} profile(s) with active bank connections to auto-sync`,
+    );
     const results = [];
     for (const p of profiles) {
       try {
         const res = await this.syncTransactions(undefined, p.id);
-        this.logger.log(`Auto-synced profile "${p.name}": ${res.newCount} new, ${res.duplicateCount} duplicates`);
+        this.logger.log(
+          `Auto-synced profile "${p.name}": ${res.newCount} new, ${res.duplicateCount} duplicates`,
+        );
         results.push({ profile: p.name, ...res });
       } catch (err) {
         this.logger.warn(`Auto-sync failed for profile "${p.name}":`, err);
@@ -81,7 +91,9 @@ export class BankSyncService {
     const [appIdSetting, keySetting, redirectUrlSetting] = await Promise.all([
       this.prisma.setting.findUnique({ where: { key: this.SETTING_APP_ID } }),
       this.prisma.setting.findUnique({ where: { key: this.SETTING_KEY } }),
-      this.prisma.setting.findUnique({ where: { key: this.SETTING_REDIRECT_URL } }),
+      this.prisma.setting.findUnique({
+        where: { key: this.SETTING_REDIRECT_URL },
+      }),
     ]);
 
     if (!appIdSetting?.value || !keySetting?.value) {
@@ -98,15 +110,22 @@ export class BankSyncService {
   }
 
   async getSettings(): Promise<BankSyncSettingsResponse> {
-    const [appIdSetting, keySetting, redirectUrlSetting, autoSyncSetting] = await Promise.all([
-      this.prisma.setting.findUnique({ where: { key: this.SETTING_APP_ID } }),
-      this.prisma.setting.findUnique({ where: { key: this.SETTING_KEY } }),
-      this.prisma.setting.findUnique({ where: { key: this.SETTING_REDIRECT_URL } }),
-      this.prisma.setting.findUnique({ where: { key: this.SETTING_AUTO_SYNC_ENABLED } }),
-    ]);
+    const [appIdSetting, keySetting, redirectUrlSetting, autoSyncSetting] =
+      await Promise.all([
+        this.prisma.setting.findUnique({ where: { key: this.SETTING_APP_ID } }),
+        this.prisma.setting.findUnique({ where: { key: this.SETTING_KEY } }),
+        this.prisma.setting.findUnique({
+          where: { key: this.SETTING_REDIRECT_URL },
+        }),
+        this.prisma.setting.findUnique({
+          where: { key: this.SETTING_AUTO_SYNC_ENABLED },
+        }),
+      ]);
 
     // Defaults to true when credentials exist unless explicitly turned off ('false')
-    const autoSyncEnabled = autoSyncSetting ? autoSyncSetting.value === 'true' : true;
+    const autoSyncEnabled = autoSyncSetting
+      ? autoSyncSetting.value === 'true'
+      : true;
 
     return {
       hasAppId: !!appIdSetting?.value,
@@ -116,7 +135,9 @@ export class BankSyncService {
     };
   }
 
-  async saveSettings(dto: BankSyncSettingsDto): Promise<BankSyncSettingsResponse> {
+  async saveSettings(
+    dto: BankSyncSettingsDto,
+  ): Promise<BankSyncSettingsResponse> {
     if (dto.appId !== undefined) {
       await this.prisma.setting.upsert({
         where: { key: this.SETTING_APP_ID },
@@ -139,7 +160,10 @@ export class BankSyncService {
       await this.prisma.setting.upsert({
         where: { key: this.SETTING_REDIRECT_URL },
         update: { value: dto.redirectUrl.trim() },
-        create: { key: this.SETTING_REDIRECT_URL, value: dto.redirectUrl.trim() },
+        create: {
+          key: this.SETTING_REDIRECT_URL,
+          value: dto.redirectUrl.trim(),
+        },
       });
     }
 
@@ -147,7 +171,10 @@ export class BankSyncService {
       await this.prisma.setting.upsert({
         where: { key: this.SETTING_AUTO_SYNC_ENABLED },
         update: { value: dto.autoSyncEnabled ? 'true' : 'false' },
-        create: { key: this.SETTING_AUTO_SYNC_ENABLED, value: dto.autoSyncEnabled ? 'true' : 'false' },
+        create: {
+          key: this.SETTING_AUTO_SYNC_ENABLED,
+          value: dto.autoSyncEnabled ? 'true' : 'false',
+        },
       });
     }
 
@@ -156,7 +183,11 @@ export class BankSyncService {
 
   async getAvailableBanks(country: string = 'ES') {
     const { appId, key } = await this.getCredentials();
-    const result = await this.enableBankingService.getBanks(country, appId, key);
+    const result = await this.enableBankingService.getBanks(
+      country,
+      appId,
+      key,
+    );
     return result.aspsps || [];
   }
 
@@ -176,7 +207,9 @@ export class BankSyncService {
 
     const state = crypto.randomUUID();
     // 90 days validity for PSD2 consent
-    const validUntil = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString();
+    const validUntil = new Date(
+      Date.now() + 90 * 24 * 60 * 60 * 1000,
+    ).toISOString();
 
     const authResponse = await this.enableBankingService.startAuth(
       {
@@ -205,10 +238,18 @@ export class BankSyncService {
 
   async handleCallback(code: string, profileId: string) {
     const { appId, key } = await this.getCredentials();
-    this.logger.log(`Exchanging authorization code for session on profile ${profileId}`);
+    this.logger.log(
+      `Exchanging authorization code for session on profile ${profileId}`,
+    );
 
-    const session = await this.enableBankingService.createSession(code, appId, key);
-    this.logger.log(`Received session ${session.session_id} with ${session.accounts?.length || 0} accounts`);
+    const session = await this.enableBankingService.createSession(
+      code,
+      appId,
+      key,
+    );
+    this.logger.log(
+      `Received session ${session.session_id} with ${session.accounts?.length || 0} accounts`,
+    );
 
     // Fetch details for each authorized account
     const accountsDetails: BankAccountDetails[] = [];
@@ -219,9 +260,10 @@ export class BankSyncService {
         if (typeof rawAcc === 'string') {
           accountUid = rawAcc;
         } else if (rawAcc && typeof rawAcc === 'object') {
-          accountUid = typeof rawAcc.uid === 'string'
-            ? rawAcc.uid
-            : (rawAcc.uid?.uid || rawAcc.account_id?.iban || rawAcc.iban || '');
+          accountUid =
+            typeof rawAcc.uid === 'string'
+              ? rawAcc.uid
+              : rawAcc.uid?.uid || rawAcc.account_id?.iban || rawAcc.iban || '';
         }
 
         if (!accountUid) continue;
@@ -238,9 +280,14 @@ export class BankSyncService {
             uid: accountUid,
           });
         } catch (err) {
-          this.logger.warn(`Failed to fetch details for account ${accountUid}:`, err);
+          this.logger.warn(
+            `Failed to fetch details for account ${accountUid}:`,
+            err,
+          );
           accountsDetails.push(
-            typeof rawAcc === 'object' ? { ...rawAcc, uid: accountUid } : { uid: accountUid },
+            typeof rawAcc === 'object'
+              ? { ...rawAcc, uid: accountUid }
+              : { uid: accountUid },
           );
         }
       }
@@ -307,7 +354,9 @@ export class BankSyncService {
       const isExpired = expiresAt < now;
       const daysRemaining = Math.max(
         0,
-        Math.ceil((expiresAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)),
+        Math.ceil(
+          (expiresAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24),
+        ),
       );
 
       return {
@@ -357,7 +406,9 @@ export class BankSyncService {
   ) {
     const [account, connection] = await Promise.all([
       this.prisma.account.findFirst({ where: { id: accountId, profileId } }),
-      this.prisma.bankConnection.findFirst({ where: { id: connectionId, profileId } }),
+      this.prisma.bankConnection.findFirst({
+        where: { id: connectionId, profileId },
+      }),
     ]);
 
     if (!account) {
@@ -371,7 +422,11 @@ export class BankSyncService {
     if (typeof bankAccountUid === 'string') {
       effectiveUid = bankAccountUid;
     } else if (bankAccountUid && typeof bankAccountUid === 'object') {
-      effectiveUid = bankAccountUid.uid || bankAccountUid.account_id?.iban || bankAccountUid.iban || '';
+      effectiveUid =
+        bankAccountUid.uid ||
+        bankAccountUid.account_id?.iban ||
+        bankAccountUid.iban ||
+        '';
     }
 
     if (!effectiveUid) {
@@ -461,7 +516,8 @@ export class BankSyncService {
           accountId: account.id,
           accountName: account.name,
           status: 'EXPIRED',
-          message: 'Bank authorization expired. Please re-authenticate in Settings.',
+          message:
+            'Bank authorization expired. Please re-authenticate in Settings.',
           newCount: 0,
           duplicateCount: 0,
         });
@@ -501,10 +557,15 @@ export class BankSyncService {
         let targetUid = account.bankAccountUid;
         if (!targetUid || targetUid === '[object Object]') {
           try {
-            const connAccounts = JSON.parse(account.bankConnection.accountsJson);
+            const connAccounts = JSON.parse(
+              account.bankConnection.accountsJson,
+            );
             if (Array.isArray(connAccounts) && connAccounts.length > 0) {
               const first = connAccounts[0];
-              targetUid = typeof first === 'string' ? first : (first.uid?.uid || first.uid || first.account_id?.iban || '');
+              targetUid =
+                typeof first === 'string'
+                  ? first
+                  : first.uid?.uid || first.uid || first.account_id?.iban || '';
               if (targetUid && typeof targetUid === 'string') {
                 await this.prisma.account.update({
                   where: { id: account.id },
@@ -512,11 +573,15 @@ export class BankSyncService {
                 });
               }
             }
-          } catch {}
+          } catch (_e) {
+            this.logger.debug('Failed to parse bankConnection accountsJson');
+          }
         }
 
         if (!targetUid || targetUid === '[object Object]') {
-          this.logger.warn(`Skipping account ${account.name}: invalid bankAccountUid`);
+          this.logger.warn(
+            `Skipping account ${account.name}: invalid bankAccountUid`,
+          );
           continue;
         }
 
@@ -544,10 +609,14 @@ export class BankSyncService {
               tx.credit_debit_indicator === 'DBIT' ||
               (tx.credit_debit_indicator === undefined && rawAmount < 0);
 
-            const finalAmount = isDebit ? -Math.abs(rawAmount) : Math.abs(rawAmount);
+            const finalAmount = isDebit
+              ? -Math.abs(rawAmount)
+              : Math.abs(rawAmount);
 
             const txDate =
-              tx.booking_date || tx.value_date || new Date().toISOString().split('T')[0];
+              tx.booking_date ||
+              tx.value_date ||
+              new Date().toISOString().split('T')[0];
 
             const descriptionParts = [
               tx.creditor?.name,
@@ -566,7 +635,12 @@ export class BankSyncService {
             const externalId =
               tx.entry_reference ||
               tx.transaction_id ||
-              this.generateTransactionHash(account.id, txDate, finalAmount, description);
+              this.generateTransactionHash(
+                account.id,
+                txDate,
+                finalAmount,
+                description,
+              );
 
             const notes = descriptionParts.slice(1).join(' - ') || null;
 
@@ -587,23 +661,24 @@ export class BankSyncService {
         const windowEnd = new Date(dateTo);
         windowEnd.setDate(windowEnd.getDate() + 4);
 
-        const existingAccountTransactions = await this.prisma.transaction.findMany({
-          where: {
-            accountId: account.id,
-            profileId,
-            date: {
-              gte: windowStart,
-              lte: windowEnd,
+        const existingAccountTransactions =
+          await this.prisma.transaction.findMany({
+            where: {
+              accountId: account.id,
+              profileId,
+              date: {
+                gte: windowStart,
+                lte: windowEnd,
+              },
             },
-          },
-          select: {
-            id: true,
-            externalId: true,
-            date: true,
-            amount: true,
-            description: true,
-          },
-        });
+            select: {
+              id: true,
+              externalId: true,
+              date: true,
+              amount: true,
+              description: true,
+            },
+          });
 
         const matchedExistingIds = new Set<string>();
         const dtosToInsert: CreateTransactionDto[] = [];
@@ -645,7 +720,9 @@ export class BankSyncService {
             if (matchedExistingIds.has(e.id)) return false;
             const amountDiff = Math.abs(e.amount.toNumber() - dtoAmount);
             if (amountDiff > 0.01) return false;
-            const daysDiff = Math.abs((e.date.getTime() - dtoTime) / (1000 * 60 * 60 * 24));
+            const daysDiff = Math.abs(
+              (e.date.getTime() - dtoTime) / (1000 * 60 * 60 * 24),
+            );
             return daysDiff <= 3;
           });
 
@@ -653,10 +730,11 @@ export class BankSyncService {
           let bestScore = 0;
 
           for (const cand of candidates) {
-            const similarity = this.transactionsService.calculateDescriptionSimilarity(
-              cand.description,
-              dto.description,
-            );
+            const similarity =
+              this.transactionsService.calculateDescriptionSimilarity(
+                cand.description,
+                dto.description,
+              );
             if (similarity >= 50 && similarity > bestScore) {
               bestScore = similarity;
               bestMatch = cand;
@@ -665,7 +743,9 @@ export class BankSyncService {
 
           // Fallback: If only 1 transaction on this account has that exact amount in a 1-day window
           if (!bestMatch && candidates.length === 1) {
-            const daysDiff = Math.abs((candidates[0].date.getTime() - dtoTime) / (1000 * 60 * 60 * 24));
+            const daysDiff = Math.abs(
+              (candidates[0].date.getTime() - dtoTime) / (1000 * 60 * 60 * 24),
+            );
             if (daysDiff <= 1) {
               bestMatch = candidates[0];
             }
@@ -715,13 +795,23 @@ export class BankSyncService {
             appId,
             key,
           );
-          if (balances?.balances && Array.isArray(balances.balances) && balances.balances.length > 0) {
-            const closingBooked = balances.balances.find(
-              (b: any) => b.balance_type === 'CLBD' || b.balance_type === 'closingBooked' || b.balance_type === 'INTERIM_BOOKED',
-            ) || balances.balances[0];
+          if (
+            balances?.balances &&
+            Array.isArray(balances.balances) &&
+            balances.balances.length > 0
+          ) {
+            const closingBooked =
+              balances.balances.find(
+                (b: any) =>
+                  b.balance_type === 'CLBD' ||
+                  b.balance_type === 'closingBooked' ||
+                  b.balance_type === 'INTERIM_BOOKED',
+              ) || balances.balances[0];
 
             if (closingBooked?.balance_amount?.amount) {
-              const balanceAmt = parseFloat(closingBooked.balance_amount.amount);
+              const balanceAmt = parseFloat(
+                closingBooked.balance_amount.amount,
+              );
               if (!isNaN(balanceAmt)) {
                 await this.prisma.setting.upsert({
                   where: { key: `balance_verified_account_${account.id}` },
@@ -735,7 +825,10 @@ export class BankSyncService {
             }
           }
         } catch (balanceErr) {
-          this.logger.warn(`Could not sync balance for ${account.name}:`, balanceErr);
+          this.logger.warn(
+            `Could not sync balance for ${account.name}:`,
+            balanceErr,
+          );
         }
 
         // Update lastSyncedAt on account

@@ -607,11 +607,7 @@ export class TransactionsService {
     }
 
     const manualMatches = !skipDuplicatesAndInsert
-      ? await this.findManualMatches(
-          enhancedDtos,
-          newTransactions,
-          profileId,
-        )
+      ? await this.findManualMatches(enhancedDtos, newTransactions, profileId)
       : [];
 
     if (!force && !skipDuplicatesAndInsert && manualMatches.length > 0) {

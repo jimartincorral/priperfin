@@ -51,7 +51,11 @@ describe('EnableBankingService', () => {
       // Verify signature with public key
       const verify = crypto.createVerify('RSA-SHA256');
       verify.update(`${parts[0]}.${parts[1]}`);
-      const isValid = verify.verify(testKeyPair.publicKey, parts[2], 'base64url');
+      const isValid = verify.verify(
+        testKeyPair.publicKey,
+        parts[2],
+        'base64url',
+      );
       expect(isValid).toBe(true);
     });
 
