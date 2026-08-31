@@ -643,9 +643,9 @@ export class BankSyncService {
           if (latestTx) {
             const start = new Date(latestTx.date);
             start.setDate(start.getDate() - 7); // 7 days safety overlap with previous imports
-            // Start from whichever date provides the requested historical reach or CSV bridge
+            // Start from latest transaction overlap, but NEVER query older than the max lookback window (prevents bank SCA session invalidation)
             const chosenStart =
-              start.getTime() < defaultStart.getTime() ? start : defaultStart;
+              start.getTime() > defaultStart.getTime() ? start : defaultStart;
             dateFrom = chosenStart.toISOString().split('T')[0];
           } else {
             dateFrom = defaultStart.toISOString().split('T')[0];
