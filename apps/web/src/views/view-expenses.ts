@@ -1543,10 +1543,19 @@ export class ViewExpenses extends LitElement {
       const result = await bankSyncApi.syncTransactions(this.selectedAccountId || undefined);
       const newCount = result?.newCount ?? 0;
       const duplicateCount = result?.duplicateCount ?? 0;
-      const msg = i18n.t('bank_sync.sync_success')
-        .replace('{newCount}', String(newCount))
-        .replace('{duplicateCount}', String(duplicateCount));
-      alert(msg);
+      const expiredAcc = result?.accountsSynced?.find((a: any) => a.status === 'EXPIRED');
+      const errorAcc = result?.accountsSynced?.find((a: any) => a.status === 'ERROR');
+
+      if (expiredAcc) {
+        alert(`⚠️ ${expiredAcc.accountName}: ${expiredAcc.message || 'La sesión del banco ha expirado. Por favor, ve a Configuración para re-autenticar.'}`);
+      } else if (errorAcc && newCount === 0 && duplicateCount === 0) {
+        alert(`⚠️ ${errorAcc.accountName}: ${errorAcc.message || 'Error al sincronizar con el banco.'}`);
+      } else {
+        const msg = i18n.t('bank_sync.sync_success')
+          .replace('{newCount}', String(newCount))
+          .replace('{duplicateCount}', String(duplicateCount));
+        alert(msg);
+      }
       await this.loadData(true);
     } catch (e: any) {
       console.error('Bank sync failed', e);
