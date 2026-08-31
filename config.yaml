@@ -1,6 +1,6 @@
 name: "Personal Finance Tracker"
 description: "A comprehensive personal finance tracker with expense tracking, savings goals, and reporting."
-version: "1.17.0"
+version: "1.17.1"
 slug: "priperfin"
 image: "ghcr.io/jimartincorral/priperfin-{arch}"
 
