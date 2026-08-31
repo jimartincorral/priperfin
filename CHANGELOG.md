@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.17.14 - 2026-08-31
+
+- Fixed container startup crash by keeping `prisma` and `@prisma/config` in production dependencies for `run.sh` database schema synchronization (`prisma db push`).
+
 ## v1.17.13 - 2026-08-31
 
 - Updated `CHANGELOG.md` with complete historical release notes so they are visible during Home Assistant add-on updates.
