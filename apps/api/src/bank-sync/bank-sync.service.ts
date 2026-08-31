@@ -25,6 +25,8 @@ export class BankSyncService {
   private readonly SETTING_REDIRECT_URL = 'enable_banking_redirect_url';
   private readonly SETTING_AUTO_SYNC_ENABLED =
     'enable_banking_auto_sync_enabled';
+  private readonly SETTING_INITIAL_LOOKBACK_DAYS =
+    'enable_banking_initial_lookback_days';
 
   constructor(
     private prisma: PrismaService,
@@ -110,28 +112,43 @@ export class BankSyncService {
   }
 
   async getSettings(): Promise<BankSyncSettingsResponse> {
-    const [appIdSetting, keySetting, redirectUrlSetting, autoSyncSetting] =
-      await Promise.all([
-        this.prisma.setting.findUnique({ where: { key: this.SETTING_APP_ID } }),
-        this.prisma.setting.findUnique({ where: { key: this.SETTING_KEY } }),
-        this.prisma.setting.findUnique({
-          where: { key: this.SETTING_REDIRECT_URL },
-        }),
-        this.prisma.setting.findUnique({
-          where: { key: this.SETTING_AUTO_SYNC_ENABLED },
-        }),
-      ]);
+    const [
+      appIdSetting,
+      keySetting,
+      redirectUrlSetting,
+      autoSyncSetting,
+      lookbackSetting,
+    ] = await Promise.all([
+      this.prisma.setting.findUnique({ where: { key: this.SETTING_APP_ID } }),
+      this.prisma.setting.findUnique({ where: { key: this.SETTING_KEY } }),
+      this.prisma.setting.findUnique({
+        where: { key: this.SETTING_REDIRECT_URL },
+      }),
+      this.prisma.setting.findUnique({
+        where: { key: this.SETTING_AUTO_SYNC_ENABLED },
+      }),
+      this.prisma.setting.findUnique({
+        where: { key: this.SETTING_INITIAL_LOOKBACK_DAYS },
+      }),
+    ]);
 
     // Defaults to true when credentials exist unless explicitly turned off ('false')
     const autoSyncEnabled = autoSyncSetting
       ? autoSyncSetting.value === 'true'
       : true;
 
+    const initialLookbackDays = lookbackSetting?.value
+      ? parseInt(lookbackSetting.value, 10)
+      : 90;
+
     return {
       hasAppId: !!appIdSetting?.value,
       hasKey: !!keySetting?.value,
       redirectUrl: redirectUrlSetting?.value || null,
       autoSyncEnabled,
+      initialLookbackDays: isNaN(initialLookbackDays)
+        ? 90
+        : initialLookbackDays,
     };
   }
 
@@ -174,6 +191,17 @@ export class BankSyncService {
         create: {
           key: this.SETTING_AUTO_SYNC_ENABLED,
           value: dto.autoSyncEnabled ? 'true' : 'false',
+        },
+      });
+    }
+
+    if (dto.initialLookbackDays !== undefined) {
+      await this.prisma.setting.upsert({
+        where: { key: this.SETTING_INITIAL_LOOKBACK_DAYS },
+        update: { value: dto.initialLookbackDays.toString() },
+        create: {
+          key: this.SETTING_INITIAL_LOOKBACK_DAYS,
+          value: dto.initialLookbackDays.toString(),
         },
       });
     }
@@ -532,6 +560,11 @@ export class BankSyncService {
           syncStart.setDate(syncStart.getDate() - 5); // 5 days safety overlap
           dateFrom = syncStart.toISOString().split('T')[0];
         } else {
+          const syncSettings = await this.getSettings();
+          const lookbackDays = syncSettings.initialLookbackDays || 90;
+          const defaultStart = new Date();
+          defaultStart.setDate(defaultStart.getDate() - lookbackDays);
+
           // First Sync: look for latest existing transaction on this account to establish overlap
           const latestTx = await this.prisma.transaction.findFirst({
             where: { accountId: account.id, profileId },
@@ -540,10 +573,11 @@ export class BankSyncService {
           if (latestTx) {
             const start = new Date(latestTx.date);
             start.setDate(start.getDate() - 7); // 7 days safety overlap with previous imports
-            dateFrom = start.toISOString().split('T')[0];
+            // Start from whichever date provides the requested historical reach or CSV bridge
+            const chosenStart =
+              start.getTime() < defaultStart.getTime() ? start : defaultStart;
+            dateFrom = chosenStart.toISOString().split('T')[0];
           } else {
-            const defaultStart = new Date();
-            defaultStart.setDate(defaultStart.getDate() - 30);
             dateFrom = defaultStart.toISOString().split('T')[0];
           }
         }

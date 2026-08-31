@@ -79,7 +79,25 @@ describe('BankSyncService', () => {
         hasKey: true,
         redirectUrl: 'https://example.com/callback',
         autoSyncEnabled: true,
+        initialLookbackDays: 90,
       });
+    });
+
+    it('should respect custom initialLookbackDays setting', async () => {
+      mockPrismaService.setting.findUnique.mockImplementation(
+        ({ where }: any) => {
+          if (where.key === 'enable_banking_app_id')
+            return Promise.resolve({ value: 'my-app-id' });
+          if (where.key === 'enable_banking_key')
+            return Promise.resolve({ value: 'my-key' });
+          if (where.key === 'enable_banking_initial_lookback_days')
+            return Promise.resolve({ value: '180' });
+          return Promise.resolve(null);
+        },
+      );
+
+      const result = await service.getSettings();
+      expect(result.initialLookbackDays).toBe(180);
     });
 
     it('should respect disabled autoSyncEnabled setting', async () => {

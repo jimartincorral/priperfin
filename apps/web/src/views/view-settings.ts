@@ -63,6 +63,7 @@ export class ViewSettings extends LitElement {
     @state() bankSyncLoading = false;
     @state() bankConnecting = false;
     @state() bankAuthUrl: string | null = null;
+    @state() initialLookbackDays = 90;
 
     // Cost Objects management
     @state() costObjects: any[] = [];
@@ -434,7 +435,8 @@ export class ViewSettings extends LitElement {
             this.costObjects = costObjs || [];
             this.currentProfile = profile?.profile || null;
             this.profiles = allProfiles || [];
-            this.bankSyncSettings = bankSettings || { hasAppId: false, hasKey: false, redirectUrl: null, autoSyncEnabled: true };
+            this.bankSyncSettings = bankSettings || { hasAppId: false, hasKey: false, redirectUrl: null, autoSyncEnabled: true, initialLookbackDays: 90 };
+            this.initialLookbackDays = bankSettings?.initialLookbackDays || 90;
             this.bankConnections = bankConns || [];
             if (bankSettings?.redirectUrl) {
                 this.bankRedirectUrl = bankSettings.redirectUrl;
@@ -722,6 +724,17 @@ export class ViewSettings extends LitElement {
         } catch (e: any) {
             console.error('Failed to update auto-sync setting', e);
             checkbox.checked = !autoSyncEnabled;
+            alert(i18n.t('bank_sync.save_failed') + ': ' + (e.message || 'Unknown error'));
+        }
+    }
+
+    async updateInitialLookback(days: number) {
+        this.initialLookbackDays = days;
+        try {
+            const result = await bankSyncApi.saveSettings({ initialLookbackDays: days });
+            this.bankSyncSettings = { ...this.bankSyncSettings, ...result };
+        } catch (e: any) {
+            console.error('Failed to update initial lookback setting', e);
             alert(i18n.t('bank_sync.save_failed') + ': ' + (e.message || 'Unknown error'));
         }
     }
@@ -1512,7 +1525,7 @@ export class ViewSettings extends LitElement {
                 </div>
 
                 <!-- Daily Automated Sync Option -->
-                <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; background: var(--md-sys-color-surface-container); border-radius: 8px; margin-bottom: 20px;">
+                <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; background: var(--md-sys-color-surface-container); border-radius: 8px; margin-bottom: 12px;">
                     <div>
                         <div style="font-weight: 500; font-size: 0.9rem;">
                             🕒 ${i18n.t('bank_sync.auto_sync_label')}
@@ -1532,6 +1545,29 @@ export class ViewSettings extends LitElement {
                             <span style="position: absolute; height: 16px; width: 16px; left: ${this.bankSyncSettings.autoSyncEnabled !== false ? '22px' : '3px'}; bottom: 3px; background-color: var(--md-sys-color-surface); transition: .3s; border-radius: 50%;"></span>
                         </span>
                     </label>
+                </div>
+
+                <!-- Initial Lookback Option -->
+                <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; background: var(--md-sys-color-surface-container); border-radius: 8px; margin-bottom: 20px; flex-wrap: wrap; gap: 12px;">
+                    <div style="flex: 1; min-width: 240px;">
+                        <div style="font-weight: 500; font-size: 0.9rem;">
+                            📅 ${i18n.t('bank_sync.initial_lookback_label')}
+                        </div>
+                        <div style="font-size: 0.75rem; color: var(--md-sys-color-on-surface-variant);">
+                            ${i18n.t('bank_sync.initial_lookback_desc')}
+                        </div>
+                    </div>
+                    <select
+                        style="width: auto; min-width: 220px; flex-shrink: 0;"
+                        .value="${String(this.initialLookbackDays)}"
+                        @change="${(e: any) => this.updateInitialLookback(parseInt(e.target.value, 10))}"
+                    >
+                        <option value="30">${i18n.t('bank_sync.lookback_30')}</option>
+                        <option value="90">${i18n.t('bank_sync.lookback_90')}</option>
+                        <option value="180">${i18n.t('bank_sync.lookback_180')}</option>
+                        <option value="365">${i18n.t('bank_sync.lookback_365')}</option>
+                        <option value="730">${i18n.t('bank_sync.lookback_730')}</option>
+                    </select>
                 </div>
 
                 <!-- API Credentials Config Form -->

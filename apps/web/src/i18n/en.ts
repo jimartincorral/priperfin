@@ -499,6 +499,13 @@ export const en = {
         not_configured: 'Not Configured',
         auto_sync_label: 'Daily automatic sync (06:00 AM)',
         auto_sync_desc: 'Automatically synchronizes and imports bank movements once per day in the background without manual intervention.',
+        initial_lookback_label: 'Initial sync historical lookback',
+        initial_lookback_desc: 'Determines how many days of historical transactions to request from the bank when an account is first synced.',
+        lookback_30: '30 days (1 month)',
+        lookback_90: '90 days (3 months - PSD2 Standard)',
+        lookback_180: '180 days (6 months)',
+        lookback_365: '365 days (1 year)',
+        lookback_730: '730 days (2 years - Maximum)',
         
         connections_title: 'Connected Banks',
         connect_bank_btn: '+ Connect Bank',

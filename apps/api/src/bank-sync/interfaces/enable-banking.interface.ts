@@ -97,6 +97,7 @@ export interface BankSyncSettingsDto {
   key?: string;
   redirectUrl?: string;
   autoSyncEnabled?: boolean;
+  initialLookbackDays?: number;
 }
 
 export interface BankSyncSettingsResponse {
@@ -104,4 +105,5 @@ export interface BankSyncSettingsResponse {
   hasKey: boolean;
   redirectUrl: string | null;
   autoSyncEnabled: boolean;
+  initialLookbackDays: number;
 }
