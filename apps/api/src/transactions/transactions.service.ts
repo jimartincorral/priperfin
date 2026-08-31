@@ -413,9 +413,10 @@ export class TransactionsService {
       importedTempId: string;
     }> = [],
     profileId: string,
+    skipDuplicatesAndInsert: boolean = false,
   ) {
     this.logger.log(
-      `createMany called with ${dtos?.length} transactions, force=${force}`,
+      `createMany called with ${dtos?.length} transactions, force=${force}, skipDuplicatesAndInsert=${skipDuplicatesAndInsert}`,
     );
 
     if (!dtos || !Array.isArray(dtos)) {
@@ -588,7 +589,7 @@ export class TransactionsService {
       `createMany: ${newTransactions.length} new, ${duplicates.length} duplicates`,
     );
 
-    if (!force && duplicates.length > 0) {
+    if (!force && !skipDuplicatesAndInsert && duplicates.length > 0) {
       return {
         newCount: newTransactions.length,
         duplicateCount: duplicates.length,
@@ -605,13 +606,15 @@ export class TransactionsService {
       };
     }
 
-    const manualMatches = await this.findManualMatches(
-      enhancedDtos,
-      newTransactions,
-      profileId,
-    );
+    const manualMatches = !skipDuplicatesAndInsert
+      ? await this.findManualMatches(
+          enhancedDtos,
+          newTransactions,
+          profileId,
+        )
+      : [];
 
-    if (!force && manualMatches.length > 0) {
+    if (!force && !skipDuplicatesAndInsert && manualMatches.length > 0) {
       return {
         newCount: newTransactions.length,
         duplicateCount: 0,
@@ -847,17 +850,61 @@ export class TransactionsService {
     return { message: 'Splits deleted successfully' };
   }
 
-  private calculateDescriptionSimilarity(desc1: string, desc2: string): number {
-    const lower1 = desc1.toLowerCase();
-    const lower2 = desc2.toLowerCase();
+  normalizeBankingText(text: string): string {
+    if (!text) return '';
+    return text
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '') // remove accents
+      .replace(
+        /\b(compra en|pago en|recibo de|transferencia de|transf|bizum de|pago|compra|recibo|bizum|tarjeta|tarj|debit|crdt|s\.?a\.?|s\.?l\.?|s\.?l\.?u\.?|s\.?c\.?|es)\b/gi,
+        ' ',
+      )
+      .replace(/\b\d{2}[:/]\d{2}([:/]\d{2,4})?\b/g, ' ') // remove dates and times
+      .replace(/[*#_\\/\-,.:;]/g, ' ') // remove special chars
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
 
-    if (lower1.includes(lower2) || lower2.includes(lower1)) {
+  calculateDescriptionSimilarity(desc1: string, desc2: string): number {
+    if (!desc1 || !desc2) return 0;
+    const raw1 = desc1.toLowerCase().trim();
+    const raw2 = desc2.toLowerCase().trim();
+
+    if (raw1 === raw2 || raw1.includes(raw2) || raw2.includes(raw1)) {
       return 100;
     }
 
-    const distance = this.levenshteinDistance(lower1, lower2);
-    const maxLen = Math.max(desc1.length, desc2.length);
-    const similarity = ((maxLen - distance) / maxLen) * 100;
+    const norm1 = this.normalizeBankingText(desc1);
+    const norm2 = this.normalizeBankingText(desc2);
+
+    if (norm1 && norm2) {
+      if (norm1 === norm2 || norm1.includes(norm2) || norm2.includes(norm1)) {
+        return 100;
+      }
+
+      // Token set overlap (Jaccard on words)
+      const tokens1 = new Set(norm1.split(/\s+/).filter((w) => w.length > 1));
+      const tokens2 = new Set(norm2.split(/\s+/).filter((w) => w.length > 1));
+
+      if (tokens1.size > 0 && tokens2.size > 0) {
+        let intersection = 0;
+        tokens1.forEach((t) => {
+          if (tokens2.has(t)) intersection++;
+        });
+        const union = new Set([...tokens1, ...tokens2]).size;
+        const jaccard = (intersection / union) * 100;
+        if (jaccard >= 40) {
+          return Math.max(jaccard, 80);
+        }
+      }
+    }
+
+    const compare1 = norm1 || raw1;
+    const compare2 = norm2 || raw2;
+    const distance = this.levenshteinDistance(compare1, compare2);
+    const maxLen = Math.max(compare1.length, compare2.length);
+    const similarity = maxLen > 0 ? ((maxLen - distance) / maxLen) * 100 : 0;
 
     return similarity;
   }

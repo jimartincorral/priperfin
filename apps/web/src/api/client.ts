@@ -282,3 +282,47 @@ export const authApi = {
     },
 };
 
+// Bank Sync API methods (Enable Banking)
+export const bankSyncApi = {
+    async getSettings() {
+        return api.get('/bank-sync/settings');
+    },
+
+    async saveSettings(data: { appId?: string; key?: string; redirectUrl?: string; autoSyncEnabled?: boolean }) {
+        return api.post('/bank-sync/settings', data);
+    },
+
+    async getBanks(country: string = 'ES') {
+        return api.get(`/bank-sync/banks?country=${encodeURIComponent(country)}`);
+    },
+
+    async startAuth(data: { aspspName: string; country?: string; redirectUrl?: string }) {
+        return api.post('/bank-sync/auth', data);
+    },
+
+    async handleCallback(code: string) {
+        return api.post('/bank-sync/callback', { code });
+    },
+
+    async getConnections() {
+        return api.get('/bank-sync/connections');
+    },
+
+    async deleteConnection(id: string) {
+        return api.delete(`/bank-sync/connections/${id}`);
+    },
+
+    async linkAccount(accountId: string, bankAccountUid: string, connectionId: string) {
+        return api.post('/bank-sync/link-account', { accountId, bankAccountUid, connectionId });
+    },
+
+    async unlinkAccount(accountId: string) {
+        return api.post('/bank-sync/unlink-account', { accountId });
+    },
+
+    async syncTransactions(accountId?: string) {
+        return api.post('/bank-sync/sync', { accountId });
+    },
+};
+
+

@@ -152,8 +152,7 @@ describe('SavingsGoalsService', () => {
 
     it('should handle edge case of 1 month remaining', () => {
       const now = new Date();
-      const futureDate = new Date(now);
-      futureDate.setMonth(futureDate.getMonth() + 1);
+      const futureDate = new Date(now.getFullYear(), now.getMonth() + 1, 1);
 
       const target = 500;
       const saved = 200;

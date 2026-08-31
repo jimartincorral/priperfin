@@ -136,6 +136,9 @@ exports.Prisma.AccountScalarFieldEnum = {
   initialBalance: 'initialBalance',
   type: 'type',
   profileId: 'profileId',
+  bankConnectionId: 'bankConnectionId',
+  bankAccountUid: 'bankAccountUid',
+  lastSyncedAt: 'lastSyncedAt',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 };
@@ -239,6 +242,20 @@ exports.Prisma.ProfileScalarFieldEnum = {
   updatedAt: 'updatedAt'
 };
 
+exports.Prisma.BankConnectionScalarFieldEnum = {
+  id: 'id',
+  provider: 'provider',
+  aspspName: 'aspspName',
+  aspspCountry: 'aspspCountry',
+  aspspLogoUrl: 'aspspLogoUrl',
+  sessionId: 'sessionId',
+  validUntil: 'validUntil',
+  accountsJson: 'accountsJson',
+  profileId: 'profileId',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
 exports.Prisma.SessionScalarFieldEnum = {
   id: 'id',
   profileId: 'profileId',
@@ -311,6 +328,7 @@ exports.Prisma.ModelName = {
   SavingsGoal: 'SavingsGoal',
   Setting: 'Setting',
   Profile: 'Profile',
+  BankConnection: 'BankConnection',
   Session: 'Session',
   MonthlyBalance: 'MonthlyBalance',
   AccountBalance: 'AccountBalance'

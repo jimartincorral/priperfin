@@ -19,7 +19,9 @@ import { CostObjectsModule } from './cost-objects/cost-objects.module';
 import { AccountBalancesModule } from './account-balances/account-balances.module';
 import { RulesModule } from './rules/rules.module';
 import { AuthModule } from './auth/auth.module';
+import { BankSyncModule } from './bank-sync/bank-sync.module';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 
 // Note: Static file serving is now handled by AppController
 // This provides better control over Home Assistant Ingress path handling
@@ -27,6 +29,7 @@ import { ConfigModule } from '@nestjs/config';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }), // Load .env files and make ConfigService available globally
+    ScheduleModule.forRoot(),
     ThrottlerModule.forRoot([
       {
         name: 'default',
@@ -70,6 +73,7 @@ import { ConfigModule } from '@nestjs/config';
           CostObjectsModule,
           AccountBalancesModule,
           RulesModule,
+          BankSyncModule,
         ],
       },
     ]),
@@ -88,6 +92,7 @@ import { ConfigModule } from '@nestjs/config';
     CostObjectsModule,
     AccountBalancesModule,
     RulesModule,
+    BankSyncModule,
   ],
   controllers: [AppController],
 

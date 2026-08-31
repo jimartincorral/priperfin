@@ -1,6 +1,6 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
-import { api } from '../api/client';
+import { api, bankSyncApi } from '../api/client';
 import '../components/csv-wizard';
 import '../components/split-transaction-modal';
 import '../components/rule-editor';
@@ -23,6 +23,7 @@ export class ViewExpenses extends LitElement {
   @state() customStartDate = '';
   @state() customEndDate = '';
   @state() loading = false;
+  @state() bankSyncing = false;
 
   @state() totalBalance = 0;
   @state() verifiedBalance = 0;
@@ -1536,6 +1537,25 @@ export class ViewExpenses extends LitElement {
     await this.loadData(true);
   }
 
+  async handleBankSync() {
+    this.bankSyncing = true;
+    try {
+      const result = await bankSyncApi.syncTransactions(this.selectedAccountId || undefined);
+      const newCount = result?.newCount ?? 0;
+      const duplicateCount = result?.duplicateCount ?? 0;
+      const msg = i18n.t('bank_sync.sync_success')
+        .replace('{newCount}', String(newCount))
+        .replace('{duplicateCount}', String(duplicateCount));
+      alert(msg);
+      await this.loadData(true);
+    } catch (e: any) {
+      console.error('Bank sync failed', e);
+      alert(i18n.t('bank_sync.sync_failed') + ': ' + (e.message || 'Unknown error'));
+    } finally {
+      this.bankSyncing = false;
+    }
+  }
+
   // Helper to handle select change
   async handleCategoryChange(e: Event, tx: any) {
     const select = e.target as HTMLSelectElement;
@@ -1979,11 +1999,14 @@ Tables: ${result.tables?.join(', ')}`;
 
         <!-- Advanced Filters Row -->
         <div style="display: flex; gap: 16px; align-items: center; flex-wrap: wrap; padding: 12px; background: var(--md-sys-color-surface-container); border-radius: 12px;">
-            <div style="display: flex; gap: 1rem;">
+            <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
                 <button class="btn-primary" @click="${() => this.showAddForm = !this.showAddForm}">
                     ${this.showAddForm ? i18n.t('common.cancel') : '+ ' + i18n.t('expenses.add_transaction')}
                 </button>
                 <button class="btn-secondary" @click="${() => this.showWizard = true}">${i18n.t('expenses.import_csv')}</button>
+                <button class="btn-secondary" @click="${this.handleBankSync}" ?disabled="${this.bankSyncing}" title="${i18n.t('bank_sync.sync_all')}">
+                    ${this.bankSyncing ? '⏳ ' + i18n.t('bank_sync.syncing') : '🔄 ' + i18n.t('bank_sync.sync_all')}
+                </button>
             </div>
 
             <div style="width: 1px; height: 32px; background: var(--md-sys-color-outline-variant);"></div>

@@ -10,6 +10,8 @@ apps/*/release/
 # Database (local dev only)
 *.db
 *.db-journal
+*.db-shm
+*.db-wal
 
 # Environment files
 .env
