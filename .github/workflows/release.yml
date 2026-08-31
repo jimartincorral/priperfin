@@ -49,7 +49,6 @@ jobs:
           args: |
             --aarch64 \
             --amd64 \
-            --armv7 \
             --target . \
             --image "priperfin-{arch}" \
             --docker-hub "ghcr.io/${{ github.repository_owner }}"
