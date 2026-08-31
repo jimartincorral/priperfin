@@ -104,24 +104,25 @@ The add-on runs on port 3000 with Ingress support and is available on aarch64, a
 ### Release Process
 
 1. **Update Version**: Increment the `version` field in `config.yaml` (e.g., `1.4.7` -> `1.5.0`).
-2. **Commit & Push**: Commit the version bump and any other changes, then push to `main`.
-3. **Create Release**: Create a GitHub Release matching the version in `config.yaml`.
+2. **Update Changelog**: Add release notes entry to `CHANGELOG.md` for Home Assistant update dialog.
+3. **Commit & Push**: Commit the version bump and any other changes, then push to `main`.
+4. **Create Release**: Create a GitHub Release matching the version in `config.yaml`.
    - **Tag**: `vX.Y.Z` (must match `config.yaml` version)
    - **Title**: `vX.Y.Z`
    - **Description**: Detailed summary of changes.
 
 ### Quick Release Command
 ```bash
-# 1. Update config.yaml first!
+# 1. Update config.yaml and CHANGELOG.md first!
 # 2. Commit and push:
-git add config.yaml
+git add config.yaml CHANGELOG.md
 git commit -m "chore: bump version to vX.Y.Z"
 git push origin main
 
 # 3. Create tag and release:
 git tag vX.Y.Z
 git push origin vX.Y.Z
-gh release create vX.Y.Z --title "vX.Y.Z" --notes "Release notes here"
+gh release create vX.Y.Z --title "vX.Y.Z" --generate-notes
 ```
 
 ## Development Notes
