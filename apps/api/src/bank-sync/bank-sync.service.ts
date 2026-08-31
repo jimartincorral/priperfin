@@ -12,6 +12,7 @@ import {
   BankSyncSettingsDto,
   BankSyncSettingsResponse,
   BankAccountDetails,
+  TransactionsResponse,
 } from './interfaces/enable-banking.interface';
 import { CreateTransactionDto } from '../transactions/create-transaction.dto';
 import * as crypto from 'crypto';
@@ -689,17 +690,32 @@ export class BankSyncService {
           continue;
         }
 
-        const response = await this.enableBankingService.getAccountTransactions(
-          targetUid,
-          appId,
-          key,
-          dateFrom,
-          dateTo,
-        );
+        const rawTransactions: any[] = [];
+        let continuationKey: string | undefined = undefined;
+        let pageCount = 0;
+        const maxPages = 25; // safety ceiling (supports thousands of transactions)
 
-        const rawTransactions = response.transactions || [];
+        do {
+          pageCount++;
+          const response: TransactionsResponse =
+            await this.enableBankingService.getAccountTransactions(
+              targetUid,
+              appId,
+              key,
+              dateFrom,
+              dateTo,
+              continuationKey,
+            );
+
+          if (response?.transactions && Array.isArray(response.transactions)) {
+            rawTransactions.push(...response.transactions);
+          }
+
+          continuationKey = response?.continuation_key || undefined;
+        } while (continuationKey && pageCount < maxPages);
+
         this.logger.log(
-          `Received ${rawTransactions.length} raw transactions for ${account.name}`,
+          `Received ${rawTransactions.length} raw transactions across ${pageCount} page(s) for ${account.name}`,
         );
 
         // Map to CreateTransactionDto
