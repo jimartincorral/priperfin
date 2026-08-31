@@ -61,12 +61,17 @@ describe('BankSyncService', () => {
 
   describe('getSettings', () => {
     it('should return settings status accurately', async () => {
-      mockPrismaService.setting.findUnique.mockImplementation(({ where }: any) => {
-        if (where.key === 'enable_banking_app_id') return Promise.resolve({ value: 'my-app-id' });
-        if (where.key === 'enable_banking_key') return Promise.resolve({ value: 'my-key' });
-        if (where.key === 'enable_banking_redirect_url') return Promise.resolve({ value: 'https://example.com/callback' });
-        return Promise.resolve(null);
-      });
+      mockPrismaService.setting.findUnique.mockImplementation(
+        ({ where }: any) => {
+          if (where.key === 'enable_banking_app_id')
+            return Promise.resolve({ value: 'my-app-id' });
+          if (where.key === 'enable_banking_key')
+            return Promise.resolve({ value: 'my-key' });
+          if (where.key === 'enable_banking_redirect_url')
+            return Promise.resolve({ value: 'https://example.com/callback' });
+          return Promise.resolve(null);
+        },
+      );
 
       const result = await service.getSettings();
       expect(result).toEqual({
@@ -78,12 +83,17 @@ describe('BankSyncService', () => {
     });
 
     it('should respect disabled autoSyncEnabled setting', async () => {
-      mockPrismaService.setting.findUnique.mockImplementation(({ where }: any) => {
-        if (where.key === 'enable_banking_app_id') return Promise.resolve({ value: 'my-app-id' });
-        if (where.key === 'enable_banking_key') return Promise.resolve({ value: 'my-key' });
-        if (where.key === 'enable_banking_auto_sync_enabled') return Promise.resolve({ value: 'false' });
-        return Promise.resolve(null);
-      });
+      mockPrismaService.setting.findUnique.mockImplementation(
+        ({ where }: any) => {
+          if (where.key === 'enable_banking_app_id')
+            return Promise.resolve({ value: 'my-app-id' });
+          if (where.key === 'enable_banking_key')
+            return Promise.resolve({ value: 'my-key' });
+          if (where.key === 'enable_banking_auto_sync_enabled')
+            return Promise.resolve({ value: 'false' });
+          return Promise.resolve(null);
+        },
+      );
 
       const result = await service.getSettings();
       expect(result.autoSyncEnabled).toBe(false);
@@ -92,19 +102,26 @@ describe('BankSyncService', () => {
 
   describe('startAuth', () => {
     it('should call startAuth on EnableBankingService with Abanca details and redirect URL', async () => {
-      mockPrismaService.setting.findUnique.mockImplementation(({ where }: any) => {
-        if (where.key === 'enable_banking_app_id') return Promise.resolve({ value: 'my-app-id' });
-        if (where.key === 'enable_banking_key') return Promise.resolve({ value: 'my-key' });
-        if (where.key === 'enable_banking_redirect_url') return Promise.resolve({ value: 'https://example.com/callback' });
-        return Promise.resolve(null);
-      });
+      mockPrismaService.setting.findUnique.mockImplementation(
+        ({ where }: any) => {
+          if (where.key === 'enable_banking_app_id')
+            return Promise.resolve({ value: 'my-app-id' });
+          if (where.key === 'enable_banking_key')
+            return Promise.resolve({ value: 'my-key' });
+          if (where.key === 'enable_banking_redirect_url')
+            return Promise.resolve({ value: 'https://example.com/callback' });
+          return Promise.resolve(null);
+        },
+      );
 
       mockEnableBankingService.startAuth.mockResolvedValue({
         url: 'https://auth.enablebanking.com/aspsp/abanca-auth-link',
       });
 
       const result = await service.startAuth('Abanca', 'ES');
-      expect(result.url).toBe('https://auth.enablebanking.com/aspsp/abanca-auth-link');
+      expect(result.url).toBe(
+        'https://auth.enablebanking.com/aspsp/abanca-auth-link',
+      );
       expect(result.state).toBeDefined();
       expect(mockEnableBankingService.startAuth).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -119,11 +136,15 @@ describe('BankSyncService', () => {
 
   describe('handleCallback', () => {
     it('should exchange code for session and store bank connection', async () => {
-      mockPrismaService.setting.findUnique.mockImplementation(({ where }: any) => {
-        if (where.key === 'enable_banking_app_id') return Promise.resolve({ value: 'my-app-id' });
-        if (where.key === 'enable_banking_key') return Promise.resolve({ value: 'my-key' });
-        return Promise.resolve(null);
-      });
+      mockPrismaService.setting.findUnique.mockImplementation(
+        ({ where }: any) => {
+          if (where.key === 'enable_banking_app_id')
+            return Promise.resolve({ value: 'my-app-id' });
+          if (where.key === 'enable_banking_key')
+            return Promise.resolve({ value: 'my-key' });
+          return Promise.resolve(null);
+        },
+      );
 
       mockEnableBankingService.createSession.mockResolvedValue({
         session_id: 'session-123',
@@ -150,7 +171,9 @@ describe('BankSyncService', () => {
       expect(result.connectionId).toBe('conn-1');
       expect(result.aspspName).toBe('Abanca');
       expect(result.accounts.length).toBe(1);
-      expect(result.accounts[0].account_id?.iban).toBe('ES9120800000000000000000');
+      expect(result.accounts[0].account_id?.iban).toBe(
+        'ES9120800000000000000000',
+      );
     });
   });
 });

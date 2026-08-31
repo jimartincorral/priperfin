@@ -1,4 +1,9 @@
-import { Injectable, Logger, BadRequestException, InternalServerErrorException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  BadRequestException,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import * as crypto from 'crypto';
 import {
   Aspsp,
@@ -33,8 +38,12 @@ export class EnableBankingService {
         exp: now + 3600, // Valid for 1 hour
       };
 
-      const encodedHeader = Buffer.from(JSON.stringify(header)).toString('base64url');
-      const encodedPayload = Buffer.from(JSON.stringify(payload)).toString('base64url');
+      const encodedHeader = Buffer.from(JSON.stringify(header)).toString(
+        'base64url',
+      );
+      const encodedPayload = Buffer.from(JSON.stringify(payload)).toString(
+        'base64url',
+      );
       const signInput = `${encodedHeader}.${encodedPayload}`;
 
       const signer = crypto.createSign('RSA-SHA256');
@@ -43,8 +52,13 @@ export class EnableBankingService {
 
       return `${signInput}.${signature}`;
     } catch (error) {
-      this.logger.error('Failed to generate RS256 JWT for Enable Banking:', error);
-      throw new BadRequestException('Invalid RSA private key or Application ID format');
+      this.logger.error(
+        'Failed to generate RS256 JWT for Enable Banking:',
+        error,
+      );
+      throw new BadRequestException(
+        'Invalid RSA private key or Application ID format',
+      );
     }
   }
 
@@ -83,7 +97,8 @@ export class EnableBankingService {
           errorBody,
         );
         throw new BadRequestException(
-          errorBody?.message || `Enable Banking API returned HTTP ${response.status}`,
+          errorBody?.message ||
+            `Enable Banking API returned HTTP ${response.status}`,
         );
       }
 
@@ -102,7 +117,11 @@ export class EnableBankingService {
   /**
    * List supported ASPSPs (banks) in a given country (e.g. "ES" for Spain)
    */
-  async getBanks(country: string, appId: string, privateKeyPem: string): Promise<{ aspsps: Aspsp[] }> {
+  async getBanks(
+    country: string,
+    appId: string,
+    privateKeyPem: string,
+  ): Promise<{ aspsps: Aspsp[] }> {
     const countryCode = (country || 'ES').toUpperCase();
     return this.request<{ aspsps: Aspsp[] }>(
       `/aspsps?country=${encodeURIComponent(countryCode)}`,

@@ -47,7 +47,9 @@ jobs:
         uses: home-assistant/builder@2025.02.0
         with:
           args: |
-            --all \
+            --aarch64 \
+            --amd64 \
+            --armv7 \
             --target . \
             --image "priperfin-{arch}" \
             --docker-hub "ghcr.io/${{ github.repository_owner }}"
