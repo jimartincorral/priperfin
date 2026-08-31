@@ -5,6 +5,7 @@ import {
   calculateBudgetRemaining,
   paginate,
   getTotalPages,
+  calculateMonthlyStats,
   Transaction,
   Category,
 } from './expense-utils';
@@ -252,6 +253,125 @@ describe('expense-utils', () => {
 
     it('should return 1 for empty data', () => {
       expect(getTotalPages(0, 10)).toBe(1);
+    });
+  });
+
+  // ============================================
+  // calculateMonthlyStats() Tests
+  // ============================================
+  describe('calculateMonthlyStats', () => {
+    const categories: Category[] = [
+      { id: 'cat-salary', name: 'Salary', type: 'INCOME', parentId: null },
+      { id: 'cat-groceries', name: 'Groceries', type: 'EXPENSE', parentId: null },
+      { id: 'cat-shopping', name: 'Shopping', type: 'EXPENSE', parentId: null },
+      { id: 'cat-freelance', name: 'Freelance', type: 'INCOME', parentId: null },
+    ];
+
+    it('should calculate standard income, expenses, and movement net', () => {
+      const txs: Transaction[] = [
+        { id: '1', date: '2026-08-01', description: 'Salary', amount: 3000, categoryId: 'cat-salary' },
+        { id: '2', date: '2026-08-05', description: 'Groceries', amount: -200, categoryId: 'cat-groceries' },
+        { id: '3', date: '2026-08-10', description: 'Shopping', amount: -150, categoryId: 'cat-shopping' },
+        { id: '4', date: '2026-08-15', description: 'Coffee', amount: -5, categoryId: null },
+      ];
+
+      const stats = calculateMonthlyStats(txs, categories);
+      expect(stats.income).toBe(3000);
+      expect(stats.expense).toBe(355);
+      expect(stats.income - stats.expense).toBe(2645);
+    });
+
+    it('should treat positive amounts as income even when categorized as EXPENSE', () => {
+      const txs: Transaction[] = [
+        { id: '1', date: '2026-08-01', description: 'Salary', amount: 3000, categoryId: 'cat-salary' },
+        { id: '2', date: '2026-08-05', description: 'Groceries', amount: -200, categoryId: 'cat-groceries' },
+        // Transfer/refund/cashback assigned to EXPENSE category
+        { id: '3', date: '2026-08-08', description: 'Store Refund', amount: 50, categoryId: 'cat-shopping' },
+        { id: '4', date: '2026-08-12', description: 'Friend transfer', amount: 100, categoryId: 'cat-shopping' },
+      ];
+
+      const stats = calculateMonthlyStats(txs, categories);
+      // Income includes 3000 + 50 + 100 = 3150
+      expect(stats.income).toBe(3150);
+      // Expenses are 200
+      expect(stats.expense).toBe(200);
+      // Net = 3150 - 200 = 2950
+      expect(stats.income - stats.expense).toBe(2950);
+    });
+
+    it('should handle uncategorized inflows as income', () => {
+      const txs: Transaction[] = [
+        { id: '1', date: '2026-08-01', description: 'Bank Inflow', amount: 500, categoryId: null },
+        { id: '2', date: '2026-08-02', description: 'Cash withdrawal', amount: -100, categoryId: null },
+      ];
+
+      const stats = calculateMonthlyStats(txs, categories);
+      expect(stats.income).toBe(500);
+      expect(stats.expense).toBe(100);
+      expect(stats.income - stats.expense).toBe(400);
+    });
+
+    it('should aggregate split transactions without dropping uncategorized splits', () => {
+      const txs: Transaction[] = [
+        { id: '1', date: '2026-08-01', description: 'Salary', amount: 2000, categoryId: 'cat-salary' },
+        {
+          id: '2',
+          date: '2026-08-05',
+          description: 'Department Store',
+          amount: -100,
+          categoryId: null,
+          splits: [
+            { amount: -60, categoryId: 'cat-groceries' },
+            { amount: -40, categoryId: null }, // Uncategorized split
+          ],
+        },
+      ];
+
+      const stats = calculateMonthlyStats(txs, categories);
+      expect(stats.income).toBe(2000);
+      expect(stats.expense).toBe(100); // 60 + 40
+      expect(stats.income - stats.expense).toBe(1900);
+    });
+
+    it('should handle split transactions with mixed income and expenses', () => {
+      const txs: Transaction[] = [
+        {
+          id: '1',
+          date: '2026-08-10',
+          description: 'Supermarket with Cashback',
+          amount: -80,
+          categoryId: null,
+          splits: [
+            { amount: -100, categoryId: 'cat-groceries' },
+            { amount: 20, categoryId: 'cat-shopping' }, // +20 refund/cashback
+          ],
+        },
+      ];
+
+      const stats = calculateMonthlyStats(txs, categories);
+      expect(stats.income).toBe(20);
+      expect(stats.expense).toBe(100);
+      expect(stats.income - stats.expense).toBe(-80);
+    });
+
+    it('should handle negative income adjustments', () => {
+      const txs: Transaction[] = [
+        { id: '1', date: '2026-08-01', description: 'Salary', amount: 3000, categoryId: 'cat-salary' },
+        // Salary clawback or tax correction
+        { id: '2', date: '2026-08-05', description: 'Salary Adjustment', amount: -200, categoryId: 'cat-salary' },
+      ];
+
+      const stats = calculateMonthlyStats(txs, categories);
+      expect(stats.income).toBe(2800); // 3000 - 200
+      expect(stats.expense).toBe(0);
+      expect(stats.income - stats.expense).toBe(2800);
+    });
+
+    it('should return 0 income and 0 expense for empty transactions', () => {
+      const stats = calculateMonthlyStats([], categories);
+      expect(stats.income).toBe(0);
+      expect(stats.expense).toBe(0);
+      expect(stats.income - stats.expense).toBe(0);
     });
   });
 });

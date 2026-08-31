@@ -2,6 +2,13 @@
  * Expense utility functions extracted for testing
  */
 
+export interface TransactionSplit {
+  id?: string;
+  amount: number;
+  categoryId?: string | null;
+  description?: string | null;
+}
+
 export interface Transaction {
   id: string;
   date: string;
@@ -9,11 +16,13 @@ export interface Transaction {
   amount: number;
   categoryId: string | null;
   notes?: string;
+  splits?: TransactionSplit[];
 }
 
 export interface Category {
   id: string;
   name: string;
+  type?: 'INCOME' | 'EXPENSE' | 'GOAL' | string;
   parentId: string | null;
   budget?: number;
 }
@@ -181,4 +190,50 @@ export function paginate<T>(items: T[], page: number, pageSize: number): T[] {
  */
 export function getTotalPages(totalItems: number, pageSize: number): number {
   return Math.ceil(totalItems / pageSize) || 1;
+}
+
+export interface MonthlyStats {
+  income: number;
+  expense: number;
+}
+
+/**
+ * Calculate income and expense sums from transactions.
+ * Positive amounts and INCOME category transactions are counted as income.
+ * Negative amounts are counted as expenses (positive magnitude).
+ * Split transactions are properly aggregated without dropping uncategorized splits.
+ */
+export function calculateMonthlyStats(
+  transactions: Transaction[],
+  categories: Category[],
+): MonthlyStats {
+  let income = 0;
+  let expense = 0;
+
+  const processLine = (amount: number | string, categoryId?: string | null) => {
+    const numAmt = Number(amount);
+    if (!Number.isFinite(numAmt)) return;
+
+    const cat = categoryId ? categories.find((c) => c.id === categoryId) : null;
+    const isIncome = cat?.type === 'INCOME' || numAmt > 0;
+
+    if (isIncome) {
+      income += numAmt;
+    } else {
+      // Expenses are stored as negative, so subtract to get positive magnitude
+      expense -= numAmt;
+    }
+  };
+
+  transactions.forEach((t) => {
+    if (t.splits && t.splits.length > 0) {
+      t.splits.forEach((split) => {
+        processLine(split.amount, split.categoryId);
+      });
+    } else {
+      processLine(t.amount, t.categoryId);
+    }
+  });
+
+  return { income, expense };
 }
