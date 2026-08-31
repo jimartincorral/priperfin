@@ -23,9 +23,12 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   publish:
-    name: Publish Multi-Arch Add-on Images
+    name: Publish (${{ matrix.arch }})
     needs: release
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [aarch64, amd64]
     permissions:
       contents: read
       packages: write
@@ -47,8 +50,8 @@ jobs:
         uses: home-assistant/builder@2025.02.0
         with:
           args: |
-            --aarch64 \
-            --amd64 \
+            --${{ matrix.arch }} \
             --target . \
             --image "priperfin-{arch}" \
-            --docker-hub "ghcr.io/${{ github.repository_owner }}"
+            --docker-hub "ghcr.io/${{ github.repository_owner }}" \
+            --self-cache
