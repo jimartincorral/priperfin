@@ -9,6 +9,7 @@ import 'emoji-picker-element';
 import type { SelectOption } from '../components/filterable-select';
 
 import { i18n } from '../i18n/i18n';
+import { calculateMonthlyStats } from '../utils/expense-utils';
 
 
 type DateFilterMode = 'month' | 'year' | 'custom' | 'all_time';
@@ -655,50 +656,7 @@ export class ViewExpenses extends LitElement {
   }
 
   get monthlyStats() {
-    let income = 0;
-    let expense = 0;
-
-    this.transactions.forEach(t => {
-      // Handle split transactions
-      if (t.splits && t.splits.length > 0) {
-        t.splits.forEach((split: any) => {
-          if (!split.categoryId) return;
-          const splitCat = this.categories.find(c => c.id === split.categoryId);
-          const splitAmt = Number(split.amount);
-
-          // Money back into an expense category is a refund, not income: it nets
-          // against that category's spend, matching the reports
-          const isRefund = splitAmt > 0 && splitCat?.type === 'EXPENSE';
-          // Income if category type is INCOME OR amount is positive
-          const isIncome = !isRefund && ((splitCat?.type === 'INCOME') || splitAmt > 0);
-
-          if (isIncome) {
-            income += splitAmt;
-          } else {
-            // Expenses are stored as negative, so subtract to get positive magnitude
-            expense -= splitAmt;
-          }
-        });
-      } else {
-        // No splits, use parent transaction
-        const cat = this.categories.find(c => c.id === t.categoryId);
-        const amt = Number(t.amount);
-
-        // Money back into an expense category is a refund, not income: it nets
-        // against that category's spend, matching the reports
-        const isRefund = amt > 0 && cat?.type === 'EXPENSE';
-        // Income if category type is INCOME OR amount is positive
-        const isIncome = !isRefund && ((cat?.type === 'INCOME') || amt > 0);
-
-        if (isIncome) {
-          income += amt;
-        } else {
-          // Expenses are stored as negative, so subtract to get positive magnitude
-          expense -= amt;
-        }
-      }
-    });
-    return { income, expense };
+    return calculateMonthlyStats(this.transactions, this.categories);
   }
 
   getPageSizeOptions() {
