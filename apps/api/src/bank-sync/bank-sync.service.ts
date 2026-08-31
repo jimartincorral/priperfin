@@ -345,6 +345,76 @@ export class BankSyncService {
       },
     });
 
+    // Auto-migrate previously linked accounts to the new connection and matching account UIDs
+    try {
+      const oldConnections = await this.prisma.bankConnection.findMany({
+        where: {
+          profileId,
+          aspspName: session.aspsp?.name || 'Bank',
+          id: { not: connection.id },
+        },
+        include: { accounts: true },
+      });
+
+      for (const oldConn of oldConnections) {
+        for (const linkedAcc of oldConn.accounts) {
+          let newMatchedUid: string | null = null;
+          let oldIban: string | null = null;
+          try {
+            const oldDetails = JSON.parse(oldConn.accountsJson);
+            const oldItem = Array.isArray(oldDetails)
+              ? oldDetails.find((d: any) => d.uid === linkedAcc.bankAccountUid)
+              : null;
+            oldIban = oldItem?.account_id?.iban || oldItem?.iban || null;
+          } catch (_err) {
+            // ignore
+          }
+
+          if (oldIban && accountsDetails.length > 0) {
+            const matchByIban = accountsDetails.find(
+              (d: any) =>
+                (d.account_id?.iban && d.account_id.iban === oldIban) ||
+                (d.iban && d.iban === oldIban),
+            );
+            if (matchByIban?.uid) {
+              newMatchedUid = matchByIban.uid;
+            }
+          }
+
+          if (
+            !newMatchedUid &&
+            accountsDetails.length === 1 &&
+            accountsDetails[0]?.uid
+          ) {
+            newMatchedUid = accountsDetails[0].uid;
+          }
+
+          if (newMatchedUid) {
+            await this.prisma.account.update({
+              where: { id: linkedAcc.id },
+              data: {
+                bankConnectionId: connection.id,
+                bankAccountUid: newMatchedUid,
+              },
+            });
+            this.logger.log(
+              `Auto-relinked account ${linkedAcc.name} to new session UID ${newMatchedUid}`,
+            );
+          }
+        }
+
+        // Remove old superseded connection
+        await this.prisma.bankConnection
+          .delete({ where: { id: oldConn.id } })
+          .catch(() => {});
+      }
+    } catch (migErr) {
+      this.logger.warn(
+        'Failed to auto-migrate old bank connection links',
+        migErr,
+      );
+    }
+
     return {
       connectionId: connection.id,
       aspspName: connection.aspspName,
@@ -880,11 +950,29 @@ export class BankSyncService {
         });
       } catch (syncErr: any) {
         this.logger.error(`Error syncing account ${account.name}:`, syncErr);
+        const errMsg = syncErr?.message || syncErr?.response?.message || '';
+        const isSessionExpired =
+          errMsg.toLowerCase().includes('expired') ||
+          syncErr?.status === 401 ||
+          syncErr?.response?.statusCode === 401;
+
+        if (isSessionExpired && account.bankConnectionId) {
+          // Immediately mark connection as expired so UI updates badge
+          await this.prisma.bankConnection
+            .update({
+              where: { id: account.bankConnectionId },
+              data: { validUntil: new Date() },
+            })
+            .catch(() => {});
+        }
+
         accountResults.push({
           accountId: account.id,
           accountName: account.name,
-          status: 'ERROR',
-          message: syncErr.message || 'Sync failed',
+          status: isSessionExpired ? 'EXPIRED' : 'ERROR',
+          message: isSessionExpired
+            ? 'La sesión de autenticación bancaria ha expirado. Por favor, haz clic en "Re-autenticar" en Configuración.'
+            : errMsg || 'Error al sincronizar con el banco',
           newCount: 0,
           duplicateCount: 0,
         });
