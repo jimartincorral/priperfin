@@ -510,6 +510,8 @@ export const es = {
         loading_banks: 'Cargando bancos disponibles...',
         start_auth_btn: 'Continuar a Autenticación Bancaria',
         connecting_redirect: 'Redirigiendo a tu banco para autenticación 2FA...',
+        open_in_new_window: 'Abrir en Ventana Principal / Nueva Pestaña ↗',
+        open_new_window_hint: 'Por seguridad bancaria (X-Frame-Options), la autenticación no se puede mostrar dentro de Home Assistant. Haz clic para abrirla en una ventana principal:',
         no_connections: 'No hay bancos conectados aún. Configura tus credenciales de API y haz clic en "+ Conectar Banco".',
         
         status_active: 'Activo',

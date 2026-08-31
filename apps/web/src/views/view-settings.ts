@@ -62,6 +62,7 @@ export class ViewSettings extends LitElement {
     @state() loadingBanks = false;
     @state() bankSyncLoading = false;
     @state() bankConnecting = false;
+    @state() bankAuthUrl: string | null = null;
 
     // Cost Objects management
     @state() costObjects: any[] = [];
@@ -744,6 +745,7 @@ export class ViewSettings extends LitElement {
             this.showBankCredentialsForm = true;
             return;
         }
+        this.bankAuthUrl = null;
         this.showConnectBankModal = true;
         await this.loadBanksForCountry(this.bankCountry);
     }
@@ -751,6 +753,7 @@ export class ViewSettings extends LitElement {
     async loadBanksForCountry(country: string) {
         this.loadingBanks = true;
         this.bankCountry = country;
+        this.bankAuthUrl = null;
         try {
             const banks = await bankSyncApi.getBanks(country);
             this.availableBanks = banks || [];
@@ -773,6 +776,7 @@ export class ViewSettings extends LitElement {
         }
 
         this.bankConnecting = true;
+        this.bankAuthUrl = null;
         try {
             const redirectUrl = this.bankRedirectUrl || `${window.location.origin}${getAppBasePath(document.baseURI)}settings`;
             const result = await bankSyncApi.startAuth({
@@ -782,13 +786,28 @@ export class ViewSettings extends LitElement {
             });
 
             if (result?.url) {
-                window.location.href = result.url;
+                this.bankAuthUrl = result.url;
+                
+                // Banking authorization cannot run inside an iframe (Home Assistant Ingress) due to X-Frame-Options: DENY.
+                // We navigate the top browser window or open in a new tab/window.
+                if (window.top && window.top !== window) {
+                    try {
+                        window.top.location.href = result.url;
+                        return;
+                    } catch (e) {
+                        // If cross-origin iframe security blocks window.top, open in a new window/tab
+                        window.open(result.url, '_blank', 'noopener,noreferrer');
+                    }
+                } else {
+                    window.location.href = result.url;
+                }
             } else {
                 throw new Error('No authorization URL returned by bank sync API');
             }
         } catch (e: any) {
             console.error('Failed to start bank authorization', e);
             alert(i18n.t('bank_sync.sync_failed') + ': ' + (e.message || 'Unknown error'));
+        } finally {
             this.bankConnecting = false;
         }
     }
@@ -2513,9 +2532,42 @@ export class ViewSettings extends LitElement {
                               </div>
 
                               ${this.bankConnecting
-                                  ? html`<p style="font-size: 0.85rem; color: var(--md-sys-color-primary);">
+                                  ? html`<p style="font-size: 0.85rem; color: var(--md-sys-color-primary); text-align: center; margin: 12px 0;">
                                         🔄 ${i18n.t('bank_sync.connecting_redirect')}
                                     </p>`
+                                  : ''}
+
+                              ${this.bankAuthUrl
+                                  ? html`
+                                        <div
+                                            style="margin: 16px 0; padding: 16px; background: var(--md-sys-color-surface-container-high); border: 1px solid var(--md-sys-color-primary); border-radius: 8px; text-align: center;"
+                                        >
+                                            <p
+                                                style="margin: 0 0 12px 0; font-size: 0.85rem; color: var(--md-sys-color-on-surface-variant);"
+                                            >
+                                                ℹ️ ${i18n.t('bank_sync.open_new_window_hint')}
+                                            </p>
+                                            <div style="display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;">
+                                                <a
+                                                    href="${this.bankAuthUrl}"
+                                                    target="_top"
+                                                    class="btn-primary"
+                                                    style="display: inline-block; text-decoration: none; padding: 8px 16px; font-weight: 500;"
+                                                >
+                                                    ↗️ ${i18n.t('bank_sync.open_in_new_window')}
+                                                </a>
+                                                <a
+                                                    href="${this.bankAuthUrl}"
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    class="btn-secondary"
+                                                    style="display: inline-block; text-decoration: none; padding: 8px 16px; font-weight: 500;"
+                                                >
+                                                    ↗️ Abrir en Nueva Pestaña
+                                                </a>
+                                            </div>
+                                        </div>
+                                    `
                                   : ''}
 
                               <div class="modal-actions">
