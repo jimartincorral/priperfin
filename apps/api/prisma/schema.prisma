@@ -38,17 +38,21 @@ model Category {
 }
 
 model Account {
-  id              String           @id @default(uuid())
-  name            String
-  initialBalance  Decimal          @default(0)
-  type            AccountType      @default(DEBIT)
-  profileId       String
-  profile         Profile          @relation(fields: [profileId], references: [id], onDelete: Cascade)
-  transactions    Transaction[]
-  monthlyBalances MonthlyBalance[]
-  accountBalances AccountBalance[]
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
+  id               String           @id @default(uuid())
+  name             String
+  initialBalance   Decimal          @default(0)
+  type             AccountType      @default(DEBIT)
+  profileId        String
+  profile          Profile          @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  bankConnectionId String?
+  bankConnection   BankConnection?  @relation(fields: [bankConnectionId], references: [id], onDelete: SetNull)
+  bankAccountUid   String?
+  lastSyncedAt     DateTime?
+  transactions     Transaction[]
+  monthlyBalances  MonthlyBalance[]
+  accountBalances  AccountBalance[]
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
   
   @@index([profileId])
 }
@@ -230,8 +234,27 @@ model Profile {
   categorizationRules  CategorizationRule[]
   ruleSuggestions      RuleSuggestion[]
   savingsGoals         SavingsGoal[]
+  bankConnections      BankConnection[]
   
   @@index([name])
+}
+
+model BankConnection {
+  id             String    @id @default(uuid())
+  provider       String    @default("ENABLE_BANKING")
+  aspspName      String    // e.g. "Abanca"
+  aspspCountry   String    // e.g. "ES"
+  aspspLogoUrl   String?
+  sessionId      String    @unique
+  validUntil     DateTime
+  accountsJson   String    // Serialized list of authorized bank accounts
+  profileId      String
+  profile        Profile   @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  accounts       Account[]
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([profileId])
 }
 
 model Session {
