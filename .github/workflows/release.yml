@@ -29,10 +29,14 @@ jobs:
   publish:
     name: Publish (${{ matrix.arch }})
     needs: release
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
     strategy:
       matrix:
-        arch: [aarch64, amd64]
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
     permissions:
       contents: read
       packages: write

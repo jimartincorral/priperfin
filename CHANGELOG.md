@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.17.16 - 2026-09-01
+
+- Enabled native ARM64 GitHub Actions runners (`ubuntu-24.04-arm`) for `aarch64` container builds, eliminating QEMU CPU emulation and speeding up builds from 15m to ~3m.
+
 ## v1.17.15 - 2026-09-01
 
 - Prioritized bank `value_date` (*Fecha valor*) over `booking_date` (*Fecha contable*) during Open Banking sync so transactions match the operation date shown in online banking apps.
