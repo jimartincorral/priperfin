@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.17.15 - 2026-09-01
+
+- Prioritized bank `value_date` (*Fecha valor*) over `booking_date` (*Fecha contable*) during Open Banking sync so transactions match the operation date shown in online banking apps.
+
 ## v1.17.14 - 2026-08-31
 
 - Fixed container startup crash by keeping `prisma` and `@prisma/config` in production dependencies for `run.sh` database schema synchronization (`prisma db push`).

@@ -28,6 +28,11 @@ describe('BankSyncService', () => {
         update: jest.fn(),
         updateMany: jest.fn(),
       },
+      transaction: {
+        findFirst: jest.fn(),
+        findMany: jest.fn(),
+        update: jest.fn(),
+      },
     };
 
     mockEnableBankingService = {
@@ -41,6 +46,8 @@ describe('BankSyncService', () => {
 
     mockTransactionsService = {
       createMany: jest.fn(),
+      generateHash: jest.fn().mockReturnValue('mock-hash'),
+      calculateDescriptionSimilarity: jest.fn().mockReturnValue(0),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -191,6 +198,70 @@ describe('BankSyncService', () => {
       expect(result.accounts.length).toBe(1);
       expect(result.accounts[0].account_id?.iban).toBe(
         'ES9120800000000000000000',
+      );
+    });
+  });
+
+  describe('syncTransactions', () => {
+    it('should prioritize value_date over booking_date when mapping transactions', async () => {
+      mockPrismaService.setting.findUnique.mockImplementation(
+        ({ where }: any) => {
+          if (where.key === 'enable_banking_app_id')
+            return Promise.resolve({ value: 'my-app-id' });
+          if (where.key === 'enable_banking_key')
+            return Promise.resolve({ value: 'my-key' });
+          return Promise.resolve(null);
+        },
+      );
+
+      mockPrismaService.account.findMany.mockResolvedValue([
+        {
+          id: 'acc-1',
+          name: 'Main Checking',
+          bankAccountUid: 'uid-1',
+          lastSyncedAt: new Date('2026-08-25T00:00:00Z'),
+          bankConnection: {
+            id: 'conn-1',
+            validUntil: new Date('2026-11-30T00:00:00Z'),
+          },
+        },
+      ]);
+
+      mockEnableBankingService.getAccountTransactions.mockResolvedValue({
+        transactions: [
+          {
+            transaction_id: 'tx-1',
+            booking_date: '2026-09-01',
+            value_date: '2026-08-31',
+            transaction_amount: { amount: '45.50', currency: 'EUR' },
+            credit_debit_indicator: 'DBIT',
+            remittance_information: ['Supermarket purchase'],
+          },
+        ],
+      });
+
+      mockPrismaService.transaction.findMany.mockResolvedValue([]);
+      mockTransactionsService.createMany.mockResolvedValue({
+        newCount: 1,
+        duplicateCount: 0,
+      });
+      mockPrismaService.account.update.mockResolvedValue({});
+
+      const result = await service.syncTransactions('acc-1', 'profile-1');
+      expect(result.newCount).toBe(1);
+
+      expect(mockTransactionsService.createMany).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({
+            date: new Date('2026-08-31').toISOString(),
+            amount: -45.5,
+            description: 'Supermarket purchase',
+          }),
+        ]),
+        false,
+        [],
+        'profile-1',
+        true,
       );
     });
   });

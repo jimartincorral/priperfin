@@ -734,8 +734,8 @@ export class BankSyncService {
               : Math.abs(rawAmount);
 
             const txDate =
-              tx.booking_date ||
               tx.value_date ||
+              tx.booking_date ||
               new Date().toISOString().split('T')[0];
 
             const descriptionParts = [
