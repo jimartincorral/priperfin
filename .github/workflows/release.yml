@@ -31,6 +31,7 @@ jobs:
     needs: release
     runs-on: ${{ matrix.runner }}
     strategy:
+      fail-fast: false
       matrix:
         include:
           - arch: amd64
@@ -57,6 +58,7 @@ jobs:
       - name: Build and Publish Add-on
         uses: home-assistant/builder@2025.02.0
         with:
+          image: ${{ matrix.arch }}
           args: |
             --${{ matrix.arch }} \
             --target . \

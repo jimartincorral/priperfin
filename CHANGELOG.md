@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.17.17 - 2026-09-01
+
+- Configured `home-assistant/builder` to use architecture-matched builder images (`image: ${{ matrix.arch }}`) on native runners.
+
 ## v1.17.16 - 2026-09-01
 
 - Enabled native ARM64 GitHub Actions runners (`ubuntu-24.04-arm`) for `aarch64` container builds, eliminating QEMU CPU emulation and speeding up builds from 15m to ~3m.
