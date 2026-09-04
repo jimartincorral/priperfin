@@ -1196,8 +1196,11 @@ export class ViewExpenses extends LitElement {
       gap: 12px;
       margin: 8px -16px 0;
       padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
-      background: var(--md-sys-color-on-primary-container);
-      border-top: 1px solid var(--md-sys-color-secondary-container);
+      /* The handoff names #001e30, which is the light palette's
+         on-primary-container; primary-container is the equivalent deep blue in
+         the dark palette and stays sane when the theme flips. */
+      background: var(--md-sys-color-primary-container);
+      border-top: 1px solid var(--md-sys-color-outline-variant);
     }
 
     /* transaction sheet */
@@ -2367,8 +2370,9 @@ Tables: ${result.tables?.join(', ')}`;
               </button>
             </div>
           ` : html`
+            <!-- name only; the avatar already carries the category emoji -->
             <div class="x-row-cat">
-              ${category ? `${category.icon} ${category.name}`.trim() : i18n.t('common.uncategorized')}
+              ${category ? category.name : i18n.t('common.uncategorized')}
             </div>
           `}
         </div>

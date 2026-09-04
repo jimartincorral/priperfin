@@ -203,9 +203,10 @@ export const mobileUI = css`
     display: flex;
     flex-direction: column;
     gap: 12px;
-    /* main already pads 1rem; bleed back out so rows can reach the edges */
-    margin: -1rem -1rem 0;
-    padding: 12px 16px 0;
+    /* main already pads 1rem (and 40px at the bottom); bleed back out so rows
+       reach the edges and a sticky footer can pin flush against the nav */
+    margin: -1rem -1rem -40px;
+    padding: 12px 16px 24px;
     min-height: 0;
   }
 
@@ -766,15 +767,17 @@ export const mobileUI = css`
     padding: 0;
   }
 
-  /* Real layout space rather than an overlay, so the last row stays reachable */
+  /* Real layout space rather than an overlay: margin-top: auto drops it to the
+     bottom on a short screen, and it follows the last card on a long one, so
+     it can never cover that card (which is why it is not a floating FAB). */
   .m-pinned {
-    position: sticky;
-    bottom: 0;
     margin: 8px -16px 0;
+    margin-top: auto;
     padding: 8px 16px calc(8px + env(safe-area-inset-bottom, 0px));
     background: var(--md-sys-color-surface);
     display: flex;
     gap: 12px;
+    flex-shrink: 0;
   }
 
   /* ---- snackbar ---- */
