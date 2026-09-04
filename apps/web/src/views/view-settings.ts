@@ -13,6 +13,16 @@ import {
   type SnackbarOptions,
 } from '../styles/mobile-ui';
 
+import {
+  CHART_PALETTE,
+  contentWidth,
+  desktopUI,
+  field as formField,
+  footnote,
+  segmented,
+  watchViewportWidth,
+} from '../styles/desktop-ui';
+
 import 'emoji-picker-element';
 
 /** The sub-screens the mobile settings list drills into. */
@@ -23,6 +33,13 @@ type SettingsSection =
   | 'costObjects'
   | 'backup'
   | 'danger';
+
+/**
+ * The desktop content pane also owns the three preference controls the phone
+ * reaches through picker sheets, so it has one section the drill-down list
+ * does not.
+ */
+type DesktopSection = SettingsSection | 'general';
 
 @customElement('view-settings')
 export class ViewSettings extends LitElement {
@@ -100,7 +117,20 @@ export class ViewSettings extends LitElement {
     @state() theme = localStorage.getItem('priperfin_theme') || 'auto';
     @state() snack: SnackbarOptions | null = null;
 
+    // --- Desktop layer (> 600px) ---
+    /** The section the content pane is showing. */
+    @state() private desktopSection: DesktopSection = 'general';
+    /** Account whose inline expand is open. */
+    @state() private openAccountId: string | null = null;
+    /** Current balance per account, loaded when the section is first opened. */
+    @state() private accountBalances: Record<string, number> = {};
+    /** This month's transactions, for the cost-object spend bars. */
+    @state() private monthTransactions: any[] = [];
+    /** Drives the responsive removal of the index pane. */
+    @state() viewportWidth = window.innerWidth;
+
     private unwatchViewport?: () => void;
+    private unwatchWidth?: () => void;
     private snackTimer?: number;
 
     static styles = [css`
@@ -479,7 +509,346 @@ export class ViewSettings extends LitElement {
             border-radius: 0;
         }
         .s-subscreen .table-container { margin: 0; border-right: none; }
-    `, mobileUI];
+    /* ---------- desktop ---------- */
+
+    /* Index pane: mobile's grouped nav list, made persistent */
+    .ds-index {
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+      min-height: 0;
+      overflow-y: auto;
+      padding-bottom: 8px;
+    }
+    .ds-group { display: flex; flex-direction: column; gap: 2px; }
+    .ds-group-label {
+      font: 500 11px/14px 'Roboto', sans-serif;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--md-sys-color-on-surface-variant);
+      padding: 0 12px 8px;
+    }
+    .ds-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      width: 100%;
+      min-height: 44px;
+      padding: 6px 12px;
+      border-radius: 12px;
+      box-sizing: border-box;
+      text-align: left;
+      color: var(--md-sys-color-on-surface);
+      cursor: pointer;
+      background: transparent;
+    }
+    .ds-item:hover { background: var(--md-sys-color-surface-container); }
+    .ds-item.selected {
+      background: var(--md-sys-color-secondary-container);
+      color: var(--md-sys-color-on-secondary-container);
+    }
+    .ds-item.danger { color: var(--md-sys-color-error); }
+    .ds-item .m-icon { color: inherit; }
+    .ds-item-label {
+      display: block;
+      font: 400 14px/20px 'Roboto', sans-serif;
+      color: inherit;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .ds-item-label.selected { font-weight: 500; }
+    .ds-item-caption {
+      display: block;
+      font: 400 11px/14px 'Roboto', sans-serif;
+      color: var(--md-sys-color-on-surface-variant);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .ds-item.selected .ds-item-caption { color: inherit; opacity: 0.8; }
+    .ds-item-value {
+      font: 400 12px/16px 'Roboto', sans-serif;
+      color: var(--md-sys-color-on-surface-variant);
+      flex-shrink: 0;
+    }
+
+    /* Content pane */
+    .ds-pane-head {
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+      flex-shrink: 0;
+      padding: 16px 20px 12px;
+    }
+    .ds-section-title {
+      font: 500 18px/24px 'Roboto', sans-serif;
+      color: var(--md-sys-color-on-surface);
+    }
+    .ds-section-blurb {
+      font: 400 13px/18px 'Roboto', sans-serif;
+      color: var(--md-sys-color-on-surface-variant);
+      text-wrap: pretty;
+    }
+    .ds-pane-body {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      overflow-x: hidden;
+      padding: 4px 20px 20px;
+    }
+
+    /* Section navigation has to exist at every width, so the pane grows a chip
+       row whenever the index is dropped. */
+    .ds-chip-row {
+      display: flex;
+      gap: 8px;
+      flex-shrink: 0;
+      overflow-x: auto;
+      scrollbar-width: none;
+      padding: 0 20px 12px;
+    }
+    .ds-chip-row::-webkit-scrollbar { display: none; }
+    .ds-chip {
+      height: 34px;
+      padding: 0 14px;
+      border-radius: 17px;
+      border: 1px solid var(--md-sys-color-outline);
+      background: transparent;
+      color: var(--md-sys-color-on-surface);
+      font: 500 13px/16px 'Roboto', sans-serif;
+      white-space: nowrap;
+      cursor: pointer;
+      flex-shrink: 0;
+      box-sizing: border-box;
+    }
+    .ds-chip:hover { background: var(--md-sys-color-surface-container); }
+    .ds-chip.selected {
+      background: var(--md-sys-color-secondary-container);
+      color: var(--md-sys-color-on-secondary-container);
+      border-color: transparent;
+    }
+    .ds-chip.danger { color: var(--md-sys-color-error); }
+    .ds-chip.danger.selected { color: var(--md-sys-color-on-secondary-container); }
+
+    /* Profile chip in the page header */
+    .ds-profile-chip {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      height: 40px;
+      padding: 0 14px 0 8px;
+      border-radius: 20px;
+      background: var(--md-sys-color-surface-container);
+      box-sizing: border-box;
+      flex-shrink: 0;
+      max-width: 220px;
+    }
+    .ds-avatar {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: var(--md-sys-color-primary);
+      color: var(--md-sys-color-on-primary);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font: 500 13px/1 'Roboto', sans-serif;
+      flex-shrink: 0;
+    }
+    .ds-avatar.large { width: 48px; height: 48px; font-size: 20px; }
+    .ds-avatar.muted {
+      background: var(--md-sys-color-surface-container-highest);
+      color: var(--md-sys-color-on-surface-variant);
+    }
+    .ds-profile-name {
+      display: block;
+      font: 500 13px/16px 'Roboto', sans-serif;
+      color: var(--md-sys-color-on-surface);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .ds-profile-meta {
+      display: block;
+      font: 400 11px/14px 'Roboto', sans-serif;
+      color: var(--md-sys-color-on-surface-variant);
+    }
+    .ds-profile-title {
+      font: 500 16px/22px 'Roboto', sans-serif;
+      color: var(--md-sys-color-on-surface);
+    }
+
+    /* Setting rows */
+    .ds-rows { display: flex; flex-direction: column; }
+    .ds-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-height: 60px;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--md-sys-color-surface-container-high);
+      box-sizing: border-box;
+    }
+    .ds-row:last-child { border-bottom: none; }
+    .ds-row.plain { border-bottom: none; }
+    .ds-row .m-icon { color: var(--md-sys-color-on-surface-variant); }
+    .ds-row-label {
+      font: 400 15px/20px 'Roboto', sans-serif;
+      color: var(--md-sys-color-on-surface);
+    }
+    .ds-row-caption {
+      font: 400 12px/16px 'Roboto', sans-serif;
+      color: var(--md-sys-color-on-surface-variant);
+      text-wrap: pretty;
+    }
+    .ds-truncate { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .ds-block-title {
+      font: 500 15px/20px 'Roboto', sans-serif;
+      color: var(--md-sys-color-on-surface);
+    }
+
+    /* Accounts table */
+    .ds-table-head {
+      display: grid;
+      align-items: center;
+      gap: 12px;
+      height: 36px;
+      border-bottom: 1px solid var(--md-sys-color-outline-variant);
+      font: 500 12px/16px 'Roboto', sans-serif;
+      color: var(--md-sys-color-on-surface-variant);
+    }
+    .ds-table-head .right { text-align: right; }
+    .ds-account-row {
+      display: grid;
+      align-items: center;
+      gap: 12px;
+      min-height: 52px;
+      padding: 6px 0;
+      border-bottom: 1px solid var(--md-sys-color-surface-container-high);
+      box-sizing: border-box;
+      cursor: pointer;
+      width: 100%;
+      text-align: left;
+      color: inherit;
+      font: inherit;
+      background: none;
+    }
+    .ds-account-row:hover { background: var(--md-sys-color-surface-container-low); }
+    .ds-account-row .m-icon { color: var(--md-sys-color-on-surface-variant); }
+    .ds-account-name {
+      font: 500 14px/18px 'Roboto', sans-serif;
+      color: var(--md-sys-color-on-surface);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .ds-account-meta {
+      font: 400 12px/16px 'Roboto', sans-serif;
+      color: var(--md-sys-color-primary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .ds-opening {
+      text-align: right;
+      font: 400 14px/20px 'Roboto Mono', ui-monospace, monospace;
+      color: var(--md-sys-color-on-surface-variant);
+      white-space: nowrap;
+    }
+    .ds-current {
+      text-align: right;
+      font: 500 14px/20px 'Roboto Mono', ui-monospace, monospace;
+      color: var(--md-sys-color-on-surface);
+      white-space: nowrap;
+    }
+    .ds-current.negative { color: var(--md-sys-color-error); }
+
+    /* Cards: backup, danger zone, credentials */
+    .ds-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 16px;
+      align-items: start;
+    }
+    .ds-card {
+      padding: 16px;
+      border: 1px solid var(--md-sys-color-outline-variant);
+      border-radius: 12px;
+      box-sizing: border-box;
+    }
+    .ds-card.danger { border-color: var(--pf-error-border); }
+    .ds-card-head { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+    .ds-card-head .m-icon { color: var(--md-sys-color-primary); }
+    .ds-card-head.danger .m-icon { color: var(--md-sys-color-error); }
+    .ds-textarea {
+      height: 96px;
+      padding: 10px 12px;
+      resize: vertical;
+      font: 400 12px/16px 'Roboto Mono', ui-monospace, monospace;
+    }
+
+    /* Bank sync */
+    .ds-credential {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 16px;
+      border-radius: 12px;
+      background: var(--md-sys-color-surface-container-low);
+      box-sizing: border-box;
+    }
+    .ds-credential .m-icon { color: var(--pf-positive); }
+    .ds-credential.pending .m-icon { color: var(--md-sys-color-outline); }
+    .ds-connection {
+      border: 1px solid var(--md-sys-color-outline-variant);
+      border-radius: 12px;
+      padding: 12px 14px;
+      margin-top: 10px;
+      box-sizing: border-box;
+    }
+    .ds-connection-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .ds-bank-tile {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: var(--md-sys-color-primary);
+      color: var(--md-sys-color-on-primary);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font: 500 13px/1 'Roboto', sans-serif;
+      flex-shrink: 0;
+    }
+    .ds-linking { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+    .ds-linking-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-height: 40px;
+      padding: 0 10px;
+      border-radius: 8px;
+      background: var(--md-sys-color-surface);
+      box-sizing: border-box;
+    }
+    .ds-actions {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      flex-wrap: nowrap;
+      gap: 2px;
+      color: var(--md-sys-color-outline);
+    }
+    .ds-linking-name {
+      flex: 1;
+      min-width: 0;
+      font: 400 13px/18px 'Roboto', sans-serif;
+      color: var(--md-sys-color-on-surface);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+  `, mobileUI, desktopUI];
 
     async firstUpdated() {
         const storedCurrency = localStorage.getItem('priperfin_currency');
@@ -508,12 +877,14 @@ export class ViewSettings extends LitElement {
         super.connectedCallback();
         i18n.addEventListener('lang-change', () => this.requestUpdate());
         this.unwatchViewport = watchMobileViewport(this);
+        this.unwatchWidth = watchViewportWidth(this);
     }
 
     disconnectedCallback() {
         super.disconnectedCallback();
         i18n.removeEventListener('lang-change', () => this.requestUpdate());
         this.unwatchViewport?.();
+        this.unwatchWidth?.();
         if (this.snackTimer) window.clearTimeout(this.snackTimer);
     }
 
@@ -1309,27 +1680,6 @@ export class ViewSettings extends LitElement {
         `;
     }
 
-    render() {
-        if (this.isMobile) return this.renderMobile();
-
-        return html`
-            <div class="header">
-                <h1>${i18n.t('settings.title')}</h1>
-            </div>
-
-            ${this.renderGeneralSection()}
-            ${this.renderProfileSection()}
-            ${this.renderAccountsSection()}
-            ${this.renderBankSyncSection()}
-            ${this.renderCostObjectsSection()}
-            ${this.renderCategoriesSection()}
-            ${this.renderBackupSection()}
-            ${this.renderDangerSection()}
-
-            ${this.renderModals()}
-        `;
-    }
-
     // ------------------------------------------------------------------
     // Mobile layout: a navigation list that drills into the sections
     // ------------------------------------------------------------------
@@ -1995,54 +2345,6 @@ export class ViewSettings extends LitElement {
                       </div>
                   `
                 : ''}
-        `;
-    }
-
-    renderGeneralSection() {
-        return html`
-            <!-- General Settings -->
-            <div class="section-title">${i18n.t('settings.general')}</div>
-            <div class="settings-group">
-                <div class="form-group">
-                    <label>${i18n.t('settings.language')}</label>
-                    <select
-                        .value="${i18n.getLocale()}"
-                        @change="${this.handleLanguageChange}"
-                        style="padding: 0.5rem; border-radius: 4px; border: 1px solid #ccc; width: 200px;"
-                    >
-                        <option value="en">English</option>
-                        <option value="es">Español</option>
-                    </select>
-                </div>
-
-                <div class="form-group">
-                    <label>${i18n.t('common.currency')}</label>
-                    <select
-                        .value="${this.currency}"
-                        @change="${this.handleCurrencyChange}"
-                        style="padding: 0.5rem; border-radius: 4px; border: 1px solid #ccc; width: 200px;"
-                    >
-                        <option value="USD">USD ($)</option>
-                        <option value="EUR">EUR (€)</option>
-                        <option value="GBP">GBP (£)</option>
-                        <option value="JPY">JPY (¥)</option>
-                        <option value="CAD">CAD ($)</option>
-                        <option value="AUD">AUD ($)</option>
-                    </select>
-                </div>
-
-                <div class="form-group">
-                    <label>${i18n.t('settings.theme')}</label>
-                    <select
-                        @change="${(e: any) => this.handleThemeChange(e.target.value)}"
-                        style="padding: 0.5rem; border-radius: 4px; border: 1px solid #ccc; width: 200px;"
-                    >
-                        <option value="auto">${i18n.t('settings.theme_auto')}</option>
-                        <option value="light">${i18n.t('settings.theme_light')}</option>
-                        <option value="dark">${i18n.t('settings.theme_dark')}</option>
-                    </select>
-                </div>
-            </div>
         `;
     }
 
@@ -2827,166 +3129,6 @@ export class ViewSettings extends LitElement {
         `;
     }
 
-    renderCategoriesSection() {
-        return html`
-            <!-- Categories Management -->
-            <div class="section-title">📂 ${i18n.t('settings.categories')}</div>
-            <div class="settings-group">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                    <h3>${i18n.t('common.expense')} ${i18n.t('settings.categories')}</h3>
-                    <button class="btn-primary" @click="${this.toggleAddForm}">
-                        ${this.showAddForm ? i18n.t('common.cancel') : '+ ' + i18n.t('settings.add_category')}
-                    </button>
-                </div>
-
-                ${this.showAddForm
-                    ? html`
-                          <div class="form-card">
-                              <h3>
-                                  ${this.editModeId
-                                      ? i18n.t('settings.edit_category')
-                                      : i18n.t('settings.add_category')}
-                              </h3>
-
-                              <div class="form-group">
-                                  <label>${i18n.t('settings.category_name')}</label>
-                                  <input
-                                      type="text"
-                                      .value="${this.categoryForm.name}"
-                                      @input="${(e: any) =>
-                                          (this.categoryForm = { ...this.categoryForm, name: e.target.value })}"
-                                      placeholder="e.g. Groceries"
-                                  />
-                              </div>
-
-                              <div class="form-group">
-                                  <label>${i18n.t('settings.type')}</label>
-                                  <select
-                                      .value="${this.categoryForm.type}"
-                                      @change="${(e: any) =>
-                                          (this.categoryForm = { ...this.categoryForm, type: e.target.value })}"
-                                  >
-                                      <option value="EXPENSE">${i18n.t('common.expense')}</option>
-                                      <option value="INCOME">${i18n.t('common.income')}</option>
-                                  </select>
-                              </div>
-
-                              <div class="form-group">
-                                  <label>${i18n.t('settings.parent_category')}</label>
-                                  <select
-                                      .value="${this.categoryForm.parentId}"
-                                      @change="${(e: any) =>
-                                          (this.categoryForm = { ...this.categoryForm, parentId: e.target.value })}"
-                                  >
-                                      <option value="">-- ${i18n.t('settings.none_top_level')} --</option>
-                                      ${this.categories
-                                          .filter(
-                                              (c) =>
-                                                  !c.parentId &&
-                                                  c.id !== this.editModeId &&
-                                                  c.type === this.categoryForm.type,
-                                          )
-                                          .map((c) => html`<option value="${c.id}">${c.icon} ${c.name}</option>`)}
-                                  </select>
-                              </div>
-
-                              <div class="form-group">
-                                  <label>${i18n.t('settings.icon')}</label>
-                                  <div style="position: relative;">
-                                      <div style="display: flex; gap: 0.5rem; align-items: center;">
-                                          <input
-                                              type="text"
-                                              placeholder="Emoji"
-                                              style="width: 60px; text-align: center;"
-                                              .value="${this.categoryForm.icon}"
-                                              @input="${(e: any) =>
-                                                  (this.categoryForm = {
-                                                      ...this.categoryForm,
-                                                      icon: e.target.value,
-                                                  })}"
-                                          />
-                                          <button
-                                              @click="${() => (this.showEmojiPicker = !this.showEmojiPicker)}"
-                                              title="Pick Emoji"
-                                          >
-                                              😀
-                                          </button>
-                                      </div>
-                                      ${this.showEmojiPicker
-                                          ? html`
-                                                <div
-                                                    style="position: absolute; z-index: 2000; bottom: 100%; left: 0; margin-bottom: 8px;"
-                                                >
-                                                    <div
-                                                        style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 1000;"
-                                                        @click="${() => (this.showEmojiPicker = false)}"
-                                                    ></div>
-                                                    <emoji-picker
-                                                        @emoji-click="${(e: any) => {
-                                                            this.categoryForm = {
-                                                                ...this.categoryForm,
-                                                                icon: e.detail.unicode,
-                                                            };
-                                                            this.showEmojiPicker = false;
-                                                        }}"
-                                                    ></emoji-picker>
-                                                </div>
-                                            `
-                                          : ''}
-                                  </div>
-                              </div>
-
-                              ${this.categoryForm.type === 'EXPENSE'
-                                  ? html`
-                                        <div class="form-group">
-                                            <label>${i18n.t('settings.monthly_budget')}</label>
-                                            <input
-                                                type="number"
-                                                step="0.01"
-                                                .value="${this.categoryForm.budget !== null
-                                                    ? this.categoryForm.budget
-                                                    : ''}"
-                                                @input="${(e: any) =>
-                                                    (this.categoryForm = {
-                                                        ...this.categoryForm,
-                                                        budget: e.target.value ? parseFloat(e.target.value) : null,
-                                                    })}"
-                                                placeholder="e.g. 500"
-                                            />
-                                        </div>
-                                    `
-                                  : ''}
-
-                              <div style="display: flex; gap: 8px; margin-top: 16px;">
-                                  <button class="btn-primary" @click="${this.saveCategory}">
-                                      ${i18n.t('common.save')}
-                                  </button>
-                                  <button class="btn-secondary" @click="${this.resetForm}">
-                                      ${i18n.t('common.cancel')}
-                                  </button>
-                              </div>
-                          </div>
-                      `
-                    : ''}
-
-                <!-- Expense Categories Table -->
-                ${this.renderCategoryTable(
-                    this.categories.filter((c) => c.type === 'EXPENSE' || !c.type),
-                    true,
-                    true,
-                )}
-
-                <!-- Income Categories Table -->
-                <h3 style="margin-top: 2rem;">${i18n.t('common.income')} ${i18n.t('settings.categories')}</h3>
-                ${this.renderCategoryTable(
-                    this.categories.filter((c) => c.type === 'INCOME'),
-                    true,
-                    false,
-                )}
-            </div>
-        `;
-    }
-
     renderBackupSection() {
         return html`
             <!-- Backup & Restore -->
@@ -3089,5 +3231,1075 @@ export class ViewSettings extends LitElement {
                     </div>
                 </div>
         `;
+    }
+    // ------------------------------------------------------------------
+    // Desktop layout (> 600px)
+    // ------------------------------------------------------------------
+
+    /**
+     * Section navigation has to exist at every width: the index is dropped only
+     * when the pane cannot hold 260px of it plus 460px of content, and the
+     * content header grows a chip row in its place.
+     */
+    private get showIndex() {
+        return contentWidth(this.viewportWidth) - 460 >= 260;
+    }
+
+    /** Width the content pane actually gets, which drives its table columns. */
+    private get contentPaneWidth() {
+        return contentWidth(this.viewportWidth) - (this.showIndex ? 276 : 0);
+    }
+
+    private get symbol() {
+        return this.currency === 'EUR' ? '€' : '$';
+    }
+
+    private money(value: number, decimals = 2): string {
+        return `${this.symbol}${Math.abs(value).toLocaleString(i18n.getLocale(), {
+            minimumFractionDigits: decimals,
+            maximumFractionDigits: decimals,
+        })}`;
+    }
+
+    private get desktopSections(): { id: DesktopSection; title: string; blurb: string }[] {
+        return [
+            { id: 'general', title: i18n.t('settings.general'), blurb: i18n.t('desktop.blurb_general') },
+            { id: 'accounts', title: i18n.t('accounts.title'), blurb: i18n.t('desktop.blurb_accounts') },
+            { id: 'bankSync', title: i18n.t('desktop.bank_sync'), blurb: i18n.t('desktop.blurb_bank_sync') },
+            { id: 'costObjects', title: i18n.t('desktop.cost_objects'), blurb: i18n.t('desktop.blurb_cost_objects') },
+            { id: 'backup', title: i18n.t('settings.backup_restore'), blurb: i18n.t('desktop.blurb_backup') },
+            { id: 'profile', title: i18n.t('desktop.profile'), blurb: i18n.t('desktop.blurb_profile') },
+            { id: 'danger', title: i18n.t('mobile.danger_zone'), blurb: i18n.t('desktop.blurb_danger') },
+        ];
+    }
+
+    /** Loads what a section needs the first time it is opened. */
+    private async selectSection(section: DesktopSection) {
+        this.desktopSection = section;
+        this.openAccountId = null;
+
+        if (section === 'accounts' && Object.keys(this.accountBalances).length === 0) {
+            const entries = await Promise.all(this.accounts.map(async account => {
+                const data = await api
+                    .get('/transactions/balance', { accountId: account.id })
+                    .catch(() => null);
+                return [account.id, Number(data?.balance ?? 0)] as const;
+            }));
+            this.accountBalances = Object.fromEntries(entries);
+        }
+
+        if (section === 'costObjects' && this.monthTransactions.length === 0) {
+            const now = new Date();
+            const transactions = await api
+                .get('/transactions', {
+                    filterMode: 'month',
+                    month: now.getMonth() + 1,
+                    year: now.getFullYear(),
+                })
+                .catch(() => []);
+            this.monthTransactions = Array.isArray(transactions) ? [...transactions] : [];
+        }
+    }
+
+    private renderDesktop() {
+        const section = this.desktopSections.find(s => s.id === this.desktopSection)
+            ?? this.desktopSections[0];
+        const showIndex = this.showIndex;
+
+        return html`
+            <div class="d-screen">
+                <div class="d-header">
+                    <h1>${i18n.t('settings.title')}</h1>
+                    <div class="d-spacer"></div>
+
+                    <div class="ds-profile-chip">
+                        <span class="ds-avatar">
+                            ${(this.currentProfile?.name || '?').charAt(0).toUpperCase()}
+                        </span>
+                        <span style="min-width: 0">
+                            <span class="ds-profile-name">
+                                ${this.currentProfile?.name || i18n.t('auth.settings.currentProfile')}
+                            </span>
+                            ${this.currentProfile?.pinLength ? html`
+                                <span class="ds-profile-meta">
+                                    ${i18n.t('mobile.pin_digits', { count: this.currentProfile.pinLength })}
+                                </span>
+                            ` : nothing}
+                        </span>
+                    </div>
+
+                    <button class="d-btn-outlined tall" @click="${this.handleLogout}">
+                        ${icon('logout', 18)}
+                        <span>${i18n.t('mobile.log_out')}</span>
+                    </button>
+                </div>
+
+                <div
+                    class="d-content"
+                    style="grid-template-columns: ${showIndex ? '260px minmax(0, 1fr)' : 'minmax(0, 1fr)'}">
+                    ${showIndex ? this.renderIndexPane() : nothing}
+                    ${this.renderContentPane(section, !showIndex)}
+                </div>
+
+                ${this.renderModals()}
+            </div>
+        `;
+    }
+
+    private renderIndexPane() {
+        const bankStatus = this.bankStatus();
+
+        return html`
+            <div class="ds-index">
+                <div class="ds-group">
+                    <div class="ds-group-label">${i18n.t('mobile.group_general')}</div>
+                    ${this.indexRow({
+                        id: 'general',
+                        glyph: 'tune',
+                        label: i18n.t('desktop.preferences'),
+                        value: `${i18n.getLocale() === 'es' ? 'Español' : 'English'} · ${this.shortThemeLabel()}`,
+                    })}
+                </div>
+
+                <div class="ds-group">
+                    <div class="ds-group-label">${i18n.t('mobile.group_data')}</div>
+                    ${this.indexRow({
+                        id: 'accounts',
+                        glyph: 'account_balance',
+                        label: i18n.t('accounts.title'),
+                        value: this.accounts.length,
+                    })}
+                    ${this.indexRow({
+                        id: 'bankSync',
+                        glyph: 'sync',
+                        label: i18n.t('desktop.bank_sync'),
+                        caption: this.lastSyncLabel(),
+                        pill: this.bankConnections.length > 0
+                            ? {
+                                label: i18n.t('desktop.linked_count', { count: this.bankConnections.length }),
+                                ok: bankStatus?.ok ?? true,
+                              }
+                            : undefined,
+                    })}
+                    ${this.indexRow({
+                        id: 'costObjects',
+                        glyph: 'work',
+                        label: i18n.t('desktop.cost_objects'),
+                        value: this.costObjects.length,
+                    })}
+                    ${this.indexRow({
+                        id: 'backup',
+                        glyph: 'backup',
+                        label: i18n.t('settings.backup_restore'),
+                    })}
+                </div>
+
+                <div class="ds-group">
+                    <div class="ds-group-label">${i18n.t('mobile.group_profile')}</div>
+                    ${this.indexRow({
+                        id: 'profile',
+                        glyph: 'person',
+                        label: this.currentProfile?.name || i18n.t('auth.settings.currentProfile'),
+                        caption: this.currentProfile?.pinLength
+                            ? i18n.t('mobile.pin_digits', { count: this.currentProfile.pinLength })
+                            : undefined,
+                    })}
+                    ${this.indexRow({
+                        id: 'danger',
+                        glyph: 'warning',
+                        label: i18n.t('mobile.danger_zone'),
+                        danger: true,
+                    })}
+                </div>
+            </div>
+        `;
+    }
+
+    private indexRow(opts: {
+        id: DesktopSection;
+        glyph: string;
+        label: string;
+        value?: unknown;
+        caption?: string;
+        pill?: { label: string; ok: boolean };
+        danger?: boolean;
+    }) {
+        const selected = this.desktopSection === opts.id;
+        return html`
+            <button
+                class="ds-item ${selected ? 'selected' : ''} ${opts.danger ? 'danger' : ''}"
+                @click="${() => this.selectSection(opts.id)}">
+                ${icon(opts.glyph, 20)}
+                <span style="flex: 1; min-width: 0">
+                    <span class="ds-item-label ${selected ? 'selected' : ''}">${opts.label}</span>
+                    ${opts.caption ? html`<span class="ds-item-caption">${opts.caption}</span>` : nothing}
+                </span>
+                ${opts.pill
+                    ? html`<span class="d-tag ${opts.pill.ok ? 'positive' : 'warning'}" style="height: 22px; border-radius: 11px; font-size: 11px">${opts.pill.label}</span>`
+                    : nothing}
+                ${opts.value !== undefined ? html`<span class="ds-item-value">${opts.value}</span>` : nothing}
+            </button>
+        `;
+    }
+
+    /** The seven sections as a scrolling chip row, when the index is dropped. */
+    private renderSectionChips() {
+        return html`
+            <div class="ds-chip-row">
+                ${this.desktopSections.map(section => html`
+                    <button
+                        class="ds-chip ${this.desktopSection === section.id ? 'selected' : ''} ${section.id === 'danger' ? 'danger' : ''}"
+                        @click="${() => this.selectSection(section.id)}">
+                        ${section.title}
+                    </button>
+                `)}
+            </div>
+        `;
+    }
+
+    private renderContentPane(
+        section: { id: DesktopSection; title: string; blurb: string },
+        withChips: boolean,
+    ) {
+        const primary = this.sectionPrimaryAction(section.id);
+
+        return html`
+            <div class="d-panel">
+                <div class="ds-pane-head">
+                    <div style="flex: 1; min-width: 0">
+                        <div class="ds-section-title">${section.title}</div>
+                        <div class="ds-section-blurb">${section.blurb}</div>
+                    </div>
+                    ${primary ?? nothing}
+                </div>
+                ${withChips ? this.renderSectionChips() : nothing}
+
+                <div class="ds-pane-body">
+                    ${this.renderSectionBody(section.id)}
+                </div>
+            </div>
+        `;
+    }
+
+    private sectionPrimaryAction(section: DesktopSection) {
+        switch (section) {
+            case 'accounts':
+                return html`
+                    <button class="d-btn" @click="${() => { this.resetAccountForm(); this.showAccountForm = true; }}">
+                        ${icon('add', 20)}
+                        <span>${i18n.t('desktop.add_account')}</span>
+                    </button>
+                `;
+            case 'bankSync':
+                return html`
+                    <button
+                        class="d-btn"
+                        ?disabled="${!this.bankSyncSettings.hasAppId || !this.bankSyncSettings.hasKey}"
+                        title="${!this.bankSyncSettings.hasAppId || !this.bankSyncSettings.hasKey
+                            ? i18n.t('bank_sync.not_configured')
+                            : ''}"
+                        @click="${this.openConnectBankModal}">
+                        ${icon('add', 20)}
+                        <span>${i18n.t('desktop.connect_a_bank')}</span>
+                    </button>
+                `;
+            case 'costObjects':
+                return html`
+                    <button
+                        class="d-btn"
+                        @click="${() => { this.resetCostObjectForm(); this.showCostObjectForm = true; }}">
+                        ${icon('add', 20)}
+                        <span>${i18n.t('settings.add_cost_object')}</span>
+                    </button>
+                `;
+            default:
+                return null;
+        }
+    }
+
+    private renderSectionBody(section: DesktopSection) {
+        switch (section) {
+            case 'general': return this.renderDesktopGeneral();
+            case 'accounts': return this.renderDesktopAccounts();
+            case 'bankSync': return this.renderDesktopBankSync();
+            case 'costObjects': return this.renderDesktopCostObjects();
+            case 'backup': return this.renderDesktopBackup();
+            case 'profile': return this.renderDesktopProfile();
+            case 'danger': return this.renderDesktopDanger();
+        }
+    }
+
+    // ---- General ----
+
+    private renderDesktopGeneral() {
+        return html`
+            <div class="ds-rows">
+                <div class="ds-row">
+                    ${icon('language', 22)}
+                    <div style="flex: 1; min-width: 0">
+                        <div class="ds-row-label">${i18n.t('settings.language')}</div>
+                        <div class="ds-row-caption">${i18n.t('desktop.language_caption')}</div>
+                    </div>
+                    ${segmented(
+                        [{ value: 'en', label: 'English' }, { value: 'es', label: 'Español' }],
+                        i18n.getLocale(),
+                        value => this.handleLanguageChange({ target: { value } } as any),
+                        true,
+                    )}
+                </div>
+
+                <div class="ds-row">
+                    ${icon('payments', 22)}
+                    <div style="flex: 1; min-width: 0">
+                        <div class="ds-row-label">${i18n.t('common.currency')}</div>
+                        <div class="ds-row-caption">${i18n.t('desktop.currency_caption')}</div>
+                    </div>
+                    <!-- Six options is past what a segmented control can carry -->
+                    <select
+                        class="d-input"
+                        style="width: 160px"
+                        .value="${this.currency}"
+                        @change="${this.handleCurrencyChange}">
+                        ${['USD', 'EUR', 'GBP', 'JPY', 'CAD', 'AUD'].map(code => html`
+                            <option value="${code}" ?selected="${code === this.currency}">
+                                ${this.currencyLabelFor(code)}
+                            </option>
+                        `)}
+                    </select>
+                </div>
+
+                <div class="ds-row">
+                    ${icon('dark_mode', 22)}
+                    <div style="flex: 1; min-width: 0">
+                        <div class="ds-row-label">${i18n.t('settings.theme')}</div>
+                        <div class="ds-row-caption">${i18n.t('desktop.theme_caption')}</div>
+                    </div>
+                    ${segmented(
+                        [
+                            { value: 'auto', label: i18n.t('settings.theme_auto') },
+                            { value: 'light', label: i18n.t('settings.theme_light') },
+                            { value: 'dark', label: i18n.t('settings.theme_dark') },
+                        ],
+                        this.theme,
+                        value => { this.theme = value; this.handleThemeChange(value); },
+                        true,
+                    )}
+                </div>
+            </div>
+        `;
+    }
+
+    /** "Auto" rather than "Auto (System)", which does not fit the index row. */
+    private shortThemeLabel(): string {
+        if (this.theme === 'light') return i18n.t('settings.theme_light');
+        if (this.theme === 'dark') return i18n.t('settings.theme_dark');
+        return i18n.t('desktop.theme_auto_short');
+    }
+
+    private currencyLabelFor(code: string): string {
+        const labels: Record<string, string> = {
+            USD: 'USD ($)', EUR: 'EUR (€)', GBP: 'GBP (£)',
+            JPY: 'JPY (¥)', CAD: 'CAD ($)', AUD: 'AUD ($)',
+        };
+        return labels[code] ?? code;
+    }
+
+    // ---- Accounts ----
+
+    /**
+     * The name column keeps a pixel floor deliberately: with minmax(0, 1fr) the
+     * fixed columns win the shrink and the account name collapses to nothing.
+     * Below 700px the opening-balance column leaves the DOM entirely.
+     */
+    private get accountColumns() {
+        return this.contentPaneWidth >= 700
+            ? 'minmax(160px, 1fr) minmax(0, 110px) minmax(0, 130px) minmax(0, 130px) 60px'
+            : 'minmax(140px, 1fr) minmax(0, 100px) minmax(0, 120px) 56px';
+    }
+
+    private get showOpeningBalance() {
+        return this.contentPaneWidth >= 700;
+    }
+
+    private accountGlyph(account: any): string {
+        if (account.type === 'CREDIT') return 'credit_card';
+        if (/saving/i.test(account.name)) return 'savings';
+        if (/cash|wallet/i.test(account.name)) return 'wallet';
+        return 'account_balance';
+    }
+
+    private renderDesktopAccounts() {
+        if (this.accounts.length === 0) {
+            return html`<div class="d-empty-row">${i18n.t('accounts.no_accounts')}</div>`;
+        }
+
+        return html`
+            <div class="ds-table-head" style="grid-template-columns: ${this.accountColumns}">
+                <div>${i18n.t('accounts.account_name')}</div>
+                <div>${i18n.t('settings.type')}</div>
+                ${this.showOpeningBalance
+                    ? html`<div class="right">${i18n.t('desktop.opening_balance')}</div>`
+                    : nothing}
+                <div class="right">${i18n.t('desktop.current_balance')}</div>
+                <div></div>
+            </div>
+
+            ${this.accounts.map(account => this.renderAccountRow(account))}
+        `;
+    }
+
+    private renderAccountRow(account: any) {
+        const open = this.openAccountId === account.id;
+        const balance = this.accountBalances[account.id];
+        const credit = account.type === 'CREDIT';
+
+        return html`
+            <div>
+                <div
+                    class="ds-account-row"
+                    style="grid-template-columns: ${this.accountColumns}"
+                    role="button"
+                    tabindex="0"
+                    @click="${() => this.toggleAccountRow(account)}">
+                    <div style="display: flex; align-items: center; gap: 12px; min-width: 0">
+                        ${icon(this.accountGlyph(account), 20)}
+                        <div style="min-width: 0">
+                            <div class="ds-account-name">${account.name}</div>
+                            ${account.bankAccountUid ? html`
+                                <div class="ds-account-meta">
+                                    ${i18n.t('desktop.linked_to_sync')}
+                                </div>
+                            ` : nothing}
+                        </div>
+                    </div>
+
+                    <div>
+                        <span class="d-tag square ${credit ? 'tertiary' : ''}">
+                            ${credit ? i18n.t('desktop.credit') : i18n.t('desktop.debit')}
+                        </span>
+                    </div>
+
+                    ${this.showOpeningBalance ? html`
+                        <div class="ds-opening">${this.money(Number(account.initialBalance) || 0)}</div>
+                    ` : nothing}
+
+                    <div class="ds-current ${balance !== undefined && balance < 0 ? 'negative' : ''}">
+                        ${balance === undefined
+                            ? '—'
+                            : `${balance < 0 ? '−' : ''}${this.money(balance)}`}
+                    </div>
+
+                    <div class="ds-actions">
+                        <button
+                            class="d-icon-btn inline"
+                            title="${i18n.t('common.edit')}"
+                            @click="${(e: Event) => { e.stopPropagation(); this.toggleAccountRow(account); }}">
+                            ${icon('edit', 18)}
+                        </button>
+                        <span class="d-row-chevron">${icon(open ? 'expand_less' : 'expand_more', 20)}</span>
+                    </div>
+                </div>
+
+                ${open ? this.renderAccountExpand(account) : nothing}
+            </div>
+        `;
+    }
+
+    private toggleAccountRow(account: any) {
+        if (this.openAccountId === account.id) {
+            this.openAccountId = null;
+            this.resetAccountForm();
+            return;
+        }
+        this.startEditAccount(account);
+        this.showAccountForm = false;
+        this.openAccountId = account.id;
+    }
+
+    private renderAccountExpand(account: any) {
+        const form = this.accountForm;
+        const credit = form.type === 'CREDIT';
+
+        return html`
+            <div class="d-expand" @click="${(e: Event) => e.stopPropagation()}">
+                <div class="d-fields">
+                    ${formField(i18n.t('accounts.account_name'), html`
+                        <input
+                            class="d-input"
+                            type="text"
+                            .value="${form.name}"
+                            @input="${(e: any) => { this.accountForm = { ...form, name: e.target.value }; }}" />
+                    `)}
+
+                    ${formField(i18n.t('settings.type'), html`
+                        ${segmented(
+                            [
+                                { value: 'DEBIT' as const, label: i18n.t('desktop.debit') },
+                                { value: 'CREDIT' as const, label: i18n.t('desktop.credit') },
+                            ],
+                            form.type,
+                            value => { this.accountForm = { ...this.accountForm, type: value }; },
+                            true,
+                        )}
+                    `)}
+
+                    ${formField(i18n.t('desktop.opening_balance'), html`
+                        <input
+                            class="d-input amount"
+                            type="number"
+                            step="0.01"
+                            .value="${form.initialBalance}"
+                            @input="${(e: any) => {
+                                this.accountForm = { ...this.accountForm, initialBalance: parseFloat(e.target.value) };
+                            }}" />
+                    `)}
+                </div>
+
+                <div class="d-actions">
+                    <button
+                        class="d-btn small plain"
+                        @click="${async () => { await this.saveAccount(); this.openAccountId = null; }}">
+                        ${i18n.t('common.save')}
+                    </button>
+                    <button class="d-btn-text" @click="${() => this.toggleAccountRow(account)}">
+                        ${i18n.t('common.cancel')}
+                    </button>
+
+                    <div class="d-spacer"></div>
+
+                    <button
+                        class="d-btn-text destructive"
+                        @click="${() => { this.accountToDelete = account.id; }}">
+                        ${icon('delete', 18)}
+                        <span>${i18n.t('desktop.delete_account')}</span>
+                    </button>
+                </div>
+
+                ${footnote('info', credit
+                    ? i18n.t('desktop.note_credit_account')
+                    : i18n.t('desktop.note_opening_balance'))}
+            </div>
+        `;
+    }
+
+    // ---- Bank sync ----
+
+    private renderDesktopBankSync() {
+        const configured = this.bankSyncSettings.hasAppId && this.bankSyncSettings.hasKey;
+
+        return html`
+            <div style="display: flex; flex-direction: column; gap: 16px">
+                <div class="ds-credential ${configured ? '' : 'pending'}">
+                    ${icon(configured ? 'verified_user' : 'gpp_maybe', 22)}
+                    <div style="flex: 1; min-width: 0">
+                        <div class="ds-row-label">${i18n.t('bank_sync.credentials_title')}</div>
+                        <div class="ds-row-caption ds-truncate">
+                            ${configured
+                                ? this.bankSyncSettings.redirectUrl || this.bankRedirectUrl
+                                : i18n.t('bank_sync.credentials_desc')}
+                        </div>
+                    </div>
+                    <button
+                        class="d-btn-outlined"
+                        @click="${() => { this.showBankCredentialsForm = !this.showBankCredentialsForm; }}">
+                        ${configured ? i18n.t('desktop.replace') : i18n.t('bank_sync.save_credentials')}
+                    </button>
+                </div>
+
+                ${this.showBankCredentialsForm ? this.renderBankCredentialsForm() : nothing}
+
+                <div class="ds-row plain">
+                    <div style="flex: 1; min-width: 0">
+                        <div class="ds-row-label">${i18n.t('desktop.sync_automatically')}</div>
+                        <div class="ds-row-caption">${i18n.t('bank_sync.auto_sync_desc')}</div>
+                    </div>
+                    <button
+                        class="d-switch"
+                        role="switch"
+                        aria-checked="${this.bankSyncSettings.autoSyncEnabled !== false}"
+                        @click="${() => this.toggleAutoSync({
+                            target: { checked: this.bankSyncSettings.autoSyncEnabled === false },
+                        } as any)}"></button>
+                </div>
+
+                <div class="ds-row plain">
+                    <div style="flex: 1; min-width: 0">
+                        <div class="ds-row-label">${i18n.t('desktop.history_on_connect')}</div>
+                        <div class="ds-row-caption">${i18n.t('bank_sync.initial_lookback_desc')}</div>
+                    </div>
+                    ${segmented(
+                        [
+                            { value: 30, label: '30d' },
+                            { value: 90, label: '90d' },
+                            { value: 180, label: '180d' },
+                            { value: 365, label: '1y' },
+                            { value: 730, label: '2y' },
+                        ],
+                        this.initialLookbackDays,
+                        value => this.updateInitialLookback(value),
+                        true,
+                    )}
+                </div>
+
+                <div>
+                    <div class="ds-block-title">${i18n.t('bank_sync.connections_title')}</div>
+                    ${this.bankConnections.length === 0
+                        ? html`<div class="ds-row-caption" style="padding: 8px 0">${i18n.t('bank_sync.no_connections')}</div>`
+                        : this.bankConnections.map(conn => this.renderBankConnection(conn))}
+                </div>
+
+                ${this.bankConnections.length > 0 ? html`
+                    <div style="display: flex; gap: 12px">
+                        <button
+                            class="d-btn-outlined"
+                            ?disabled="${this.bankSyncLoading}"
+                            @click="${() => this.syncBankNow()}">
+                            ${icon('sync', 16)}
+                            <span>${this.bankSyncLoading ? i18n.t('bank_sync.syncing') : i18n.t('bank_sync.sync_all')}</span>
+                        </button>
+                        <button class="d-btn-outlined" @click="${this.promptManualCode}">
+                            ${i18n.t('bank_sync.paste_callback_btn')}
+                        </button>
+                    </div>
+                ` : nothing}
+            </div>
+        `;
+    }
+
+    private renderBankCredentialsForm() {
+        return html`
+            <div class="ds-card">
+                <div class="ds-block-title">${i18n.t('bank_sync.credentials_title')}</div>
+                <div class="ds-row-caption" style="margin-bottom: 12px">
+                    ${i18n.t('bank_sync.credentials_desc')}
+                </div>
+
+                <div class="d-fields" style="grid-template-columns: minmax(0, 1fr)">
+                    ${formField(i18n.t('bank_sync.app_id_label'), html`
+                        <input
+                            class="d-input"
+                            type="text"
+                            .value="${this.bankAppId}"
+                            placeholder="${this.bankSyncSettings.hasAppId
+                                ? '••••••••••••••••'
+                                : i18n.t('bank_sync.app_id_placeholder')}"
+                            @input="${(e: any) => { this.bankAppId = e.target.value; }}" />
+                    `)}
+
+                    ${formField(i18n.t('bank_sync.key_label'), html`
+                        <textarea
+                            class="d-input ds-textarea"
+                            .value="${this.bankKey}"
+                            placeholder="${this.bankSyncSettings.hasKey
+                                ? '•••••'
+                                : i18n.t('bank_sync.key_placeholder')}"
+                            @input="${(e: any) => { this.bankKey = e.target.value; }}"></textarea>
+                    `)}
+
+                    ${formField(i18n.t('bank_sync.redirect_url_label'), html`
+                        <input
+                            class="d-input"
+                            type="text"
+                            .value="${this.bankRedirectUrl}"
+                            placeholder="${i18n.t('bank_sync.redirect_url_placeholder')}"
+                            @input="${(e: any) => { this.bankRedirectUrl = e.target.value; }}" />
+                    `)}
+                </div>
+
+                <label class="d-btn-text" style="padding: 0; margin-top: 10px; cursor: pointer">
+                    ${icon('upload_file', 18)}
+                    <span>${i18n.t('bank_sync.key_upload')}</span>
+                    <input
+                        type="file"
+                        accept=".pem,.key,.txt"
+                        style="display: none"
+                        @change="${this.handleKeyFileUpload}" />
+                </label>
+
+                <div class="d-actions">
+                    <button class="d-btn small plain" @click="${this.saveBankCredentials}">
+                        ${i18n.t('bank_sync.save_credentials')}
+                    </button>
+                    <button
+                        class="d-btn-text"
+                        @click="${() => { this.showBankCredentialsForm = false; }}">
+                        ${i18n.t('common.cancel')}
+                    </button>
+                </div>
+
+                ${footnote('lock', i18n.t('bank_sync.redirect_url_hint'))}
+            </div>
+        `;
+    }
+
+    private renderBankConnection(conn: any) {
+        const expiresAt = conn.validUntil ? new Date(conn.validUntil) : null;
+        const daysLeft = expiresAt
+            ? Math.ceil((expiresAt.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+            : 0;
+        const expired = expiresAt !== null && expiresAt.getTime() < Date.now();
+        const expiring = daysLeft > 0 && daysLeft <= 14;
+        const initials = String(conn.aspspName || '?').slice(0, 2).toUpperCase();
+        const bankAccounts = Array.isArray(conn.accounts) ? conn.accounts : [];
+        const linkedCount = bankAccounts.filter((bankAcc: any) => {
+            const uid = typeof bankAcc === 'string'
+                ? bankAcc
+                : String(bankAcc?.uid || bankAcc?.account_id?.iban || bankAcc?.iban || '');
+            return this.accounts.some(a => a.bankAccountUid === uid);
+        }).length;
+
+        return html`
+            <div class="ds-connection">
+                <div class="ds-connection-head">
+                    <span class="ds-bank-tile">${initials}</span>
+                    <div style="flex: 1; min-width: 0">
+                        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
+                            <span class="ds-row-label">${conn.aspspName}</span>
+                            <span class="d-tag ${expired ? 'warning' : expiring ? 'amber' : 'positive'}">
+                                ${expired
+                                    ? i18n.t('bank_sync.status_expired')
+                                    : expiring
+                                        ? i18n.t('bank_sync.status_expiring_soon')
+                                        : i18n.t('bank_sync.status_active')}
+                            </span>
+                        </div>
+                        <div class="ds-row-caption">
+                            ${i18n.t('desktop.connection_meta', {
+                                accounts: linkedCount,
+                                sync: this.lastSyncLabel(),
+                                days: daysLeft > 0 ? i18n.t('bank_sync.expires_in', { days: daysLeft }) : '—',
+                            })}
+                        </div>
+                    </div>
+                    <button
+                        class="d-btn-tonal tiny"
+                        ?disabled="${this.bankSyncLoading}"
+                        @click="${() => this.syncBankNow()}">
+                        ${i18n.t('bank_sync.sync_now')}
+                    </button>
+                    <button
+                        class="d-icon-btn small destructive"
+                        title="${i18n.t('bank_sync.disconnect')}"
+                        @click="${() => this.disconnectBank(conn.id, conn.aspspName)}">
+                        ${icon('link_off', 18)}
+                    </button>
+                </div>
+
+                <div class="ds-linking">
+                    <div class="d-micro">${i18n.t('bank_sync.discovered_accounts')}</div>
+                    ${bankAccounts.length === 0
+                        ? html`<div class="ds-row-caption">${i18n.t('bank_sync.never_synced')}</div>`
+                        : bankAccounts.map((bankAcc: any) => {
+                            const uid = typeof bankAcc === 'string'
+                                ? bankAcc
+                                : String(bankAcc?.uid || bankAcc?.account_id?.iban || bankAcc?.iban || '');
+                            const label = typeof bankAcc === 'object' && bankAcc
+                                ? (bankAcc.account_id?.iban || bankAcc.iban || bankAcc.name || uid)
+                                : String(bankAcc);
+                            const linked = this.accounts.find(a => a.bankAccountUid === uid);
+
+                            return html`
+                                <div class="ds-linking-row">
+                                    <span class="ds-linking-name">${label}</span>
+                                    ${linked
+                                        ? html`
+                                            <span class="d-tag positive">${linked.name}</span>
+                                            <button
+                                                class="d-btn-text"
+                                                @click="${() => this.handleUnlinkAccount(linked.id)}">
+                                                ${i18n.t('bank_sync.unlink_btn')}
+                                            </button>
+                                        `
+                                        : html`
+                                            <select
+                                                class="d-input"
+                                                style="width: 180px; height: 32px"
+                                                @change="${(e: any) => {
+                                                    const accountId = e.target.value;
+                                                    if (accountId) this.handleLinkAccount(accountId, uid, conn.id);
+                                                }}">
+                                                <option value="">
+                                                    ${i18n.t('bank_sync.select_account_placeholder')}
+                                                </option>
+                                                ${this.accounts.map(a => html`
+                                                    <option value="${a.id}">${a.name}</option>
+                                                `)}
+                                            </select>
+                                        `}
+                                </div>
+                            `;
+                        })}
+                </div>
+            </div>
+        `;
+    }
+
+    // ---- Cost objects ----
+
+    private renderDesktopCostObjects() {
+        // Credit-card spend per cost object this month, ranked, so the list
+        // reads the same way the Reports funding panel does
+        const spend = new Map<string, { total: number; count: number }>();
+        this.monthTransactions.forEach(tx => {
+            if (!tx.costObjectId) return;
+            const amount = Number(tx.amount) || 0;
+            if (amount >= 0) return;
+            const entry = spend.get(tx.costObjectId) ?? { total: 0, count: 0 };
+            entry.total += Math.abs(amount);
+            entry.count += 1;
+            spend.set(tx.costObjectId, entry);
+        });
+
+        const rows = this.costObjects
+            .map(co => ({ co, ...(spend.get(co.id) ?? { total: 0, count: 0 }) }))
+            .sort((a, b) => b.total - a.total);
+        const max = rows.reduce((peak, row) => Math.max(peak, row.total), 0);
+
+        if (rows.length === 0) {
+            return html`<div class="d-empty-row">${i18n.t('settings.no_cost_objects')}</div>`;
+        }
+
+        return html`
+            <div class="ds-rows">
+                ${rows.map(row => html`
+                    <div class="ds-row">
+                        <span class="d-dot" style="background: ${row.co.color || CHART_PALETTE[0]}"></span>
+                        <span class="d-emoji">${row.co.icon || ''}</span>
+                        <div style="flex: 1; min-width: 0">
+                            <div class="ds-row-label">${row.co.name}</div>
+                            <div class="ds-row-caption">
+                                ${i18n.t('mobile.transactions_count', { count: row.count })}
+                            </div>
+                        </div>
+                        <div class="d-bar" style="width: 140px; flex: 0 0 140px">
+                            <div
+                                class="d-bar-fill"
+                                style="width: ${max > 0 ? (row.total / max) * 100 : 0}%;
+                                    background: ${row.co.color || CHART_PALETTE[0]}"></div>
+                        </div>
+                        <span class="ds-current">${this.money(row.total)}</span>
+                        <button
+                            class="d-icon-btn small"
+                            title="${i18n.t('common.edit')}"
+                            @click="${() => this.startEditCostObject(row.co)}">
+                            ${icon('edit', 18)}
+                        </button>
+                        <button
+                            class="d-icon-btn small destructive"
+                            title="${i18n.t('common.delete')}"
+                            @click="${() => { this.costObjectToDelete = row.co.id; }}">
+                            ${icon('delete', 18)}
+                        </button>
+                    </div>
+                `)}
+
+                <button
+                    class="d-add-row"
+                    @click="${() => { this.resetCostObjectForm(); this.showCostObjectForm = true; }}">
+                    ${icon('add', 20)}
+                    <span>${i18n.t('settings.add_cost_object')}</span>
+                </button>
+            </div>
+        `;
+    }
+
+    // ---- Backup ----
+
+    private renderDesktopBackup() {
+        return html`
+            <div class="ds-cards">
+                <div class="ds-card">
+                    <div class="ds-card-head">
+                        ${icon('backup', 22)}
+                        <span class="ds-block-title">${i18n.t('settings.create_backup')}</span>
+                    </div>
+                    <div class="ds-row-caption">${i18n.t('settings.backup_description')}</div>
+
+                    <div class="d-fields" style="grid-template-columns: minmax(0, 1fr); margin-top: 12px">
+                        ${formField(i18n.t('settings.encryption_key_optional'), html`
+                            <input
+                                class="d-input password"
+                                type="password"
+                                placeholder="${i18n.t('settings.encryption_placeholder')}"
+                                .value="${this.encryptionKey}"
+                                @input="${(e: any) => { this.encryptionKey = e.target.value; }}" />
+                        `)}
+                    </div>
+
+                    <div class="d-actions">
+                        <button
+                            class="d-btn small plain"
+                            ?disabled="${this.backupLoading}"
+                            @click="${this.createBackup}">
+                            ${this.backupLoading ? i18n.t('common.loading') : i18n.t('desktop.download_backup')}
+                        </button>
+                    </div>
+                </div>
+
+                <div class="ds-card">
+                    <div class="ds-card-head">
+                        ${icon('restore', 22)}
+                        <span class="ds-block-title">${i18n.t('settings.restore_backup')}</span>
+                    </div>
+                    <div class="ds-row-caption">${i18n.t('settings.restore_description')}</div>
+
+                    <div class="d-fields" style="grid-template-columns: minmax(0, 1fr); margin-top: 12px">
+                        ${formField(i18n.t('settings.decryption_key'), html`
+                            <input
+                                class="d-input password"
+                                type="password"
+                                placeholder="${i18n.t('settings.decryption_placeholder')}"
+                                .value="${this.decryptionKey}"
+                                @input="${(e: any) => { this.decryptionKey = e.target.value; }}" />
+                        `)}
+                    </div>
+
+                    <div class="d-actions">
+                        <label class="d-btn-outlined" style="cursor: pointer">
+                            ${icon('upload_file', 16)}
+                            <span>
+                                ${this.restoreLoading
+                                    ? i18n.t('common.loading')
+                                    : i18n.t('settings.select_backup_file')}
+                            </span>
+                            <input
+                                type="file"
+                                accept=".json,.enc"
+                                style="display: none"
+                                ?disabled="${this.restoreLoading}"
+                                @change="${this.restoreBackup}" />
+                        </label>
+                    </div>
+
+                    <div class="d-warn-block" style="margin-top: 12px">
+                        ${icon('warning', 18)}
+                        <span>${i18n.t('desktop.restore_warning')}</span>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    // ---- Profile ----
+
+    private renderDesktopProfile() {
+        const profile = this.currentProfile;
+        const initial = (profile?.name || '?').charAt(0).toUpperCase();
+
+        return html`
+            <div class="ds-card" style="display: flex; align-items: center; gap: 16px">
+                <span class="ds-avatar large">${initial}</span>
+                <div style="flex: 1; min-width: 0">
+                    <div class="ds-profile-title">
+                        ${profile?.name || i18n.t('auth.settings.currentProfile')}
+                    </div>
+                    <div class="ds-row-caption">
+                        ${profile?.pinLength
+                            ? i18n.t('mobile.pin_digits', { count: profile.pinLength })
+                            : ''}
+                    </div>
+                </div>
+                <button class="d-btn-outlined" @click="${() => { this.showChangePinModal = true; }}">
+                    ${i18n.t('auth.settings.changePin')}
+                </button>
+            </div>
+
+            <div class="d-micro" style="margin: 18px 0 6px">
+                ${i18n.t('desktop.all_profiles')}
+            </div>
+
+            <div class="ds-rows">
+                ${this.profiles.map(entry => {
+                    const current = entry.id === profile?.id || entry.name === profile?.name;
+                    return html`
+                        <div class="ds-row">
+                            <span class="ds-avatar ${current ? '' : 'muted'}">
+                                ${(entry.name || '?').charAt(0).toUpperCase()}
+                            </span>
+                            <div style="flex: 1; min-width: 0">
+                                <div class="ds-row-label">${entry.name}</div>
+                                <div class="ds-row-caption">
+                                    ${entry.pinLength
+                                        ? i18n.t('mobile.pin_digits', { count: entry.pinLength })
+                                        : ''}
+                                </div>
+                            </div>
+                            ${current
+                                ? html`<span class="d-tag selected">${i18n.t('desktop.current')}</span>`
+                                : html`
+                                    <button class="d-btn-text" @click="${this.handleLogout}">
+                                        ${i18n.t('auth.settings.switchProfile')}
+                                    </button>
+                                `}
+                        </div>
+                    `;
+                })}
+
+                <button
+                    class="d-add-row"
+                    @click="${() => { this.showCreateProfileModal = true; }}">
+                    ${icon('person_add', 20)}
+                    <span>${i18n.t('auth.settings.createProfile')}</span>
+                </button>
+            </div>
+
+            ${footnote('info', i18n.t('auth.settings.switchProfileHint'))}
+        `;
+    }
+
+    // ---- Danger zone ----
+
+    private renderDesktopDanger() {
+        const cards = [
+            {
+                glyph: 'delete_forever',
+                title: i18n.t('settings.delete_profile_data'),
+                body: i18n.t('settings.delete_profile_data_desc'),
+                label: i18n.t('desktop.delete_data'),
+                action: () => this.deleteProfileData(),
+            },
+            {
+                glyph: 'person_remove',
+                title: i18n.t('settings.delete_this_profile'),
+                body: i18n.t('settings.delete_this_profile_desc'),
+                label: i18n.t('desktop.delete_profile'),
+                action: () => { this.showDeleteProfileModal = true; },
+            },
+            {
+                glyph: 'warning',
+                title: i18n.t('settings.delete_all_profiles_data'),
+                body: i18n.t('settings.delete_all_profiles_data_desc'),
+                label: i18n.t('settings.delete_everything'),
+                action: () => { this.showDeleteAllDataModal = true; },
+            },
+        ];
+
+        return html`
+            <div class="ds-cards">
+                ${cards.map(card => html`
+                    <div class="ds-card danger">
+                        <div class="ds-card-head danger">
+                            ${icon(card.glyph, 22)}
+                            <span class="ds-block-title">${card.title}</span>
+                        </div>
+                        <div class="ds-row-caption" style="text-wrap: pretty">${card.body}</div>
+                        <div class="d-actions">
+                            <button class="d-btn small plain danger" @click="${card.action}">
+                                ${card.label}
+                            </button>
+                        </div>
+                    </div>
+                `)}
+            </div>
+
+            <div class="d-warn-block" style="margin-top: 16px">
+                ${icon('warning', 18)}
+                <span>${i18n.t('desktop.danger_note')}</span>
+            </div>
+        `;
+    }
+
+    render() {
+        return this.isMobile ? this.renderMobile() : this.renderDesktop();
     }
 }

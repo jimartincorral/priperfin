@@ -13,6 +13,16 @@ import {
   watchMobileViewport,
   type SnackbarOptions,
 } from '../styles/mobile-ui';
+import {
+  contentWidth,
+  desktopUI,
+  field as formField,
+  footnote,
+  paletteColor,
+  rankedBar,
+  statusPill,
+  watchViewportWidth,
+} from '../styles/desktop-ui';
 
 import { i18n } from '../i18n/i18n';
 
@@ -36,8 +46,6 @@ export class ViewGoals extends LitElement {
   @state() unassigned: number = 0;
 
   // Inline Editing State
-  @state() editingCell: { id: string, field: string } | null = null;
-  @state() editValue: any = null;
 
   @state() sortField = 'targetDate';
   @state() sortDirection: 'asc' | 'desc' = 'asc';
@@ -49,7 +57,6 @@ export class ViewGoals extends LitElement {
 
   @state() showDistributeMenu: 'unassigned' | 'all' | null = null;
   
-  @state() showAddRow = false;
   @state() newGoal: any = { name: '', categoryId: '', startDate: '', targetDate: '', targetAmount: 0, isEvergreen: false, targetMonths: null };
 
   // --- Mobile layer (<= 600px). The desktop table above the breakpoint is untouched. ---
@@ -63,9 +70,22 @@ export class ViewGoals extends LitElement {
   @state() goalToDelete: string | null = null;
   /** Inline validation messages for the mobile goal form, keyed by field. */
   @state() formErrors: Record<string, string> = {};
+
+  // --- Desktop layer (> 600px) ---
+  /** Card whose inline expand is open; only one at a time. */
+  @state() private openGoalId: string | null = null;
+  /** Goal whose inline contribution field is open. */
+  @state() private contributeFor: string | null = null;
+  @state() private distributeMode: 'byDate' | 'toOnTrack' | 'proportional' = 'toOnTrack';
+  @state() private showSortMenu = false;
+  @state() private showFilterMenu = false;
+  @state() private goalCatMenu = false;
+  /** Drives the responsive removal of the side column. */
+  @state() viewportWidth = window.innerWidth;
   @state() snack: SnackbarOptions | null = null;
 
   private unwatchViewport?: () => void;
+  private unwatchWidth?: () => void;
   private snackTimer?: number;
 
   get sortedGoals() {
@@ -620,7 +640,185 @@ export class ViewGoals extends LitElement {
       font: 500 20px/28px 'Roboto', sans-serif;
     }
     .g-prefix-field input:focus { outline: none; }
-  `, mobileUI];
+    /* ---------- desktop ---------- */
+
+    .dg-anchor { position: relative; display: flex; flex-shrink: 0; }
+    .dg-pop {
+      position: absolute;
+      top: calc(100% + 6px);
+      left: 0;
+      z-index: 20;
+      min-width: 220px;
+      padding: 8px;
+      background: var(--md-sys-color-surface-container-lowest);
+      border: 1px solid var(--md-sys-color-outline-variant);
+      border-radius: 12px;
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+      box-sizing: border-box;
+    }
+    .dg-pop.wide { min-width: 320px; }
+    .dg-pop-list { max-height: 260px; overflow-y: auto; }
+    .dg-pop-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      min-height: 36px;
+      padding: 0 10px;
+      border-radius: 8px;
+      box-sizing: border-box;
+      font: 400 13px/18px 'Roboto', sans-serif;
+      color: var(--md-sys-color-on-surface);
+      cursor: pointer;
+    }
+    .dg-pop-row:hover { background: var(--md-sys-color-surface-container); }
+    .dg-pop-row.selected {
+      background: var(--md-sys-color-secondary-container);
+      color: var(--md-sys-color-on-secondary-container);
+    }
+
+    .dg-sort {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      height: 36px;
+      padding: 0 4px 0 12px;
+      border-radius: 18px;
+      background: var(--md-sys-color-surface-container);
+      box-sizing: border-box;
+    }
+    .dg-sort-label {
+      font: 400 13px/16px 'Roboto', sans-serif;
+      color: var(--md-sys-color-on-surface-variant);
+      white-space: nowrap;
+    }
+    .dg-sort-value {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      height: 28px;
+      padding: 0 8px 0 10px;
+      border-radius: 14px;
+      background: var(--md-sys-color-surface-container-lowest);
+      color: var(--md-sys-color-on-surface);
+      font: 500 13px/16px 'Roboto', sans-serif;
+      white-space: nowrap;
+      cursor: pointer;
+    }
+    .dg-sort-value .m-icon { color: var(--md-sys-color-on-surface-variant); }
+
+    /* Goal cards */
+    .dg-card {
+      background: var(--md-sys-color-surface-container-lowest);
+      border: 1px solid var(--md-sys-color-outline-variant);
+      border-radius: 16px;
+      overflow: hidden;
+    }
+    /* A card that is behind the line carries it in its border too */
+    .dg-card.behind { border-color: var(--pf-error-border); }
+    .dg-row {
+      display: grid;
+      /* minmax(0, ...) on the meta columns, or they starve column one */
+      grid-template-columns: minmax(0, 1fr) minmax(0, 200px) minmax(0, 150px) minmax(0, 132px) 28px;
+      align-items: center;
+      gap: 16px;
+      padding: 14px 16px;
+      cursor: pointer;
+      background: none;
+      width: 100%;
+      box-sizing: border-box;
+      text-align: left;
+      font: inherit;
+      color: inherit;
+    }
+    .dg-row:hover { background: var(--md-sys-color-surface); }
+    .dg-title-row {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+      row-gap: 6px;
+      min-width: 0;
+    }
+    .dg-name {
+      flex: 1 1 auto;
+      min-width: 0;
+      font: 500 15px/20px 'Roboto', sans-serif;
+      color: var(--md-sys-color-on-surface);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .dg-saved {
+      font: 500 16px/22px 'Roboto Mono', ui-monospace, monospace;
+      color: var(--md-sys-color-on-surface);
+      white-space: nowrap;
+    }
+    .dg-monthly {
+      font: 500 14px/20px 'Roboto Mono', ui-monospace, monospace;
+      color: var(--md-sys-color-on-surface);
+      white-space: nowrap;
+    }
+    .dg-date {
+      font: 400 14px/20px 'Roboto', sans-serif;
+      color: var(--md-sys-color-on-surface);
+      white-space: nowrap;
+    }
+
+    .dg-expand {
+      padding: 16px;
+      border-top: 1px solid var(--md-sys-color-outline-variant);
+      background: var(--md-sys-color-surface-container-low);
+    }
+    .dg-errors {
+      margin-top: 12px;
+      font: 400 12px/16px 'Roboto', sans-serif;
+      color: var(--md-sys-color-error);
+    }
+    .dg-contribute { display: flex; align-items: center; gap: 8px; }
+
+    /* Distribute modes as radio cards */
+    .dg-mode {
+      display: flex;
+      gap: 10px;
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid var(--md-sys-color-outline-variant);
+      background: var(--md-sys-color-surface-container-lowest);
+      box-sizing: border-box;
+      text-align: left;
+      cursor: pointer;
+      color: var(--md-sys-color-on-surface);
+    }
+    .dg-mode .m-icon { color: var(--md-sys-color-outline); margin-top: 1px; }
+    .dg-mode.selected {
+      border-color: var(--md-sys-color-primary);
+      background: var(--md-sys-color-secondary-container);
+      color: var(--md-sys-color-on-secondary-container);
+    }
+    .dg-mode.selected .m-icon { color: var(--md-sys-color-primary); }
+    .dg-mode-title {
+      display: block;
+      font: 500 13px/18px 'Roboto', sans-serif;
+      color: inherit;
+    }
+    .dg-mode-desc {
+      display: block;
+      font: 400 12px/16px 'Roboto', sans-serif;
+      color: var(--md-sys-color-on-surface-variant);
+      text-wrap: pretty;
+    }
+    .dg-mode.selected .dg-mode-desc { color: inherit; opacity: 0.8; }
+
+    .dg-evergreen {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      margin-top: 14px;
+      cursor: pointer;
+    }
+  `, mobileUI, desktopUI];
 
 
   async firstUpdated() {
@@ -666,6 +864,7 @@ export class ViewGoals extends LitElement {
     i18n.addEventListener('lang-change', () => this.requestUpdate());
     document.addEventListener('click', this.handleOutsideClick);
     this.unwatchViewport = watchMobileViewport(this);
+    this.unwatchWidth = watchViewportWidth(this);
   }
 
   disconnectedCallback() {
@@ -673,6 +872,7 @@ export class ViewGoals extends LitElement {
     i18n.removeEventListener('lang-change', () => this.requestUpdate());
     document.removeEventListener('click', this.handleOutsideClick);
     this.unwatchViewport?.();
+    this.unwatchWidth?.();
     if (this.snackTimer) window.clearTimeout(this.snackTimer);
   }
 
@@ -792,75 +992,6 @@ export class ViewGoals extends LitElement {
     return parsed.toISOString().split('T')[0];
   }
 
-  startEditing(id: string, field: string, value: any) {
-    this.editingCell = { id, field };
-    this.editValue =
-      field === 'startDate' || field === 'targetDate'
-        ? this.formatDateForInput(value)
-        : value;
-    // Delay focus to let render happen
-    setTimeout(() => {
-      const input = this.shadowRoot?.querySelector(`#edit-${id}-${field}`) as HTMLElement;
-      if (input) input.focus();
-    }, 0);
-  }
-
-  cancelEditing() {
-    this.editingCell = null;
-    this.editValue = null;
-  }
-
-  // Save a single cell update
-  async saveCell(id: string, field: string) {
-    if (this.editValue === null) return;
-
-    // Optimistic / Sanitization
-    let payload: any = {};
-
-    if (field === 'targetAmount' || field === 'savedAmount') {
-      payload[field] = isNaN(parseFloat(this.editValue)) ? 0 : parseFloat(this.editValue);
-    } else if (field === 'categoryId') {
-      payload[field] = this.editValue === '' || this.editValue === 'uncategorized' ? null : this.editValue;
-    } else if (field === 'startDate' || field === 'targetDate') {
-      if (!this.editValue) {
-        // For required fields, we might want to prevent empty saving or revert
-        // But for now, we just don't send updates if it's invalid for required fields
-        if (field === 'targetDate') { this.cancelEditing(); return; } // Target date required
-        payload[field] = null; // Start date optional
-      } else {
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(this.editValue)) {
-          alert('Date format must be yyyy-mm-dd');
-          return;
-        }
-        payload[field] = new Date(`${this.editValue}T00:00:00.000Z`).toISOString();
-      }
-    } else {
-      payload[field] = this.editValue;
-    }
-
-    try {
-      await api.patch(`/savings-goals/${id}`, payload);
-      this.editingCell = null;
-      this.editValue = null;
-      await this.loadData();
-    } catch (e: any) {
-      console.error('Failed to update cell', e);
-      this.notify('Update failed: ' + (e.message || 'Unknown error'));
-      this.cancelEditing();
-    }
-  }
-
-  handleKeyDown(e: KeyboardEvent, id: string, field: string) {
-    if (e.key === 'Enter') {
-      this.saveCell(id, field);
-    } else if (e.key === 'Escape') {
-      this.cancelEditing();
-    }
-  }
-
-  // --- New Goal Creation ---
-
-  /** Field-keyed validation errors for the new-goal form. */
   private validateNewGoal(): Record<string, string> {
     const goal = this.newGoal;
     const errors: Record<string, string> = {};
@@ -868,10 +999,17 @@ export class ViewGoals extends LitElement {
     if (!goal.name) errors.name = 'Name is required';
     if (!goal.targetAmount) errors.targetAmount = 'Target Amount is required';
 
+    const isoDate = /^\d{4}-\d{2}-\d{2}$/;
+    if (goal.startDate && !isoDate.test(goal.startDate)) {
+      errors.startDate = 'Start date must be yyyy-mm-dd';
+    }
+
     if (goal.isEvergreen) {
       if (!goal.targetMonths || goal.targetMonths <= 0) {
         errors.targetMonths = 'Target months is required for evergreen goals';
       }
+    } else if (goal.targetDate && !isoDate.test(goal.targetDate)) {
+      errors.targetDate = 'Target date must be yyyy-mm-dd';
     } else if (!goal.targetDate) {
       errors.targetDate = 'Target Date is required';
     } else if (new Date(goal.targetDate) < new Date(goal.startDate)) {
@@ -886,9 +1024,8 @@ export class ViewGoals extends LitElement {
 
     const errors = this.validateNewGoal();
     if (Object.keys(errors).length > 0) {
-      // Mobile shows the messages under the fields; desktop keeps the alert
-      if (this.isMobile) this.formErrors = errors;
-      else alert(Object.values(errors)[0]);
+      // Both layouts show the messages under the fields now
+      this.formErrors = errors;
       return;
     }
     this.formErrors = {};
@@ -908,7 +1045,6 @@ export class ViewGoals extends LitElement {
       await api.post('/savings-goals', payload);
       // Reset form
       this.newGoal = { name: '', targetAmount: 0, startDate: new Date().toISOString().split('T')[0], targetDate: '', savedAmount: 0, categoryId: '', isEvergreen: false, targetMonths: 12 };
-      this.showAddRow = false;
       this.showGoalForm = false;
       await this.loadData();
     } catch (e: any) {
@@ -1597,7 +1733,8 @@ export class ViewGoals extends LitElement {
   }
 
   /** Loads an existing goal into the mobile form so it can be edited in place. */
-  private startMobileEdit(goal: any) {
+  /** Seeds the edit draft from a goal; shared by both layouts. */
+  private startGoalEdit(goal: any) {
     this.newGoal = {
       id: goal.id,
       name: goal.name || '',
@@ -1610,11 +1747,15 @@ export class ViewGoals extends LitElement {
       targetMonths: goal.targetMonths ?? 12,
     };
     this.formErrors = {};
+  }
+
+  private startMobileEdit(goal: any) {
+    this.startGoalEdit(goal);
     this.showGoalForm = true;
   }
 
-  /** Saves the mobile form, creating or updating depending on newGoal.id. */
-  private async saveMobileGoal() {
+  /** Saves the edit draft, creating or updating depending on newGoal.id. */
+  private async saveGoalDraft() {
     if (!this.newGoal.id) {
       await this.createGoal();
       return;
@@ -1648,6 +1789,7 @@ export class ViewGoals extends LitElement {
     try {
       await api.patch(`/savings-goals/${this.newGoal.id}`, payload);
       this.showGoalForm = false;
+      this.openGoalId = null;
       await this.loadData();
     } catch (e: any) {
       this.notify('Update failed: ' + (e.message || 'Unknown error'));
@@ -1807,7 +1949,7 @@ export class ViewGoals extends LitElement {
             @click="${() => { this.showGoalForm = false; this.formErrors = {}; }}">
             ${i18n.t('common.cancel')}
           </button>
-          <button class="m-btn form" style="flex: 2" @click="${() => this.saveMobileGoal()}">
+          <button class="m-btn form" style="flex: 2" @click="${() => this.saveGoalDraft()}">
             ${i18n.t('mobile.save_goal')}
           </button>
         </div>
@@ -1922,328 +2064,882 @@ export class ViewGoals extends LitElement {
     return this.renderMobileList();
   }
 
-  render() {
-    if (this.isMobile) return this.renderMobile();
+  // ------------------------------------------------------------------
+  // Desktop layout (> 600px)
+  // ------------------------------------------------------------------
 
-    if (this.loading) {
-      return html`<p>${i18n.t('common.loading')}</p>`;
+  /** The 360px side column only fits while the cards still get ~640px. */
+  private get showSideColumn() {
+    return contentWidth(this.viewportWidth) - 380 >= 640;
+  }
+
+  /**
+   * The goals that are behind the line — `saved < shouldHave`. Every count and
+   * hint on the screen is derived from this one set, badge included, so they
+   * can never disagree. An evergreen goal can be in here while its pill still
+   * reads Evergreen.
+   */
+  private get behindGoals() {
+    return (Array.isArray(this.goals) ? this.goals : []).filter(goal =>
+      Number(goal.savedAmount || 0) < this.getEffectiveShouldHaveSaved(goal));
+  }
+
+  private get shortfallTotal() {
+    return this.behindGoals.reduce((sum, goal) =>
+      sum + (this.getEffectiveShouldHaveSaved(goal) - Number(goal.savedAmount || 0)), 0);
+  }
+
+  /** A goal's emoji comes from its category, as the rest of the app does. */
+  private goalIcon(goal: any): string {
+    const category = this.categories.find(c => c.id === goal.categoryId);
+    return category?.icon || '🐷';
+  }
+
+  private closeDesktopMenus() {
+    this.showDistributeMenu = null;
+    this.showSortMenu = false;
+    this.showFilterMenu = false;
+    this.goalCatMenu = false;
+  }
+
+  private toggleGoalCard(goal: any) {
+    if (this.openGoalId === goal.id) {
+      this.openGoalId = null;
+      return;
     }
+    this.openGoalId = goal.id;
+    this.goalCatMenu = false;
+    this.contributeFor = null;
+    this.startGoalEdit(goal);
+  }
 
-    const symbol = this.currency === 'EUR' ? '€' : '$';
-    const sorted = this.sortedGoals;
+  private renderDesktop() {
+    const showSide = this.showSideColumn;
 
     return html`
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-        <h1>${i18n.t('goals.title')}</h1>
+      <div class="d-screen" @click="${() => this.closeDesktopMenus()}">
+        ${this.renderDesktopHeader()}
+        ${this.renderDesktopStrip()}
+
+        <div
+          class="d-content scroll top"
+          style="grid-template-columns: ${showSide ? 'minmax(0, 1fr) 360px' : 'minmax(0, 1fr)'}">
+          <div style="min-width: 0; display: flex; flex-direction: column; gap: 12px">
+            ${this.loading
+              ? this.renderDesktopSkeletons()
+              : this.sortedGoals.map(goal => this.renderGoalCard(goal))}
+
+            <button
+              class="d-add-row dashed"
+              @click="${() => {
+                this.formErrors = {};
+                this.newGoal = {
+                  name: '',
+                  targetAmount: 0,
+                  startDate: new Date().toISOString().split('T')[0],
+                  targetDate: '',
+                  savedAmount: 0,
+                  categoryId: '',
+                  isEvergreen: false,
+                  targetMonths: 12,
+                };
+                this.showGoalForm = true;
+              }}">
+              ${icon('add', 20)}
+              <span>${i18n.t('mobile.new_goal')}</span>
+            </button>
+          </div>
+
+          ${showSide ? this.renderDesktopSide() : nothing}
+        </div>
+
+        ${this.showGoalForm ? this.renderDesktopGoalModal() : nothing}
       </div>
+    `;
+  }
 
-      <div class="header-controls">
-        <div class="savings-input">
-          <label>${i18n.t('goals.current_saved')}</label>
-          <input type="number" .value="${this.totalSavings}" @input="${this.handleTotalSavingsChange}" placeholder="0.00">
+  private renderDesktopSkeletons() {
+    return html`
+      ${[0, 1, 2].map(index => html`
+        <div
+          class="d-panel"
+          style="padding: 14px 16px; gap: 10px"
+          aria-hidden="true">
+          ${skeleton('35%', '16px', index % 2 === 1)}
+          ${skeleton('100%', '10px', index % 2 === 1)}
         </div>
-        
-        <div class="savings-input">
-             <label>${i18n.t('goals.unassigned_savings')}</label>
-             <div class="unassigned-badge ${this.unassigned >= 0 ? 'positive' : 'negative'}">
-                ${this.unassigned >= 0 ? '' : '-'}${symbol}${Math.abs(this.unassigned).toFixed(2)}
-             </div>
-        </div>
+      `)}
+    `;
+  }
 
-        <div style="position: relative; display: flex; flex-direction: column; gap: 8px;">
-          <button class="btn-secondary" 
-                  @click="${(e: Event) => { e.stopPropagation(); this.showDistributeMenu = this.showDistributeMenu === 'unassigned' ? null : 'unassigned'; }}"
-                  ?disabled="${this.unassigned <= 0}">
-            ${i18n.t('goals.distribute.distribute_unassigned')}
-          </button>
-          
-          <button class="btn-warning" 
-                  @click="${(e: Event) => { e.stopPropagation(); this.showDistributeMenu = this.showDistributeMenu === 'all' ? null : 'all'; }}">
-            ${i18n.t('goals.distribute.redistribute_all')}
-          </button>
-          
-          ${this.showDistributeMenu ? html`
-            <div class="distribute-menu" @click="${(e: Event) => e.stopPropagation()}">
-              <div class="menu-item" @click="${() => this.handleDistribute('byDate')}">
-                <strong>${i18n.t('goals.distribute.fill_by_date')}</strong>
-                <span>${i18n.t('goals.distribute.fill_by_date_desc')}</span>
-              </div>
-              <div class="menu-item" @click="${() => this.handleDistribute('toOnTrack')}">
-                <strong>${i18n.t('goals.distribute.fill_to_on_track')}</strong>
-                <span>${i18n.t('goals.distribute.fill_to_on_track_desc')}</span>
-              </div>
-              <div class="menu-item" @click="${() => this.handleDistribute('proportional')}">
-                <strong>${i18n.t('goals.distribute.proportional')}</strong>
-                <span>${i18n.t('goals.distribute.proportional_desc')}</span>
-              </div>
+  private renderDesktopHeader() {
+    const sortFields: { value: string; label: string }[] = [
+      { value: 'name', label: i18n.t('mobile.goal_name') },
+      { value: 'targetDate', label: i18n.t('goals.target_date') },
+      { value: 'targetAmount', label: i18n.t('goals.target_amount') },
+      { value: 'savedAmount', label: i18n.t('goals.current_saved') },
+      { value: 'status', label: i18n.t('goals.status.on_track') },
+    ];
+    const activeSort = sortFields.find(f => f.value === this.sortField) ?? sortFields[1];
+
+    return html`
+      <div class="d-header">
+        <h1>${i18n.t('nav.goals')}</h1>
+
+        <div class="dg-anchor" @click="${(e: Event) => e.stopPropagation()}">
+          <div class="dg-sort">
+            <span class="dg-sort-label">${i18n.t('desktop.sort')}</span>
+            <button
+              class="dg-sort-value"
+              @click="${() => {
+                const open = this.showSortMenu;
+                this.closeDesktopMenus();
+                this.showSortMenu = !open;
+              }}">
+              <span>${activeSort.label}</span>
+              ${icon(this.sortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward', 16)}
+            </button>
+          </div>
+          ${this.showSortMenu ? html`
+            <div class="dg-pop">
+              ${sortFields.map(sort => html`
+                <button
+                  class="dg-pop-row ${sort.value === this.sortField ? 'selected' : ''}"
+                  @click="${() => { this.toggleSort(sort.value); this.showSortMenu = false; }}">
+                  <span style="flex: 1">${sort.label}</span>
+                  ${sort.value === this.sortField
+                    ? icon(this.sortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward', 16)
+                    : nothing}
+                </button>
+              `)}
             </div>
-          ` : ''}
+          ` : nothing}
         </div>
-      </div>
 
-      <div style="display: flex; justify-content: flex-end; margin-bottom: 1rem;">
-        <button class="btn-primary" @click="${() => this.showAddRow = !this.showAddRow}">
-            ${this.showAddRow ? i18n.t('common.cancel') : '+ ' + i18n.t('goals.add_goal')}
+        <div class="dg-anchor" @click="${(e: Event) => e.stopPropagation()}">
+          <button
+            class="d-btn-outlined"
+            @click="${() => {
+              const open = this.showFilterMenu;
+              this.closeDesktopMenus();
+              this.showFilterMenu = !open;
+            }}">
+            ${icon('filter_list', 16)}
+            <span>${i18n.t('filters.filters')}</span>
+            ${this.filters.length > 0
+              ? html`<span class="d-seg-count">${this.filters.length}</span>`
+              : nothing}
+          </button>
+          ${this.showFilterMenu ? this.renderFilterPopover() : nothing}
+        </div>
+
+        <div class="d-spacer"></div>
+
+        <button
+          class="d-btn"
+          @click="${() => {
+            this.formErrors = {};
+            this.newGoal = {
+              name: '',
+              targetAmount: 0,
+              startDate: new Date().toISOString().split('T')[0],
+              targetDate: '',
+              savedAmount: 0,
+              categoryId: '',
+              isEvergreen: false,
+              targetMonths: 12,
+            };
+            this.showGoalForm = true;
+          }}">
+          ${icon('add', 20)}
+          <span>${i18n.t('mobile.new_goal')}</span>
         </button>
       </div>
-
-      ${this.showAddRow ? html`
-        <div class="card" style="margin-bottom: 1rem; padding: 20px;">
-          <h3 style="margin: 0 0 16px 0; color: var(--md-sys-color-on-surface);">${i18n.t('goals.add_goal')}</h3>
-          <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px;">
-            <div>
-              <label style="display: block; margin-bottom: 4px; font-size: 0.875rem; color: var(--md-sys-color-on-surface-variant);">${i18n.t('goals.goal_name')}</label>
-              <input type="text" placeholder="${i18n.t('goals.goal_name')}" .value="${this.newGoal.name}" @input="${(e: any) => this.newGoal = { ...this.newGoal, name: e.target.value }}" style="width: 100%; padding: 8px; border: 1px solid var(--md-sys-color-outline); border-radius: 4px; background: var(--md-sys-color-surface); color: var(--md-sys-color-on-surface); box-sizing: border-box;">
-            </div>
-            
-            <div>
-              <label style="display: block; margin-bottom: 4px; font-size: 0.875rem; color: var(--md-sys-color-on-surface-variant);">${i18n.t('common.category')}</label>
-              <filterable-select
-                .value="${this.newGoal.categoryId || ''}"
-                .options="${this.getCategoryOptions()}"
-                .placeholder="${i18n.t('common.category')}"
-                @change="${(e: CustomEvent) => this.newGoal = { ...this.newGoal, categoryId: e.detail.value }}">
-              </filterable-select>
-            </div>
-            
-            <div>
-              <label style="display: block; margin-bottom: 4px; font-size: 0.875rem; color: var(--md-sys-color-on-surface-variant);">${i18n.t('goals.start_date')}</label>
-              <input type="text" pattern="\d{4}-\d{2}-\d{2}" placeholder="yyyy-mm-dd" title="Format: yyyy-mm-dd" .value="${this.newGoal.startDate}" @input="${(e: any) => this.newGoal = { ...this.newGoal, startDate: e.target.value }}" style="width: 100%; padding: 8px; border: 1px solid var(--md-sys-color-outline); border-radius: 4px; background: var(--md-sys-color-surface); color: var(--md-sys-color-on-surface); box-sizing: border-box;">
-            </div>
-            
-            <div>
-              <label style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 0.875rem; color: var(--md-sys-color-on-surface-variant);">
-                <input type="checkbox" .checked="${this.newGoal.isEvergreen}" @change="${(e: any) => this.newGoal = { ...this.newGoal, isEvergreen: e.target.checked }}" style="width: auto; height: auto;">
-                ${i18n.t('goals.evergreen_goal')}
-              </label>
-              <label style="display: block; margin-bottom: 4px; font-size: 0.75rem; color: var(--md-sys-color-on-surface-variant); font-weight: 500;">
-                ${this.newGoal.isEvergreen ? i18n.t('goals.target_months') : i18n.t('goals.target_date')}
-              </label>
-              ${this.newGoal.isEvergreen ? html`
-                <input type="number" placeholder="${i18n.t('goals.target_months')}" .value="${this.newGoal.targetMonths || ''}" @input="${(e: any) => this.newGoal = { ...this.newGoal, targetMonths: parseInt(e.target.value) }}" style="width: 100%; padding: 8px; border: 1px solid var(--md-sys-color-outline); border-radius: 4px; background: var(--md-sys-color-surface); color: var(--md-sys-color-on-surface); box-sizing: border-box;">
-              ` : html`
-                <input type="text" pattern="\d{4}-\d{2}-\d{2}" placeholder="yyyy-mm-dd" .value="${this.newGoal.targetDate}" @input="${(e: any) => this.newGoal = { ...this.newGoal, targetDate: e.target.value }}" style="width: 100%; padding: 8px; border: 1px solid var(--md-sys-color-outline); border-radius: 4px; background: var(--md-sys-color-surface); color: var(--md-sys-color-on-surface); box-sizing: border-box;">
-              `}
-            </div>
-            
-            <div>
-              <label style="display: block; margin-bottom: 4px; font-size: 0.875rem; color: var(--md-sys-color-on-surface-variant);">${i18n.t('goals.target_amount')}</label>
-              <input type="number" placeholder="0" .value="${this.newGoal.targetAmount || ''}" @input="${(e: any) => this.newGoal = { ...this.newGoal, targetAmount: parseFloat(e.target.value) }}" style="width: 100%; padding: 8px; border: 1px solid var(--md-sys-color-outline); border-radius: 4px; background: var(--md-sys-color-surface); color: var(--md-sys-color-on-surface); box-sizing: border-box;">
-            </div>
-            
-            <div>
-              <label style="display: block; margin-bottom: 4px; font-size: 0.875rem; color: var(--md-sys-color-on-surface-variant);">${i18n.t('goals.current_saved')}</label>
-              <input type="number" placeholder="0" .value="${this.newGoal.savedAmount || ''}" @input="${(e: any) => this.newGoal = { ...this.newGoal, savedAmount: parseFloat(e.target.value) }}" style="width: 100%; padding: 8px; border: 1px solid var(--md-sys-color-outline); border-radius: 4px; background: var(--md-sys-color-surface); color: var(--md-sys-color-on-surface); box-sizing: border-box;">
-            </div>
-          </div>
-          <div style="display: flex; gap: 12px; margin-top: 16px; justify-content: flex-end;">
-            <button class="btn-secondary" @click="${() => this.showAddRow = false}">${i18n.t('common.cancel')}</button>
-            <button class="btn-primary" @click="${this.createGoal}">${i18n.t('common.save')}</button>
-          </div>
-        </div>
-      ` : ''}
-
-      <div class="filter-controls">
-          <div class="filter-row">
-              <span style="font-weight: 500">${i18n.t('goals.filter.filter_by')}:</span>
-              
-              <select .value="${this.filterField}" @change="${(e: any) => this.filterField = e.target.value}">
-                  <option value="name">${i18n.t('goals.goal_name')}</option>
-                  <option value="categoryId">${i18n.t('common.category')}</option>
-                  <option value="startDate">${i18n.t('goals.start_date')}</option>
-                  <option value="targetDate">${i18n.t('goals.target_date')}</option>
-                  <option value="targetAmount">${i18n.t('goals.target_amount')}</option>
-                  <option value="savedAmount">${i18n.t('goals.current_saved')}</option>
-                  <option value="status">${i18n.t('goals.status.on_track')}</option>
-              </select>
-
-              <select .value="${this.filterOperator}" @change="${(e: any) => this.filterOperator = e.target.value}">
-                  <option value="contains">${i18n.t('goals.filter.op.contains')}</option>
-                  <option value="equals">${i18n.t('goals.filter.op.equals')}</option>
-                  <option value="gt">${i18n.t('goals.filter.op.gt')}</option>
-                  <option value="lt">${i18n.t('goals.filter.op.lt')}</option>
-                  <option value="gte">${i18n.t('goals.filter.op.gte')}</option>
-                  <option value="lte">${i18n.t('goals.filter.op.lte')}</option>
-              </select>
-
-              <input type="text" 
-                  placeholder="${i18n.t('goals.filter.value')}" 
-                  .value="${this.filterValue}" 
-                  @input="${(e: any) => this.filterValue = e.target.value}"
-                  @keydown="${(e: KeyboardEvent) => e.key === 'Enter' && this.addFilter()}">
-              
-              <button class="btn-primary" style="height: 36px; padding: 0 16px;" @click="${this.addFilter}">
-                  ${i18n.t('goals.filter.add')}
-              </button>
-              
-              ${this.filters.length > 0 ? html`
-                  <button style="height: 36px; padding: 0 16px; background: transparent; color: var(--md-sys-color-error);" @click="${this.clearFilters}">
-                      ${i18n.t('goals.filter.clear_all')}
-                  </button>
-              ` : ''}
-          </div>
-
-          ${this.filters.length > 0 ? html`
-              <div class="chip-container">
-                  ${this.filters.map(f => html`
-                      <div class="chip">
-                          <span>
-                            ${this.getFieldLabel(f.field)} 
-                            <b>${this.getOperatorLabel(f.operator)}</b> 
-                            "${f.value}"
-                          </span>
-                          <button @click="${() => this.removeFilter(f.id)}">✕</button>
-                      </div>
-                  `)}
-              </div>
-          ` : ''}
-      </div>
-
-      <div class="table-container">
-        <table>
-            <thead>
-                <tr>
-                    <th @click="${() => this.toggleSort('name')}" style="cursor: pointer; width: 20%">
-                        ${i18n.t('goals.goal_name')} ${this.sortField === 'name' ? (this.sortDirection === 'asc' ? '↑' : '↓') : ''}
-                    </th>
-                    <th @click="${() => this.toggleSort('categoryId')}" style="cursor: pointer; width: 15%">
-                        ${i18n.t('common.category')} ${this.sortField === 'categoryId' ? (this.sortDirection === 'asc' ? '↑' : '↓') : ''}
-                    </th>
-                    <th @click="${() => this.toggleSort('startDate')}" style="cursor: pointer; width: 12%">
-                        ${i18n.t('goals.start_date')} ${this.sortField === 'startDate' ? (this.sortDirection === 'asc' ? '↑' : '↓') : ''}
-                    </th>
-                    <th @click="${() => this.toggleSort('targetDate')}" style="cursor: pointer; width: 12%">
-                        ${i18n.t('goals.target_date')} ${this.sortField === 'targetDate' ? (this.sortDirection === 'asc' ? '↑' : '↓') : ''}
-                    </th>
-                    <th @click="${() => this.toggleSort('targetAmount')}" style="cursor: pointer; width: 10%">
-                        ${i18n.t('goals.target_amount')} ${this.sortField === 'targetAmount' ? (this.sortDirection === 'asc' ? '↑' : '↓') : ''}
-                    </th>
-                    <th style="width: 10%">
-                        ${i18n.t('goals.monthly_saving_needed')}
-                    </th>
-                    <th @click="${() => this.toggleSort('savedAmount')}" style="cursor: pointer; width: 10%">
-                        ${i18n.t('goals.current_saved')} ${this.sortField === 'savedAmount' ? (this.sortDirection === 'asc' ? '↑' : '↓') : ''}
-                    </th>
-                    <th @click="${() => this.toggleSort('status')}" style="cursor: pointer; width: 15%">
-                        ${i18n.t('goals.status.on_track')} ${this.sortField === 'status' ? (this.sortDirection === 'asc' ? '↑' : '↓') : ''}
-                    </th>
-                    <th style="width: 10%">${i18n.t('common.actions')}</th>
-                </tr>
-            </thead>
-            <tbody>
-                ${sorted.length === 0 ? html`<tr><td colspan="9" style="text-align: center; color: #666; padding: 2rem;">${i18n.t('common.no_data')}</td></tr>` : ''}
-
-                ${sorted.map(goal => {
-      const targetAmount = Number(goal.targetAmount || 0);
-      const savedAmount = Number(goal.savedAmount || 0);
-      const percent = targetAmount > 0 ? Math.min(100, (savedAmount / targetAmount) * 100) : 0;
-      const shouldHave = this.getEffectiveShouldHaveSaved(goal);
-      const diff = savedAmount - shouldHave;
-      const isBehind = diff < 0;
-
-      const isEditingName = this.editingCell?.id === goal.id && this.editingCell?.field === 'name';
-      const isEditingCat = this.editingCell?.id === goal.id && this.editingCell?.field === 'categoryId';
-      const isEditingStartDate = this.editingCell?.id === goal.id && this.editingCell?.field === 'startDate';
-      const isEditingDate = this.editingCell?.id === goal.id && this.editingCell?.field === 'targetDate';
-      const isEditingTarget = this.editingCell?.id === goal.id && this.editingCell?.field === 'targetAmount';
-      const isEditingSaved = this.editingCell?.id === goal.id && this.editingCell?.field === 'savedAmount';
-
-      const monthly = this.getMonthlySaving(goal);
-
-      return html`
-                        <tr>
-                            <td class="editable" @click="${() => !isEditingName && this.startEditing(goal.id, 'name', goal.name)}">
-                                ${isEditingName ? html`
-                                    <input id="edit-${goal.id}-name" type="text" .value="${this.editValue}" 
-                                        @input="${(e: any) => this.editValue = e.target.value}"
-                                        @blur="${() => this.saveCell(goal.id, 'name')}"
-                                        @keydown="${(e: any) => this.handleKeyDown(e, goal.id, 'name')}">
-                                ` : goal.name}
-                            </td>
-                            
-                            <td class="editable" @click="${() => !isEditingCat && this.startEditing(goal.id, 'categoryId', goal.categoryId)}">
-                                ${isEditingCat ? html`
-                                    <select id="edit-${goal.id}-categoryId" .value="${this.editValue || ''}"
-                                        @change="${(e: any) => { this.editValue = e.target.value; this.saveCell(goal.id, 'categoryId'); }}"
-                                        @blur="${() => this.cancelEditing()}">
-                                        <option value="">${i18n.t('common.uncategorized')}</option>
-                                        ${this.categories.map(c => html`<option value="${c.id}" ?selected="${this.editValue === c.id}">${c.name}</option>`)}
-                                    </select>
-                                ` : (goal.categoryId ? html`<span class="category-tag">${this.getCategoryName(goal.categoryId)}</span>` : '-')}
-                            </td>
-
-                            <td class="editable col-date" @click="${() => !isEditingStartDate && this.startEditing(goal.id, 'startDate', goal.startDate)}">
-                                ${isEditingStartDate ? html`
-                                    <input id="edit-${goal.id}-startDate" type="text" pattern="\d{4}-\d{2}-\d{2}" placeholder="yyyy-mm-dd" .value="${this.editValue}"
-                                                                                                         @input="${(e: any) => this.editValue = e.target.value}"
-                                                                                                         @blur="${() => this.saveCell(goal.id, 'startDate')}"
-                                                                                                         @keydown="${(e: any) => this.handleKeyDown(e, goal.id, 'startDate')}">
-                                                                                                ` : (goal.startDate ? this.formatDateForInput(goal.startDate) : '-')}
-                                                                                            </td>                            <td class="editable col-date" @click="${() => !isEditingDate && this.startEditing(goal.id, 'targetDate', goal.targetDate)}">
-                                ${isEditingDate ? html`
-                                    <input id="edit-${goal.id}-targetDate" type="text" pattern="\d{4}-\d{2}-\d{2}" placeholder="yyyy-mm-dd" .value="${this.editValue}"
-                                                                                                         @input="${(e: any) => this.editValue = e.target.value}"
-                                                                                                         @blur="${() => this.saveCell(goal.id, 'targetDate')}"
-                                                                                                         @keydown="${(e: any) => this.handleKeyDown(e, goal.id, 'targetDate')}">
-                                                                                                ` : (goal.isEvergreen ? html`<span style="color: var(--md-sys-color-tertiary);">∞ ${i18n.t('goals.evergreen')}${percent < 100 ? ` (${goal.targetMonths || 12}mo)` : ''}</span>` : (goal.targetDate ? this.formatDateForInput(goal.targetDate) : '-'))}
-                                                                                             </td>                            <td class="editable" @click="${() => !isEditingTarget && this.startEditing(goal.id, 'targetAmount', goal.targetAmount)}">
-                                ${isEditingTarget ? html`
-                                    <input id="edit-${goal.id}-targetAmount" type="number" .value="${this.editValue}"
-                                        @input="${(e: any) => this.editValue = parseFloat(e.target.value)}"
-                                        @blur="${() => this.saveCell(goal.id, 'targetAmount')}"
-                                        @keydown="${(e: any) => this.handleKeyDown(e, goal.id, 'targetAmount')}">
-                                ` : html`${symbol}${targetAmount}`}
-                            </td>
-
-                            <td>
-                                ${symbol}${monthly.toFixed(2)}
-                            </td>
-
-                            <td class="editable" @click="${() => !isEditingSaved && this.startEditing(goal.id, 'savedAmount', goal.savedAmount)}">
-                                ${isEditingSaved ? html`
-                                    <input id="edit-${goal.id}-savedAmount" type="number" .value="${this.editValue}"
-                                        @input="${(e: any) => this.editValue = parseFloat(e.target.value)}"
-                                        @blur="${() => this.saveCell(goal.id, 'savedAmount')}"
-                                        @keydown="${(e: any) => this.handleKeyDown(e, goal.id, 'savedAmount')}">
-                                ` : html`<b>${symbol}${savedAmount}</b>`}
-                            </td>
-
-                            <td>
-                                <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 2px;">
-                                    <div class="progress-bar"><div class="progress-fill" style="width: ${percent}%"></div></div>
-                                    <span style="font-size: 0.8rem; font-weight: 500; min-width: 35px;">${percent >= 100 ? 100 : Math.floor(percent)}%</span>
-                                </div>
-                                <div class="${isBehind && percent < 100 && !goal.isEvergreen ? 'status-behind' : 'status-ok'}" style="font-size: 0.75rem;">
-                                    ${percent >= 100 ? i18n.t('goals.status.completed') :
-          (goal.isEvergreen ? i18n.t('goals.building') : (isBehind ? i18n.t('goals.status.at_risk') + ` (${symbol}${Math.abs(diff).toFixed(0)})` : i18n.t('goals.status.on_track')))}
-                                </div>
-                            </td>
-                            
-                            <td>
-                                <button class="btn-danger" style="padding: 0.25rem 0.5rem" @click="${() => this.deleteGoal(goal.id)}">✕</button>
-                            </td>
-                        </tr>
-                    `;
-    })}
-
-                ${sorted.length > 0 ? (() => {
-        const totalTarget = sorted.reduce((s, g) => s + Number(g.targetAmount || 0), 0);
-        const totalMonthly = sorted.reduce((s, g) => s + this.getMonthlySaving(g), 0);
-        const totalSaved = sorted.reduce((s, g) => s + Number(g.savedAmount || 0), 0);
-
-        return html`
-                          <tr class="totals-row">
-                              <td colspan="4" style="text-align: right; padding-right: 2rem;">${i18n.t('common.total')}</td>
-                              <td>${symbol}${totalTarget.toFixed(2)}</td>
-                              <td>${symbol}${totalMonthly.toFixed(2)}</td>
-                              <td>${symbol}${totalSaved.toFixed(2)}</td>
-                              <td colspan="2"></td>
-                          </tr>
-                      `;
-      })() : ''}
-            </tbody>
-        </table>
-        </div>
     `;
+  }
+
+  private renderFilterPopover() {
+    return html`
+      <div class="dg-pop wide" style="padding: 12px">
+        ${this.filters.length > 0 ? html`
+          <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px">
+            ${this.filters.map(filter => html`
+              <button class="d-chip" @click="${() => this.removeFilter(filter.id)}">
+                <span>
+                  ${this.getFieldLabel(filter.field)}
+                  ${this.getOperatorLabel(filter.operator)}
+                  ${filter.value}
+                </span>
+                ${icon('close', 16)}
+              </button>
+            `)}
+          </div>
+        ` : nothing}
+
+        <div class="d-fields" style="grid-template-columns: repeat(3, minmax(90px, 1fr))">
+          ${formField(i18n.t('rules.field'), html`
+            <select
+              class="d-input"
+              .value="${this.filterField}"
+              @change="${(e: any) => { this.filterField = e.target.value; }}">
+              <option value="name">${i18n.t('mobile.goal_name')}</option>
+              <option value="categoryId">${i18n.t('common.category')}</option>
+              <option value="targetAmount">${i18n.t('goals.target_amount')}</option>
+              <option value="savedAmount">${i18n.t('goals.current_saved')}</option>
+              <option value="targetDate">${i18n.t('goals.target_date')}</option>
+              <option value="status">${i18n.t('goals.status.on_track')}</option>
+            </select>
+          `)}
+          ${formField(i18n.t('goals.filter.operator'), html`
+            <select
+              class="d-input"
+              .value="${this.filterOperator}"
+              @change="${(e: any) => { this.filterOperator = e.target.value; }}">
+              <option value="contains">${i18n.t('goals.filter.op.contains')}</option>
+              <option value="equals">${i18n.t('goals.filter.op.equals')}</option>
+              <option value="gt">${i18n.t('goals.filter.op.gt')}</option>
+              <option value="lt">${i18n.t('goals.filter.op.lt')}</option>
+              <option value="gte">${i18n.t('goals.filter.op.gte')}</option>
+              <option value="lte">${i18n.t('goals.filter.op.lte')}</option>
+            </select>
+          `)}
+          ${formField(i18n.t('goals.filter.value'), html`
+            <input
+              class="d-input"
+              type="text"
+              .value="${this.filterValue}"
+              @input="${(e: any) => { this.filterValue = e.target.value; }}"
+              @keydown="${(e: KeyboardEvent) => { if (e.key === 'Enter') this.addFilter(); }}" />
+          `)}
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px">
+          ${this.filters.length > 0 ? html`
+            <button class="d-btn-text" @click="${() => this.clearFilters()}">
+              ${i18n.t('goals.filter.clear_all')}
+            </button>
+          ` : nothing}
+          <button class="d-btn small plain" @click="${() => this.addFilter()}">
+            ${i18n.t('goals.filter.add')}
+          </button>
+        </div>
+      </div>
+    `;
+  }
+
+  private renderDesktopStrip() {
+    const assigned = (Array.isArray(this.goals) ? this.goals : [])
+      .reduce((sum, goal) => sum + Number(goal.savedAmount || 0), 0);
+    const monthlyTotal = (Array.isArray(this.goals) ? this.goals : [])
+      .reduce((sum, goal) => sum + this.getMonthlySaving(goal), 0);
+    const behind = this.behindGoals.length;
+    const onTrack = (Array.isArray(this.goals) ? this.goals : []).length - behind;
+
+    return html`
+      <div class="d-strip">
+        <div class="d-strip-cell">
+          <div>
+            <div class="d-strip-label">${i18n.t('desktop.savings_pot')}</div>
+            <div class="d-strip-edit">
+              <span class="d-strip-prefix" style="font-size: 15px">${this.symbol}</span>
+              <input
+                class="d-strip-input lead"
+                style="width: 124px"
+                type="number"
+                step="0.01"
+                .value="${this.totalSavings}"
+                @input="${this.handleTotalSavingsChange}" />
+            </div>
+          </div>
+        </div>
+
+        <div class="d-strip-divider"></div>
+
+        <div class="d-strip-cell">
+          <div>
+            <div class="d-strip-label">${i18n.t('desktop.assigned_to_goals')}</div>
+            <div class="d-strip-value">${this.money(assigned, 2)}</div>
+          </div>
+        </div>
+
+        <div class="d-strip-cell">
+          <div>
+            <div class="d-strip-label">${i18n.t('mobile.unassigned')}</div>
+            <!-- Never Math.abs() this into a lie: over-allocation is real -->
+            <div class="d-strip-value ${this.unassigned < 0 ? 'negative' : 'positive'}">
+              ${this.unassigned < 0 ? '−' : ''}${this.money(this.unassigned, 2)}
+            </div>
+          </div>
+          <div class="dg-anchor" @click="${(e: Event) => e.stopPropagation()}">
+            <button
+              class="d-btn-tonal tiny"
+              ?disabled="${this.unassigned <= 0}"
+              @click="${() => {
+                const open = this.showDistributeMenu === 'unassigned';
+                this.closeDesktopMenus();
+                this.showDistributeMenu = open ? null : 'unassigned';
+              }}">
+              ${icon('call_split', 16)}
+              <span>${i18n.t('mobile.assign')}</span>
+            </button>
+            ${this.showDistributeMenu ? html`
+              <div class="dg-pop wide">
+                ${this.distributeModes().map(mode => html`
+                  <button
+                    class="dg-pop-row"
+                    style="align-items: flex-start; padding: 8px 10px"
+                    @click="${() => {
+                      this.showDistributeMenu = 'unassigned';
+                      this.handleDistribute(mode.mode);
+                    }}">
+                    <span style="min-width: 0">
+                      <span class="dg-mode-title">${mode.title}</span>
+                      <span class="dg-mode-desc">${mode.desc}</span>
+                    </span>
+                  </button>
+                `)}
+              </div>
+            ` : nothing}
+          </div>
+        </div>
+
+        <div class="d-strip-divider"></div>
+
+        <div class="d-strip-cell">
+          <div>
+            <div class="d-strip-label">${i18n.t('desktop.needed_per_month')}</div>
+            <div class="d-strip-value">${this.money(monthlyTotal, 2)}/mo</div>
+          </div>
+        </div>
+
+        <div class="d-spacer"></div>
+
+        <div class="d-strip-cell tight" style="gap: 8px">
+          ${onTrack > 0
+            ? statusPill({
+                kind: 'positive',
+                glyph: 'check_circle',
+                label: i18n.t('desktop.on_track_count', { count: onTrack }),
+              })
+            : nothing}
+          ${behind > 0
+            ? statusPill({
+                kind: 'warning',
+                glyph: 'warning',
+                label: i18n.t('desktop.behind_count', { count: behind }),
+              })
+            : nothing}
+        </div>
+      </div>
+    `;
+  }
+
+  private renderGoalCard(goal: any) {
+    const status = this.goalStatus(goal);
+    const monthly = this.getMonthlySaving(goal);
+    const open = this.openGoalId === goal.id;
+    const target = Number(goal.targetAmount || 0);
+    const saved = Number(goal.savedAmount || 0);
+
+    return html`
+      <div class="dg-card ${status.kind === 'behind' ? 'behind' : ''}">
+        <div
+          class="dg-row"
+          role="button"
+          tabindex="0"
+          @click="${() => this.toggleGoalCard(goal)}">
+          <div style="min-width: 0; display: flex; flex-direction: column; gap: 8px">
+            <!-- Wrapping is what keeps the name legible as the column narrows -->
+            <div class="dg-title-row">
+              <span class="d-emoji" style="font-size: 15px">${this.goalIcon(goal)}</span>
+              <span class="dg-name">${goal.name}</span>
+              <span class="d-tag ${status.kind === 'behind'
+                ? 'warning'
+                : status.kind === 'evergreen' ? 'tertiary' : 'positive'}">
+                ${status.label}
+              </span>
+              ${goal.categoryId ? html`
+                <span class="d-tag square">${this.getCategoryName(goal.categoryId)}</span>
+              ` : nothing}
+            </div>
+
+            <div style="position: relative; height: 10px">
+              <div class="d-bar detail">
+                <div
+                  class="d-bar-fill"
+                  style="width: ${status.percent}%; background: ${status.fill}"></div>
+              </div>
+              ${status.kind === 'behind' ? html`
+                <div
+                  class="d-bar-tick"
+                  style="left: ${status.shouldHavePercent}%"
+                  title="${i18n.t('desktop.should_be_here')}"></div>
+              ` : nothing}
+            </div>
+          </div>
+
+          <div style="min-width: 0">
+            <div style="display: flex; align-items: baseline; gap: 6px">
+              <span class="dg-saved">${this.money(saved)}</span>
+              <span class="d-panel-caption">
+                ${i18n.t('mobile.of_amount', { amount: this.money(target) })}
+              </span>
+            </div>
+            <div class="d-panel-caption">
+              ${i18n.t('mobile.percent_saved', { percent: Math.floor(status.percent) })}
+            </div>
+          </div>
+
+          <div style="min-width: 0">
+            <div class="d-micro">${i18n.t('desktop.per_month')}</div>
+            <div class="dg-monthly">
+              ${status.kind === 'completed' ? '—' : this.money(monthly, 2)}
+            </div>
+          </div>
+
+          <div style="min-width: 0">
+            <div class="d-micro">
+              ${goal.isEvergreen ? i18n.t('desktop.rolling_window') : i18n.t('goals.target_date')}
+            </div>
+            <div class="dg-date">
+              ${goal.isEvergreen
+                ? `${this.getEvergreenTargetMonths(goal)} ${i18n.t('mobile.months')}`
+                : this.formatDateForInput(goal.targetDate) || '—'}
+            </div>
+            <div class="d-panel-caption">
+              ${status.kind === 'completed' ? i18n.t('desktop.reached') : this.timeLeftLabel(goal)}
+            </div>
+          </div>
+
+          <div class="d-row-chevron">${icon(open ? 'expand_less' : 'expand_more', 20)}</div>
+        </div>
+
+        ${open ? this.renderGoalExpand(goal, status, monthly) : nothing}
+      </div>
+    `;
+  }
+
+  private renderGoalExpand(
+    goal: any,
+    status: { kind: string },
+    monthly: number,
+  ) {
+    const draft = this.newGoal;
+    const shouldHave = this.getEffectiveShouldHaveSaved(goal);
+    const diff = Number(goal.savedAmount || 0) - shouldHave;
+    const category = this.categories.find(c => c.id === draft.categoryId);
+
+    // Branches on the sign of saved - shouldHave, not on the status kind: an
+    // evergreen goal can be behind the line while its pill says Evergreen.
+    const paceNote = status.kind === 'completed'
+      ? i18n.t('desktop.pace_funded')
+      : diff < 0
+        ? i18n.t('desktop.pace_behind', {
+            shortfall: this.money(Math.abs(diff), 2),
+            monthly: this.money(monthly, 2),
+          })
+        : i18n.t('desktop.pace_ahead', { amount: this.money(diff, 2) });
+
+    return html`
+      <div class="dg-expand" @click="${(e: Event) => e.stopPropagation()}">
+        <div class="d-fields">
+          ${formField(i18n.t('mobile.goal_name'), html`
+            <input
+              class="d-input"
+              type="text"
+              .value="${draft.name}"
+              @input="${(e: any) => { this.newGoal = { ...draft, name: e.target.value }; }}" />
+          `)}
+
+          ${formField(i18n.t('common.category'), html`
+            <div class="dg-anchor" style="display: block">
+              <button
+                class="d-select"
+                @click="${(e: Event) => {
+                  e.stopPropagation();
+                  this.goalCatMenu = !this.goalCatMenu;
+                }}">
+                <span class="d-emoji">${category?.icon ?? ''}</span>
+                <span class="d-select-value ${category ? '' : 'muted'}">
+                  ${category?.name ?? i18n.t('common.uncategorized')}
+                </span>
+                ${icon('expand_more', 20)}
+              </button>
+              ${this.goalCatMenu ? html`
+                <div class="dg-pop" @click="${(e: Event) => e.stopPropagation()}">
+                  <div class="dg-pop-list">
+                    ${this.getCategoryOptions().map(option => html`
+                      <button
+                        class="dg-pop-row"
+                        @click="${() => {
+                          this.newGoal = { ...draft, categoryId: option.value };
+                          this.goalCatMenu = false;
+                        }}">
+                        <span class="d-emoji">${option.icon ?? ''}</span>
+                        <span>${option.label}</span>
+                      </button>
+                    `)}
+                  </div>
+                </div>
+              ` : nothing}
+            </div>
+          `)}
+
+          ${formField(i18n.t('goals.start_date'), html`
+            <input
+              class="d-input mono"
+              type="text"
+              inputmode="numeric"
+              placeholder="yyyy-mm-dd"
+              .value="${draft.startDate}"
+              @input="${(e: any) => { this.newGoal = { ...draft, startDate: e.target.value }; }}" />
+          `)}
+
+          ${draft.isEvergreen
+            ? formField(i18n.t('desktop.rolling_window'), html`
+              <input
+                class="d-input mono"
+                type="number"
+                min="1"
+                .value="${draft.targetMonths ?? 12}"
+                @input="${(e: any) => {
+                  this.newGoal = { ...draft, targetMonths: parseInt(e.target.value, 10) };
+                }}" />
+            `)
+            : formField(i18n.t('goals.target_date'), html`
+              <input
+                class="d-input mono"
+                type="text"
+                inputmode="numeric"
+                placeholder="yyyy-mm-dd"
+                .value="${draft.targetDate}"
+                @input="${(e: any) => { this.newGoal = { ...draft, targetDate: e.target.value }; }}" />
+            `)}
+
+          ${formField(i18n.t('goals.target_amount'), html`
+            <input
+              class="d-input amount"
+              type="number"
+              step="0.01"
+              .value="${draft.targetAmount}"
+              @input="${(e: any) => {
+                this.newGoal = { ...draft, targetAmount: parseFloat(e.target.value) };
+              }}" />
+          `)}
+
+          ${formField(i18n.t('goals.current_saved'), html`
+            <input
+              class="d-input amount"
+              type="number"
+              step="0.01"
+              .value="${draft.savedAmount}"
+              @input="${(e: any) => {
+                this.newGoal = { ...draft, savedAmount: parseFloat(e.target.value) };
+              }}" />
+          `)}
+        </div>
+
+        ${Object.keys(this.formErrors).length > 0 ? html`
+          <div class="dg-errors">${Object.values(this.formErrors)[0]}</div>
+        ` : nothing}
+
+        <div class="d-actions">
+          <button class="d-btn small plain" @click="${() => this.saveGoalDraft()}">
+            ${i18n.t('common.save')}
+          </button>
+          <button class="d-btn-text" @click="${() => this.toggleGoalCard(goal)}">
+            ${i18n.t('common.cancel')}
+          </button>
+
+          <div class="d-actions-divider"></div>
+
+          ${this.contributeFor === goal.id
+            ? html`
+              <div class="dg-contribute">
+                <input
+                  class="d-input amount"
+                  style="width: 120px"
+                  type="number"
+                  step="0.01"
+                  placeholder="0.00"
+                  .value="${this.contributeAmount}"
+                  @input="${(e: any) => { this.contributeAmount = e.target.value; }}" />
+                <button
+                  class="d-btn small plain"
+                  ?disabled="${!(parseFloat(this.contributeAmount) > 0)}"
+                  @click="${() => this.assignToGoal(goal, parseFloat(this.contributeAmount))}">
+                  ${i18n.t('mobile.add_to_goal')}
+                </button>
+                <button class="d-btn-text" @click="${() => { this.contributeFor = null; }}">
+                  ${i18n.t('common.cancel')}
+                </button>
+              </div>
+            `
+            : html`
+              <button
+                class="d-btn-tonal"
+                @click="${() => { this.contributeFor = goal.id; this.contributeAmount = ''; }}">
+                ${icon('add_card', 18)}
+                <span>${i18n.t('desktop.add_contribution')}</span>
+              </button>
+            `}
+
+          <div class="d-spacer"></div>
+
+          <button class="d-btn-text destructive" @click="${() => this.deleteGoal(goal.id)}">
+            ${icon('delete', 18)}
+            <span>${i18n.t('desktop.delete_goal')}</span>
+          </button>
+        </div>
+
+        ${footnote('insights', paceNote)}
+      </div>
+    `;
+  }
+
+  private distributeModes(): { mode: 'byDate' | 'toOnTrack' | 'proportional'; title: string; desc: string }[] {
+    return [
+      {
+        mode: 'byDate',
+        title: i18n.t('goals.distribute.fill_by_date'),
+        desc: i18n.t('goals.distribute.fill_by_date_desc'),
+      },
+      {
+        mode: 'toOnTrack',
+        title: i18n.t('goals.distribute.fill_to_on_track'),
+        desc: i18n.t('goals.distribute.fill_to_on_track_desc'),
+      },
+      {
+        mode: 'proportional',
+        title: i18n.t('goals.distribute.proportional'),
+        desc: i18n.t('goals.distribute.proportional_desc'),
+      },
+    ];
+  }
+
+  private renderDesktopSide() {
+    const behind = this.behindGoals;
+    const soonest = [...behind].sort((a, b) =>
+      this.getEffectiveTargetDate(a).getTime() - this.getEffectiveTargetDate(b).getTime())[0];
+
+    // Every hint counts the same shortfall set as the summary badge
+    const hints: Record<string, string> = {
+      byDate: soonest
+        ? i18n.t('desktop.hint_by_date', { name: soonest.name })
+        : i18n.t('desktop.hint_nothing_behind'),
+      toOnTrack: behind.length === 0
+        ? i18n.t('desktop.hint_nothing_behind')
+        : i18n.t(behind.length === 1 ? 'desktop.hint_on_track_one' : 'desktop.hint_on_track', {
+            count: behind.length,
+            amount: this.money(this.shortfallTotal, 2),
+          }),
+      proportional: behind.length === 0
+        ? i18n.t('desktop.hint_nothing_behind')
+        : i18n.t(behind.length === 1 ? 'desktop.hint_proportional_one' : 'desktop.hint_proportional', {
+            count: behind.length,
+          }),
+    };
+
+    const pace = (Array.isArray(this.goals) ? this.goals : [])
+      .map(goal => ({ goal, monthly: this.getMonthlySaving(goal) }))
+      .filter(entry => entry.monthly > 0)
+      .sort((a, b) => b.monthly - a.monthly);
+    const paceTotal = pace.reduce((sum, entry) => sum + entry.monthly, 0);
+
+    return html`
+      <div style="display: flex; flex-direction: column; gap: 12px; min-width: 0">
+        <div class="d-panel pad">
+          <div class="d-panel-title">${i18n.t('desktop.assign_unassigned')}</div>
+          <div class="d-panel-caption">
+            ${this.unassigned < 0
+              ? i18n.t('desktop.pot_over_allocated', { amount: this.money(this.unassigned, 2) })
+              : i18n.t('desktop.pot_sitting', { amount: this.money(this.unassigned, 2) })}
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 6px; margin-top: 14px">
+            ${this.distributeModes().map(mode => html`
+              <button
+                class="dg-mode ${this.distributeMode === mode.mode ? 'selected' : ''}"
+                @click="${() => { this.distributeMode = mode.mode; }}">
+                ${icon(
+                  this.distributeMode === mode.mode ? 'radio_button_checked' : 'radio_button_unchecked',
+                  18)}
+                <span style="min-width: 0">
+                  <span class="dg-mode-title">${mode.title}</span>
+                  <span class="dg-mode-desc">${mode.desc}</span>
+                </span>
+              </button>
+            `)}
+          </div>
+
+          <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-top: 14px">
+            <button
+              class="d-btn small plain"
+              ?disabled="${this.unassigned <= 0}"
+              @click="${() => {
+                this.showDistributeMenu = 'unassigned';
+                this.handleDistribute(this.distributeMode);
+              }}">
+              ${i18n.t('desktop.preview_split')}
+            </button>
+            <span class="d-panel-caption" style="text-wrap: pretty">
+              ${hints[this.distributeMode]}
+            </span>
+          </div>
+        </div>
+
+        <div class="d-panel pad">
+          <div class="d-panel-head">
+            <span class="d-panel-title">${i18n.t('desktop.monthly_commitment')}</span>
+            <div class="d-spacer"></div>
+            <span class="dg-monthly">${this.money(paceTotal, 2)}/mo</span>
+          </div>
+          <div class="d-panel-caption">${i18n.t('desktop.monthly_commitment_sub')}</div>
+
+          <div style="display: flex; flex-direction: column; gap: 11px; margin-top: 14px">
+            ${pace.length === 0
+              ? html`<div class="d-panel-caption">${i18n.t('desktop.no_data')}</div>`
+              : pace.map((entry, index) => rankedBar({
+                  emoji: this.goalIcon(entry.goal),
+                  name: entry.goal.name,
+                  amount: this.money(entry.monthly, 2),
+                  // Share of the total commitment drives the bar, so the bars
+                  // add up to the figure printed in the header
+                  percent: paceTotal > 0 ? (entry.monthly / paceTotal) * 100 : 0,
+                  color: paletteColor(index),
+                }))}
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  /** New goal / edit as a dialog, replacing the card that pushed the list down. */
+  private renderDesktopGoalModal() {
+    const draft = this.newGoal;
+    const editing = !!draft.id;
+    const monthly = draft.targetAmount ? this.getMonthlySaving(draft) : 0;
+
+    return html`
+      <div class="modal-overlay" @click="${() => { this.showGoalForm = false; }}">
+        <div class="modal" style="max-width: 640px" @click="${(e: Event) => e.stopPropagation()}">
+          <h3 style="margin-top: 0">
+            ${editing ? i18n.t('mobile.save_goal') : i18n.t('goals.add_goal')}
+          </h3>
+
+          <div class="d-screen" style="display: block; height: auto; padding: 0; overflow: visible">
+            <div class="d-fields">
+              ${formField(i18n.t('mobile.goal_name'), html`
+                <input
+                  class="d-input"
+                  type="text"
+                  .value="${draft.name}"
+                  @input="${(e: any) => { this.newGoal = { ...draft, name: e.target.value }; }}" />
+              `, true)}
+
+              ${formField(i18n.t('common.category'), html`
+                <filterable-select
+                  .value="${draft.categoryId || ''}"
+                  .options="${this.getCategoryOptions()}"
+                  .placeholder="${i18n.t('common.category')}"
+                  @change="${(e: CustomEvent) => {
+                    this.newGoal = { ...draft, categoryId: e.detail.value };
+                  }}">
+                </filterable-select>
+              `)}
+
+              ${formField(i18n.t('goals.target_amount'), html`
+                <input
+                  class="d-input amount"
+                  type="number"
+                  step="0.01"
+                  .value="${draft.targetAmount || ''}"
+                  @input="${(e: any) => {
+                    this.newGoal = { ...draft, targetAmount: parseFloat(e.target.value) };
+                  }}" />
+              `)}
+
+              ${formField(i18n.t('goals.current_saved'), html`
+                <input
+                  class="d-input amount"
+                  type="number"
+                  step="0.01"
+                  .value="${draft.savedAmount || ''}"
+                  @input="${(e: any) => {
+                    this.newGoal = { ...draft, savedAmount: parseFloat(e.target.value) };
+                  }}" />
+              `)}
+
+              ${formField(i18n.t('goals.start_date'), html`
+                <input
+                  class="d-input mono"
+                  type="date"
+                  .value="${draft.startDate}"
+                  @input="${(e: any) => { this.newGoal = { ...draft, startDate: e.target.value }; }}" />
+              `)}
+
+              ${draft.isEvergreen
+                ? formField(i18n.t('goals.target_months'), html`
+                  <input
+                    class="d-input mono"
+                    type="number"
+                    min="1"
+                    .value="${draft.targetMonths ?? 12}"
+                    @input="${(e: any) => {
+                      this.newGoal = { ...draft, targetMonths: parseInt(e.target.value, 10) };
+                    }}" />
+                `)
+                : formField(i18n.t('goals.target_date'), html`
+                  <input
+                    class="d-input mono"
+                    type="date"
+                    .value="${draft.targetDate}"
+                    @input="${(e: any) => { this.newGoal = { ...draft, targetDate: e.target.value }; }}" />
+                `)}
+            </div>
+
+            <label class="dg-evergreen">
+              <button
+                class="d-checkbox"
+                role="checkbox"
+                aria-checked="${!!draft.isEvergreen}"
+                @click="${() => { this.newGoal = { ...draft, isEvergreen: !draft.isEvergreen }; }}">
+                ${draft.isEvergreen ? icon('check', 14) : nothing}
+              </button>
+              <span>
+                <span class="dg-mode-title">${i18n.t('goals.evergreen_goal')}</span>
+                <span class="dg-mode-desc">${i18n.t('mobile.evergreen_repeats')}</span>
+              </span>
+            </label>
+
+            ${draft.targetAmount ? html`
+              ${footnote('insights', i18n.t('mobile.per_month_needed', {
+                amount: this.money(monthly, 2),
+              }))}
+            ` : nothing}
+
+            ${Object.keys(this.formErrors).length > 0 ? html`
+              <div class="dg-errors">${Object.values(this.formErrors)[0]}</div>
+            ` : nothing}
+
+            <div class="d-actions">
+              <div class="d-spacer"></div>
+              <button class="d-btn-text" @click="${() => { this.showGoalForm = false; }}">
+                ${i18n.t('common.cancel')}
+              </button>
+              <button
+                class="d-btn small plain"
+                @click="${() => (editing ? this.saveGoalDraft() : this.createGoal())}">
+                ${i18n.t('common.save')}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  render() {
+    return this.isMobile ? this.renderMobile() : this.renderDesktop();
   }
 }

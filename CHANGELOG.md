@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.19.0 - 2026-09-04
+
+Desktop redesign. Expenses, Reports, Goals, Categories and Settings now have desktop layouts built in the same language as the phone ones; the mobile layout below 600px is unchanged.
+
+- **Expenses** replace the three stacked summary cards and the wall of filter selects with a single summary strip and removable filter chips, so the first row of the table is visible without scrolling. Rows expand in place to edit category, date, amount and notes, and a side column ranks where the money went across the filtered set. Row density can be toggled between comfortable and compact.
+- **Reports** move from four stacked full-width charts to a 2×2 grid: the category breakdown with drill-down to the transactions behind it, a composition doughnut, budget vs actual, and funding sources. Hiding a category now drops it from the total that every percentage is based on. The Sankey chart is dropped.
+- **Goals** replace the nine-column table with a card per goal and a marker on the progress bar showing where the goal should be by now, so being behind is visible instead of calculated. The distribute sheet becomes a persistent panel, and over-allocated savings are shown as negative rather than absolute.
+- **Categories** merge the two stacked tables into one tree with an Expense / Goal switch, and each row shows spend against its budget as a bar — grey where there is no budget, so unplanned spend reads as unplanned. The Goal tab drops the budget columns, which goal categories do not have.
+- **Settings** replace the single long scroll with a persistent section index beside one section at a time, with a chip row taking over on narrow windows. Preferences use inline segmented controls instead of picker dialogs.
+- Add / edit forms are dialogs instead of cards that pushed the page down, and side columns are removed at narrow widths rather than squeezed.
+- Every screen follows the theme, dark mode included, and the accounts list now shows each account's current balance next to its opening balance.
+
 ## v1.18.0 - 2026-09-04
 
 Mobile redesign. Every screen now has a phone layout below 600px; the desktop layout above that width is unchanged.

@@ -17,9 +17,20 @@ import {
   watchMobileViewport,
   type SnackbarOptions,
 } from '../styles/mobile-ui';
+import {
+  contentWidth,
+  desktopUI,
+  field as formField,
+  footnote,
+  periodStepper,
+  rankedBar,
+  statusPill,
+  watchViewportWidth,
+} from '../styles/desktop-ui';
 
 import { i18n } from '../i18n/i18n';
 import { calculateMonthlyStats } from '../utils/expense-utils';
+import { getAppBasePath } from '../utils/router-paths';
 
 
 type DateFilterMode = 'month' | 'year' | 'custom' | 'all_time';
@@ -160,10 +171,6 @@ export class ViewExpenses extends LitElement {
   @state() showRuleModal = false;
   @state() ruleTransaction: any = null;
 
-  @state() editingCell: { id: string, field: string } | null = null;
-
-  @state() editValue: any = null;
-
   @state() sortField = 'date';
   @state() sortDirection: 'asc' | 'desc' = 'desc';
 
@@ -179,9 +186,26 @@ export class ViewExpenses extends LitElement {
 
   @state() selectedTransactions: Set<string> = new Set();
 
-  @state() showColumnModal = false;
+  // --- Desktop layer (> 600px) ---
+  /** Row whose inline expand is open; only one at a time. */
+  @state() private openRowId: string | null = null;
+  /** Edits held by the open row until Save. */
+  @state() private rowDraft: { categoryId: string; date: string; amount: string; notes: string } | null = null;
+  /** Category dropdown inside the open row's expand. */
+  @state() private rowCatMenu = false;
+  @state() private rowCatQuery = '';
+  /** Account / period / filter popovers in the header. */
+  @state() private showAccountMenu = false;
+  @state() private showFilterMenu = false;
+  @state() private showPageSizeMenu = false;
+  /** Transaction whose in-row category dropdown is open, or null. */
+  @state() private catCellFor: string | null = null;
+  /** 44px rows comfortable, 36px compact. Remembered per device. */
+  @state() private density: 'comfortable' | 'compact' = 'comfortable';
+  /** Drives the responsive drop of the side column; kept in sync on resize. */
+  @state() viewportWidth = window.innerWidth;
 
-  // --- Mobile layer (<= 600px). The desktop table above the breakpoint is untouched. ---
+  // --- Mobile layer (<= 600px). ---
   @state() isMobile = false;
   /** Transaction whose category sheet is open, or null. */
   @state() sheetTx: any = null;
@@ -208,6 +232,7 @@ export class ViewExpenses extends LitElement {
   @state() private sheetEndDate = '';
 
   private unwatchViewport?: () => void;
+  private unwatchWidth?: () => void;
   private snackTimer?: number;
   private longPressTimer?: number;
   private listObserver?: IntersectionObserver;
@@ -217,61 +242,6 @@ export class ViewExpenses extends LitElement {
   private _preservedScrollY: number | null = null;
   private _autoPageSizeToTotalOnNextLoad = false;
   private _allTimePageSizeSuggested = false;
-  @state() columnConfig: { id: string, label: string, visible: boolean }[] = [
-    { id: 'select', label: 'Select', visible: true },
-    { id: 'date', label: 'common.date', visible: true },
-    { id: 'description', label: 'common.description', visible: true },
-    { id: 'categoryId', label: 'common.category', visible: true },
-    { id: 'costObjectId', label: 'cost_objects.funding_source', visible: false },
-    { id: 'amount', label: 'common.amount', visible: true },
-    { id: 'budget', label: 'expenses.budget_remaining', visible: true },
-    { id: 'notes', label: 'common.notes', visible: true },
-    { id: 'actions', label: 'common.actions', visible: true }
-  ];
-
-  normalizeColumnConfig(rawConfig: any) {
-    const defaultConfig = [
-      { id: 'select', label: 'Select', visible: true },
-      { id: 'date', label: 'common.date', visible: true },
-      { id: 'description', label: 'common.description', visible: true },
-      { id: 'categoryId', label: 'common.category', visible: true },
-      { id: 'costObjectId', label: 'cost_objects.funding_source', visible: false },
-      { id: 'amount', label: 'common.amount', visible: true },
-      { id: 'budget', label: 'expenses.budget_remaining', visible: true },
-      { id: 'notes', label: 'common.notes', visible: true },
-      { id: 'actions', label: 'common.actions', visible: true },
-    ];
-
-    if (!Array.isArray(rawConfig)) return defaultConfig;
-
-    const defaultsById = new Map(defaultConfig.map(col => [col.id, col]));
-    const mergedById = new Map(defaultConfig.map(col => [col.id, { ...col }]));
-
-    rawConfig.forEach((item: any) => {
-      if (!item || typeof item.id !== 'string') return;
-      const defaultCol = defaultsById.get(item.id);
-      if (!defaultCol) return;
-
-      const isProtected = item.id === 'select' || item.id === 'actions';
-      const nextVisible = isProtected ? true : (typeof item.visible === 'boolean' ? item.visible : defaultCol.visible);
-
-      mergedById.set(item.id, {
-        ...defaultCol,
-        visible: nextVisible,
-      });
-    });
-
-    const orderedIds = rawConfig
-      .map((item: any) => item?.id)
-      .filter((id: any, index: number, arr: any[]) => typeof id === 'string' && defaultsById.has(id) && arr.indexOf(id) === index);
-
-    const missingIds = defaultConfig
-      .map(col => col.id)
-      .filter(id => !orderedIds.includes(id));
-
-    return [...orderedIds, ...missingIds].map(id => mergedById.get(id)!);
-  }
-
   get filteredTransactions() {
     let filtered = this.transactions;
 
@@ -360,12 +330,14 @@ export class ViewExpenses extends LitElement {
     this.showWizard = false;
     i18n.addEventListener('lang-change', () => this.requestUpdate());
     this.unwatchViewport = watchMobileViewport(this);
+    this.unwatchWidth = watchViewportWidth(this);
   }
 
   disconnectedCallback() {
     super.disconnectedCallback();
     i18n.removeEventListener('lang-change', () => this.requestUpdate());
     this.unwatchViewport?.();
+    this.unwatchWidth?.();
     if (this.snackTimer) window.clearTimeout(this.snackTimer);
     if (this.longPressTimer) window.clearTimeout(this.longPressTimer);
     this.listObserver?.disconnect();
@@ -474,45 +446,6 @@ export class ViewExpenses extends LitElement {
     } catch (e: any) {
       this.notify(i18n.t('bulk_actions.assign_account_failed') + ': ' + e.message);
     }
-  }
-
-  renderPaginationControls() {
-    return html`
-        <div class="pagination-controls" style="margin-bottom: 1rem;">
-            <span style="font-size: 0.875rem; color: var(--md-sys-color-on-surface-variant);">${i18n.t('table.rows_per_page')}:</span>
-            <select style="width: auto; height: 32px; padding: 0 8px;" 
-                .value="${String(this.pageSize)}" 
-                @change="${(e: any) => {
-                  const nextPageSize = parseInt(e.target.value, 10);
-                  if (Number.isNaN(nextPageSize) || nextPageSize <= 0) return;
-                  this.pageSize = nextPageSize;
-                  this.currentPage = 1;
-                }}">
-                ${this.getPageSizeOptions().map(size => html`
-                    <option value="${size}" ?selected=${size === this.pageSize}>${size}${size === this.filteredTransactions.length ? ` (${i18n.t('common.total')})` : ''}</option>
-                `)}
-            </select>
-
-            <button class="btn-secondary" style="width: auto; height: 32px; padding: 0 12px;" @click="${() => this.showColumnModal = true}">${i18n.t('filters.columns')}</button>
-
-            <span style="font-size: 0.875rem; color: var(--md-sys-color-on-surface-variant);">
-                ${(this.currentPage - 1) * this.pageSize + 1}-${Math.min(this.currentPage * this.pageSize, this.filteredTransactions.length)} of ${this.filteredTransactions.length}
-            </span>
-
-            <div style="display: flex; gap: 8px;">
-                <button class="btn-secondary" 
-                    ?disabled="${this.currentPage === 1}"
-                    @click="${() => this.currentPage--}">
-                    <
-                </button>
-                <button class="btn-secondary" 
-                    ?disabled="${this.currentPage * this.pageSize >= this.filteredTransactions.length}"
-                    @click="${() => this.currentPage++}">
-                    >
-                </button>
-            </div>
-        </div>
-      `;
   }
 
   async loadBalances() {
@@ -1253,18 +1186,150 @@ export class ViewExpenses extends LitElement {
       border-bottom: 1px solid var(--md-sys-color-surface-container-high);
     }
     .x-skeleton-main { flex: 1; display: flex; flex-direction: column; gap: 8px; }
-  `, mobileUI];
+
+    /* ---------- desktop ---------- */
+
+    /* Anchored popovers replace the phone's bottom sheets: account picker,
+       period picker, the filter panel and the category dropdown. */
+    .dx-anchor { position: relative; display: flex; flex-shrink: 0; }
+    .dx-pop {
+      position: absolute;
+      top: calc(100% + 6px);
+      left: 0;
+      z-index: 20;
+      min-width: 240px;
+      padding: 8px;
+      background: var(--md-sys-color-surface-container-lowest);
+      border: 1px solid var(--md-sys-color-outline-variant);
+      border-radius: 12px;
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+      box-sizing: border-box;
+    }
+    .dx-pop.right { left: auto; right: 0; }
+    .dx-pop.wide { min-width: 320px; }
+    .dx-pop-list { max-height: 268px; overflow-y: auto; }
+    .dx-pop-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      min-height: 36px;
+      padding: 0 10px;
+      border-radius: 8px;
+      box-sizing: border-box;
+      font: 400 13px/18px 'Roboto', sans-serif;
+      color: var(--md-sys-color-on-surface);
+      cursor: pointer;
+    }
+    .dx-pop-row:hover { background: var(--md-sys-color-surface-container); }
+    .dx-pop-row.selected {
+      background: var(--md-sys-color-secondary-container);
+      color: var(--md-sys-color-on-secondary-container);
+    }
+    .dx-pop-row.child { padding-left: 26px; }
+    .dx-pop-search {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      height: 38px;
+      padding: 0 10px;
+      border-bottom: 1px solid var(--md-sys-color-surface-container-high);
+      margin-bottom: 4px;
+    }
+    .dx-pop-search .m-icon { color: var(--md-sys-color-on-surface-variant); }
+    .dx-pop-search input {
+      flex: 1;
+      min-width: 0;
+      border: none;
+      background: transparent;
+      outline: none;
+      font: 400 13px/18px 'Roboto', sans-serif;
+      color: var(--md-sys-color-on-surface);
+    }
+    .dx-pop-title {
+      font: 500 13px/18px 'Roboto', sans-serif;
+      color: var(--md-sys-color-on-surface);
+      padding: 4px 10px 8px;
+    }
+    .dx-month-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; padding: 0 6px 6px; }
+    .dx-month {
+      height: 36px;
+      border-radius: 8px;
+      background: var(--md-sys-color-surface-container);
+      color: var(--md-sys-color-on-surface);
+      font: 400 13px/18px 'Roboto', sans-serif;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+    .dx-month.selected { background: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary); }
+    .dx-month.future { color: var(--md-sys-color-outline); }
+    .dx-year-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 6px 6px;
+      font: 500 14px/20px 'Roboto', sans-serif;
+    }
+
+    /* The category cell doubles as a one-click editor, as the row expand does
+       for everything else. */
+    .dx-cat-cell {
+      position: relative;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+      height: 100%;
+      margin-right: 12px;
+      padding: 0 8px;
+      border-radius: 8px;
+      box-sizing: border-box;
+      cursor: pointer;
+      background: none;
+      font: inherit;
+      color: inherit;
+      text-align: left;
+    }
+    .dx-cat-cell:hover { background: var(--md-sys-color-surface-container-highest); }
+    .dx-cat-name {
+      font: 400 14px/18px 'Roboto', sans-serif;
+      color: var(--md-sys-color-on-surface);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .dx-cat-empty {
+      font: italic 400 14px/18px 'Roboto', sans-serif;
+      color: var(--md-sys-color-outline);
+    }
+    .dx-suggestion {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      height: 26px;
+      padding: 0 4px 0 10px;
+      border-radius: 13px;
+      background: var(--md-sys-color-tertiary-container);
+      color: var(--md-sys-color-on-tertiary-container);
+      font: 500 12px/16px 'Roboto', sans-serif;
+      white-space: nowrap;
+      max-width: 100%;
+    }
+    .dx-suggestion > span:first-child { overflow: hidden; text-overflow: ellipsis; }
+    .dx-suggestion button { display: inline-flex; padding: 0; }
+    .dx-accept { color: var(--pf-positive); }
+    .dx-reject { color: var(--md-sys-color-outline); }
+  `, mobileUI, desktopUI];
 
   async firstUpdated() {
     const storedCurrency = localStorage.getItem('priperfin_currency');
     if (storedCurrency) this.currency = storedCurrency;
 
-    const storedColumns = localStorage.getItem('priperfin_column_config');
-    if (storedColumns) {
-      try {
-        const parsedColumns = JSON.parse(storedColumns);
-        this.columnConfig = this.normalizeColumnConfig(parsedColumns);
-      } catch (e) { console.error('Failed to parse column config', e); }
+    const storedDensity = localStorage.getItem('priperfin_row_density');
+    if (storedDensity === 'compact' || storedDensity === 'comfortable') {
+      this.density = storedDensity;
     }
 
     this.loadFiltersFromURL();
@@ -1345,54 +1410,6 @@ export class ViewExpenses extends LitElement {
       });
       this._preservedScrollY = null;
     }
-  }
-
-  saveColumnConfig() {
-    localStorage.setItem('priperfin_column_config', JSON.stringify(this.columnConfig));
-    this.showColumnModal = false;
-  }
-
-  moveColumn(index: number, direction: 'up' | 'down') {
-    const newConfig = [...this.columnConfig];
-    if (direction === 'up' && index > 0) {
-      [newConfig[index], newConfig[index - 1]] = [newConfig[index - 1], newConfig[index]];
-    } else if (direction === 'down' && index < newConfig.length - 1) {
-      [newConfig[index], newConfig[index + 1]] = [newConfig[index + 1], newConfig[index]];
-    }
-    this.columnConfig = newConfig;
-  }
-
-  toggleColumnVisibility(id: string) {
-    this.columnConfig = this.columnConfig.map(c => c.id === id ? { ...c, visible: !c.visible } : c);
-  }
-
-  renderColumnModal() {
-    if (!this.showColumnModal) return '';
-    return html`
-        <div class="modal-overlay" @click="${() => this.showColumnModal = false}">
-            <div class="modal" @click="${(e: Event) => e.stopPropagation()}" style="max-width: 500px;">
-                <h3>${i18n.t('table.columns_title')}</h3>
-                <div style="display: flex; flex-direction: column; gap: 8px; max-height: 400px; overflow-y: auto;">
-                    ${this.columnConfig.map((col, i) => html`
-                        <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px; background: var(--md-sys-color-surface-container-high); border-radius: 4px;">
-                            <label style="display: flex; align-items: center; gap: 8px; flex-grow: 1;">
-                                <input type="checkbox" .checked="${col.visible}" ?disabled="${col.id === 'select' || col.id === 'actions'}" 
-                                    @change="${() => this.toggleColumnVisibility(col.id)}" />
-                                ${i18n.t(col.label) || col.label}
-                            </label>
-                            <div style="display: flex; gap: 4px;">
-                                <button class="btn-secondary" style="height: 24px; padding: 0 8px;" @click="${() => this.moveColumn(i, 'up')}" ?disabled="${i === 0}">↑</button>
-                                <button class="btn-secondary" style="height: 24px; padding: 0 8px;" @click="${() => this.moveColumn(i, 'down')}" ?disabled="${i === this.columnConfig.length - 1}">↓</button>
-                            </div>
-                        </div>
-                    `)}
-                </div>
-                <div class="modal-actions">
-                    <button class="btn-primary" @click="${this.saveColumnConfig}">${i18n.t('common.save')}</button>
-                </div>
-            </div>
-        </div>
-      `;
   }
 
   renderAddCategoryModal() {
@@ -1481,38 +1498,6 @@ export class ViewExpenses extends LitElement {
     });
   }
 
-
-  @state() columnWidths: { [key: string]: number } = {};
-  private resizingColumn: string | null = null;
-  private startX: number = 0;
-  private startWidth: number = 0;
-
-  startResize(e: MouseEvent, column: string) {
-    e.preventDefault();
-    this.resizingColumn = column;
-    this.startX = e.pageX;
-    this.startWidth = this.columnWidths[column] || (e.target as HTMLElement).parentElement!.offsetWidth;
-
-    document.addEventListener('mousemove', this.onMouseMove);
-    document.addEventListener('mouseup', this.onMouseUp);
-    document.body.style.cursor = 'col-resize';
-  }
-
-  onMouseMove = (e: MouseEvent) => {
-    if (this.resizingColumn) {
-      const currentWidth = this.startWidth + (e.pageX - this.startX);
-      if (currentWidth > 50) { // Min width
-        this.columnWidths = { ...this.columnWidths, [this.resizingColumn]: currentWidth };
-      }
-    }
-  }
-
-  onMouseUp = () => {
-    this.resizingColumn = null;
-    document.removeEventListener('mousemove', this.onMouseMove);
-    document.removeEventListener('mouseup', this.onMouseUp);
-    document.body.style.cursor = '';
-  }
 
   async loadData(preserveScroll = false, isBackground = false) {
     const scrollPos = window.scrollY;
@@ -1870,61 +1855,32 @@ export class ViewExpenses extends LitElement {
     }
   }
 
-  startEditing(id: string, field: string, value: any) {
-    // Capture scroll position at the start of editing
-    this._preservedScrollY = window.scrollY;
-    console.log('[ViewExpenses] Starting edit, captured scrollY:', this._preservedScrollY);
-
-    // Soft lock for imported transactions
-    const tx = this.transactions.find(t => t.id === id);
-    if (tx && tx.externalId) {
-      // Only lock fields that are imported (Date, Amount, Description)
-      if (['date', 'amount', 'description'].includes(field)) {
-        if (!confirm(`This transaction was imported from CSV(Locked).\nAre you sure you want to edit the ${field}?`)) {
-          this._preservedScrollY = null; // Clear if user cancels
-          return;
-        }
-      }
-    }
-
-    this.editingCell = { id, field };
-    this.editValue = value;
-    // Wait for update then focus (prevent scroll)
-    setTimeout(() => {
-      const input = this.shadowRoot?.querySelector(`#edit-${id}-${field}`) as HTMLElement;
-      if (input) {
-        input.focus({ preventScroll: true });
-      }
-    }, 0);
-  }
-
-  cancelEditing() {
-    this.editingCell = null;
-    this.editValue = null;
-    this._preservedScrollY = null; // Clear preserved scroll on cancel
-  }
-
-  async saveCell(id: string, field: string) {
-    if (this.editValue === null) return;
+  /**
+   * Writes one field of one transaction and patches local state in place, then
+   * offers a rule when a category was set. Shared by the inline row expand and
+   * the mobile transaction sheet.
+   */
+  async saveField(id: string, field: string, value: any) {
+    if (value === null || value === undefined) return;
 
     try {
-      let payload: any = {};
-      let localValue: any = this.editValue;
+      const payload: any = {};
+      let localValue: any = value;
 
       if (field === 'date') {
-        payload[field] = new Date(this.editValue).toISOString();
+        payload[field] = new Date(value).toISOString();
         localValue = payload[field];
       } else if (field === 'amount') {
-        payload[field] = parseFloat(this.editValue);
+        payload[field] = parseFloat(value);
         localValue = payload[field];
-      } else if (field === 'categoryId' && (this.editValue === 'uncategorized' || this.editValue === '')) {
+      } else if (field === 'categoryId' && (value === 'uncategorized' || value === '')) {
         payload[field] = null;
         localValue = null;
-      } else if (field === 'costObjectId' && this.editValue === '') {
+      } else if (field === 'costObjectId' && value === '') {
         payload[field] = null;
         localValue = null;
       } else {
-        payload[field] = this.editValue;
+        payload[field] = value;
       }
 
       await api.patch(`/transactions/${id}`, payload);
@@ -1937,8 +1893,6 @@ export class ViewExpenses extends LitElement {
         );
       }
 
-      this.editingCell = null;
-      this.editValue = null;
       this._preservedScrollY = null;
 
       // Recompute budget balances if needed
@@ -1948,12 +1902,12 @@ export class ViewExpenses extends LitElement {
 
       // If category was changed, check for rule suggestions
       if (field === 'categoryId' && localValue && localValue !== 'uncategorized') {
-        console.log('[ViewExpenses] saveCell: category changed, checking for suggestions');
+        console.log('[ViewExpenses] saveField: category changed, checking for suggestions');
         try {
           const suggestion = await api.get(`/rules/suggestions/for-transaction/${id}`);
-          console.log('[ViewExpenses] saveCell: suggestion response:', suggestion);
-          console.log('[ViewExpenses] saveCell: has conditionsJson?', !!suggestion?.conditionsJson);
-          console.log('[ViewExpenses] saveCell: keys:', Object.keys(suggestion || {}));
+          console.log('[ViewExpenses] saveField: suggestion response:', suggestion);
+          console.log('[ViewExpenses] saveField: has conditionsJson?', !!suggestion?.conditionsJson);
+          console.log('[ViewExpenses] saveField: keys:', Object.keys(suggestion || {}));
           
           // Check if suggestion has conditionsJson (backend returns null as {} when no suggestion)
           if (suggestion?.conditionsJson) {
@@ -1977,24 +1931,16 @@ export class ViewExpenses extends LitElement {
               });
             }
           } else {
-            console.log('[ViewExpenses] saveCell: No suggestion returned (not enough similar transactions or rule already exists)');
+            console.log('[ViewExpenses] saveField: No suggestion returned (not enough similar transactions or rule already exists)');
           }
         } catch (err) {
-          console.error('[ViewExpenses] saveCell: failed to get suggestion:', err);
+          console.error('[ViewExpenses] saveField: failed to get suggestion:', err);
         }
       }
     } catch (e: any) {
-      console.error('Failed to save cell', e);
+      console.error('Failed to save field', e);
       this.notify('Failed to save changes: ' + (e.message || JSON.stringify(e)));
       this._preservedScrollY = null;
-    }
-  }
-
-  handleKeyDown(e: KeyboardEvent, id: string, field: string) {
-    if (e.key === 'Enter') {
-      this.saveCell(id, field);
-    } else if (e.key === 'Escape') {
-      this.cancelEditing();
     }
   }
 
@@ -3238,587 +3184,1261 @@ Tables: ${result.tables?.join(', ')}`;
     });
   }
 
-  render() {
-    if (this.isMobile) return this.renderMobile();
+  // ------------------------------------------------------------------
+  // Desktop layout (> 600px)
+  // ------------------------------------------------------------------
 
-    const symbol = this.currency === 'EUR' ? '€' : '$';
-    const totalBalance = Number.isFinite(this.totalBalance) ? this.totalBalance : null;
-    const verifiedBalance = Number.isFinite(this.verifiedBalance) ? this.verifiedBalance : null;
-    const difference = totalBalance !== null && verifiedBalance !== null ? verifiedBalance - totalBalance : null;
-    const isBalanced = difference !== null && Math.abs(difference) < 0.01;
-    const movementNet = this.monthlyStats.income - this.monthlyStats.expense;
+  /** The side column only earns its keep while the table still gets ~640px. */
+  private get showSideColumn() {
+    return contentWidth(this.viewportWidth) - 340 >= 640;
+  }
+
+  /** Below this the table sheds a few pixels per column and the expand unindents. */
+  private get tightTable() {
+    return this.viewportWidth < 1100;
+  }
+
+  private get tableColumns() {
+    return this.tightTable
+      ? '40px 92px minmax(140px, 1fr) minmax(132px, 196px) minmax(100px, 124px) 36px'
+      : '40px 100px minmax(180px, 1fr) minmax(160px, 216px) minmax(112px, 132px) 40px';
+  }
+
+  /** `−€1,150.00` / `+€3,240.00`, with a real minus sign. */
+  private signedMoney(value: number) {
+    return `${value < 0 ? '−' : '+'}${this.money(value)}`;
+  }
+
+  /** Spend per category across the filtered set, ranked. Income is excluded. */
+  private get filteredCategoryTotals() {
+    const buckets = new Map<string, { icon: string; name: string; total: number; unknown: boolean }>();
+
+    this.filteredTransactions.forEach(tx => {
+      const amount = Number(tx.amount) || 0;
+      if (amount >= 0) return;
+      const category = this.categories.find(c => c.id === tx.categoryId);
+      const key = category?.id ?? 'uncategorized';
+      const bucket = buckets.get(key) ?? {
+        icon: category?.icon || '',
+        name: category?.name || i18n.t('common.uncategorized'),
+        total: 0,
+        unknown: !category,
+      };
+      bucket.total += Math.abs(amount);
+      buckets.set(key, bucket);
+    });
+
+    return [...buckets.values()].sort((a, b) => b.total - a.total);
+  }
+
+  /** Rows a rule already matched, and how many distinct rules that involves. */
+  private get pendingSuggestions() {
+    const rows = this.transactions.filter(t => t._suggestion);
+    const ruleIds = new Set(rows.map(t => t._suggestionRuleId).filter(Boolean));
+    return { rows: rows.length, rules: ruleIds.size || (rows.length ? 1 : 0) };
+  }
+
+  /** Every popover on the screen closes on a click that isn't one of theirs. */
+  private closeDesktopMenus() {
+    this.showAccountMenu = false;
+    this.showPeriodSheet = false;
+    this.showFilterMenu = false;
+    this.showPageSizeMenu = false;
+    this.catCellFor = null;
+    this.rowCatMenu = false;
+  }
+
+  private toggleDensity() {
+    this.density = this.density === 'compact' ? 'comfortable' : 'compact';
+    localStorage.setItem('priperfin_row_density', this.density);
+  }
+
+  /** Opens a row's inline expand, seeding the draft from the transaction. */
+  private toggleRow(tx: any) {
+    if (this.openRowId === tx.id) {
+      this.openRowId = null;
+      this.rowDraft = null;
+      this.rowCatMenu = false;
+      return;
+    }
+    this.openRowId = tx.id;
+    this.rowCatMenu = false;
+    this.rowDraft = {
+      categoryId: tx.categoryId || 'uncategorized',
+      date: new Date(tx.date).toISOString().split('T')[0],
+      amount: (Number(tx.amount) || 0).toFixed(2),
+      notes: tx.notes || '',
+    };
+  }
+
+  /**
+   * Writes only the fields the draft actually changed, so an untouched row is
+   * never PATCHed and the imported-row confirmation only fires when it must.
+   */
+  private async saveOpenRow(tx: any) {
+    const draft = this.rowDraft;
+    if (!draft) return;
+
+    const originalDate = new Date(tx.date).toISOString().split('T')[0];
+    const amount = parseFloat(draft.amount);
+    const changed: [string, any][] = [];
+
+    if (draft.categoryId !== (tx.categoryId || 'uncategorized')) changed.push(['categoryId', draft.categoryId]);
+    if (this.isValidIsoDate(draft.date) && draft.date !== originalDate) changed.push(['date', draft.date]);
+    if (Number.isFinite(amount) && amount !== Number(tx.amount)) changed.push(['amount', amount]);
+    if (draft.notes !== (tx.notes || '')) changed.push(['notes', draft.notes]);
+
+    // An imported row carries the bank's own date, amount and description; the
+    // old cell editor asked before touching those and so does this.
+    const locked = changed.some(([f]) => f === 'date' || f === 'amount');
+    if (tx.externalId && locked) {
+      const proceed = await this.askConfirm(
+        i18n.t('desktop.imported_edit_confirm'),
+        i18n.t('common.save'),
+      );
+      if (!proceed) return;
+    }
+
+    for (const [field, value] of changed) {
+      await this.saveField(tx.id, field, value);
+    }
+
+    this.openRowId = null;
+    this.rowDraft = null;
+    this.rowCatMenu = false;
+  }
+
+  /** Declines a rule's suggestion, remembering the rejection server-side. */
+  private async rejectSuggestion(tx: any) {
+    if (tx._suggestionConditionsJson) {
+      try {
+        await api.post('/rules/suggestions/reject-prompt', {
+          conditionsJson: tx._suggestionConditionsJson,
+          categoryId: tx._suggestion,
+        });
+      } catch (err) {
+        console.error('Failed to reject suggestion:', err);
+      }
+    }
+    this.transactions = this.transactions.map(t =>
+      t.id === tx.id ? { ...t, _suggestion: null } : t);
+  }
+
+  private clearAllFilters() {
+    this.filterCategoryId = '';
+    this.filterMinAmount = null;
+    this.filterMaxAmount = null;
+    this.filterText = '';
+    this.filterDateFrom = '';
+    this.filterDateTo = '';
+    this.currentPage = 1;
+  }
+
+  /** One chip per active filter, each removable on its own. */
+  private get filterChips() {
+    const chips: { label: string; clear: () => void }[] = [];
+
+    if (this.filterCategoryId) {
+      const category = this.categories.find(c => c.id === this.filterCategoryId);
+      chips.push({
+        label: this.filterCategoryId === 'uncategorized'
+          ? i18n.t('common.uncategorized')
+          : `${category?.icon ?? ''} ${category?.name ?? ''}`.trim(),
+        clear: () => { this.filterCategoryId = ''; this.currentPage = 1; },
+      });
+    }
+
+    if (this.filterMinAmount !== null || this.filterMaxAmount !== null) {
+      const min = this.filterMinAmount !== null ? this.money(this.filterMinAmount, 0) : '';
+      const max = this.filterMaxAmount !== null ? this.money(this.filterMaxAmount, 0) : '';
+      chips.push({
+        label: min && max ? `${min} – ${max}` : min ? `≥ ${min}` : `≤ ${max}`,
+        clear: () => {
+          this.filterMinAmount = null;
+          this.filterMaxAmount = null;
+          this.currentPage = 1;
+        },
+      });
+    }
+
+    if (this.filterDateFrom || this.filterDateTo) {
+      chips.push({
+        label: `${this.filterDateFrom || '…'} → ${this.filterDateTo || '…'}`,
+        clear: () => {
+          this.filterDateFrom = '';
+          this.filterDateTo = '';
+          this.currentPage = 1;
+        },
+      });
+    }
+
+    if (this.filterText) {
+      chips.push({
+        label: `"${this.filterText}"`,
+        clear: () => { this.filterText = ''; this.currentPage = 1; },
+      });
+    }
+
+    return chips;
+  }
+
+  private renderDesktop() {
+    return html`
+      <div class="d-screen" @click="${() => this.closeDesktopMenus()}">
+        ${this.renderDesktopHeader()}
+        ${this.renderDesktopStrip()}
+        ${this.selectedTransactions.size > 0
+          ? this.renderDesktopBulkRow()
+          : this.renderDesktopFilterRow()}
+
+        <div
+          class="d-content"
+          style="grid-template-columns: ${this.showSideColumn ? 'minmax(0, 1fr) 320px' : 'minmax(0, 1fr)'}">
+          ${this.renderDesktopTable()}
+          ${this.showSideColumn ? this.renderDesktopSide() : nothing}
+        </div>
+
+        ${this.renderSharedModals()}
+        ${this.showAddForm ? this.renderDesktopAddModal() : nothing}
+        ${this.transactionToDelete ? html`
+          <div class="modal-overlay" @click="${() => this.transactionToDelete = null}">
+            <div class="modal" @click="${(e: Event) => e.stopPropagation()}">
+              <h3 style="margin-top: 0">${i18n.t('table.delete_transaction')}</h3>
+              <p>${i18n.t('common.confirm_delete')}</p>
+              <div class="modal-actions">
+                <button @click="${() => this.transactionToDelete = null}">${i18n.t('common.cancel')}</button>
+                <button
+                  class="danger"
+                  style="background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container)"
+                  @click="${this.confirmDelete}">
+                  ${i18n.t('common.delete')}
+                </button>
+              </div>
+            </div>
+          </div>
+        ` : nothing}
+      </div>
+    `;
+  }
+
+  private renderDesktopHeader() {
+    const account = this.selectedAccount;
 
     return html`
-        <div class="header">
-            <h1>${i18n.t('nav.expenses')}</h1>
-            <div class="filters">
-                <filterable-select
-                    .value="${this.selectedAccountId}"
-                    .options="${this.getAccountOptions()}"
-                    .placeholder="Select Account"
-                    @change="${(e: CustomEvent) => { this.selectedAccountId = e.detail.value; this.loadData(true); }}"
-                    width="200px">
-                </filterable-select>
-                <select @change="${(e: any) => {
-                    const previousMode = this.dateFilterMode;
-                    const nextMode = e.target.value as DateFilterMode;
-                    this.dateFilterMode = nextMode;
+      <div class="d-header">
+        <h1>${i18n.t('nav.expenses')}</h1>
 
-                    if (previousMode === 'all_time' && nextMode !== 'all_time') {
-                      this.pageSize = 20;
-                      this.currentPage = 1;
-                      this._allTimePageSizeSuggested = false;
-                    }
-
-                    this._autoPageSizeToTotalOnNextLoad = this.dateFilterMode === 'all_time';
-                    this.loadData(true);
-                }}" .value="${this.dateFilterMode}">
-                    <option value="month">${i18n.t('filters.mode_month')}</option>
-                    <option value="year">${i18n.t('filters.mode_year')}</option>
-                    <option value="custom">${i18n.t('filters.mode_custom')}</option>
-                    <option value="all_time">${i18n.t('filters.mode_all_time')}</option>
-                </select>
-                ${this.dateFilterMode === 'month' ? html`
-                    <select @change="${(e: any) => { this.month = parseInt(e.target.value); this.loadData(true); }}" .value="${this.month}">
-                        ${Array.from({ length: 12 }, (_, i) => i + 1).map(m => {
-                            const date = new Date(this.year, m - 1, 1);
-                            const monthName = new Intl.DateTimeFormat(i18n.getLocale(), { month: 'long' }).format(date);
-                            const capitalized = monthName.charAt(0).toUpperCase() + monthName.slice(1);
-                            return html`<option value="${m}" ?selected=${this.month === m}>${capitalized}</option>`;
-                        })}
-                    </select>
-                ` : ''}
-                ${this.dateFilterMode === 'month' || this.dateFilterMode === 'year' ? html`
-                    <select @change="${(e: any) => { this.year = parseInt(e.target.value); this.loadData(true); }}" .value="${this.year}">
-                        ${this.getYearOptions().map(y => html`<option value="${y}">${y}</option>`)}
-                    </select>
-                ` : ''}
-                ${this.dateFilterMode === 'custom' ? html`
-                    <input type="date" .value="${this.customStartDate}" @change="${(e: any) => { this.customStartDate = e.target.value; this.loadData(true); }}" style="padding: 0.5rem;" />
-                    <span style="color: var(--md-sys-color-on-surface-variant);">-</span>
-                    <input type="date" .value="${this.customEndDate}" @change="${(e: any) => { this.customEndDate = e.target.value; this.loadData(true); }}" style="padding: 0.5rem;" />
-                ` : ''}
-                <button class="btn-secondary" @click="${() => this.loadData(true)}">${i18n.t('reports.refresh')}</button>
+        <div class="dx-anchor" @click="${(e: Event) => e.stopPropagation()}">
+          <button
+            class="d-account-chip"
+            @click="${() => {
+              const open = this.showAccountMenu;
+              this.closeDesktopMenus();
+              this.showAccountMenu = !open;
+            }}">
+            ${icon('account_balance', 18)}
+            <span>${account ? account.name : i18n.t('reports.all_accounts')}</span>
+            ${icon('expand_more', 18)}
+          </button>
+          ${this.showAccountMenu ? html`
+            <div class="dx-pop">
+              <div class="dx-pop-list">
+                ${this.getAccountOptions().map(option => html`
+                  <button
+                    class="dx-pop-row ${option.value === this.selectedAccountId ? 'selected' : ''}"
+                    @click="${() => {
+                      this.showAccountMenu = false;
+                      if (option.value === this.selectedAccountId) return;
+                      this.selectedAccountId = option.value;
+                      this.openRowId = null;
+                      this.loadData(true);
+                    }}">
+                    <span class="d-emoji">${option.icon ?? ''}</span>
+                    <span style="flex: 1; min-width: 0">${option.label}</span>
+                    ${option.value === this.selectedAccountId ? icon('check', 18) : nothing}
+                  </button>
+                `)}
+              </div>
             </div>
+          ` : nothing}
         </div>
 
-        <div class="card" style="display: flex; flex-direction: column; gap: 12px; align-items: stretch;">
-            <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
-                <div style="font-size: 0.9rem; color: var(--md-sys-color-on-surface-variant); font-weight: 500;">${i18n.t('expenses.reconciliation_status')}</div>
-                <span style="font-size: 0.75rem; font-weight: 600; padding: 4px 10px; border-radius: 999px; background: ${isBalanced ? 'rgba(22, 163, 74, 0.16)' : 'var(--md-sys-color-error-container)'}; color: ${isBalanced ? '#16a34a' : 'var(--md-sys-color-on-error-container)'};">
-                    ${isBalanced ? i18n.t('expenses.balanced') : i18n.t('expenses.review')}
-                </span>
-            </div>
-            <div style="display: grid; grid-template-columns: repeat(3, minmax(180px, 1fr)); gap: 16px; align-items: center;">
-            <div>
-                <div style="font-size: 0.875rem; color: var(--md-sys-color-secondary); margin-bottom: 0.25rem;">${i18n.t('expenses.verified_balance')}</div>
-                <div style="display: flex; align-items: center; gap: 0.5rem;">
-                    <span style="font-size: 1.5rem; font-weight: 600; color: var(--md-sys-color-on-surface);">${symbol}</span>
-                    <input type="number" step="0.01" class="amount-input" .value="${verifiedBalance ?? ''}" @change="${this.updateVerifiedBalance}" />
-                </div>
-            </div>
-
-            <div>
-                <div style="font-size: 0.875rem; color: var(--md-sys-color-secondary); margin-bottom: 0.25rem;">${this.isCredit ? i18n.t('expenses.amount_owed') : i18n.t('expenses.system_balance')}</div>
-                <div class="balance" style="color: ${totalBalance === null ? 'var(--md-sys-color-on-surface-variant)' : totalBalance >= 0 ? '#16a34a' : 'var(--md-sys-color-error)'}">
-                    ${totalBalance === null ? '—' : `${totalBalance >= 0 ? '+' : '-'}${symbol}${Math.abs(totalBalance).toFixed(2)}`}
-                </div>
-            </div>
-
-            <div>
-                <div style="font-size: 0.875rem; color: var(--md-sys-color-secondary); margin-bottom: 0.25rem;">${i18n.t('expenses.discrepancy')}</div>
-                <div class="balance" style="color: ${difference === null ? 'var(--md-sys-color-on-surface-variant)' : Math.abs(difference) < 0.01 ? '#16a34a' : 'var(--md-sys-color-error)'}">
-                    ${difference === null ? '—' : `${Math.abs(difference) < 0.01 ? '' : (difference > 0 ? '+' : '-')}${symbol}${Math.abs(difference).toFixed(2)}`}
-                </div>
-            </div>
-            </div>
-            </div>
-            <div style="font-size: 0.8rem; color: var(--md-sys-color-on-surface-variant);">${i18n.t('expenses.reconciliation_hint')}</div>
+        <div class="dx-anchor" @click="${(e: Event) => e.stopPropagation()}">
+          ${periodStepper({
+            label: this.periodLabel(),
+            open: this.showPeriodSheet,
+            onPrev: () => this.stepPeriod(-1),
+            onNext: () => this.stepPeriod(1),
+            nextDisabled: this.isAtLatestPeriod(),
+            prevLabel: i18n.t('mobile.prev_period'),
+            nextLabel: i18n.t('mobile.next_period'),
+            onLabel: () => {
+              const open = this.showPeriodSheet;
+              this.closeDesktopMenus();
+              if (!open) this.openPeriodSheet();
+            },
+          })}
+          ${this.showPeriodSheet ? this.renderPeriodPopover() : nothing}
         </div>
 
-        <div class="card" style="display: flex; flex-direction: column; gap: 1rem; align-items: stretch;">
-            <div style="font-size: 0.9rem; color: var(--md-sys-color-on-surface-variant); font-weight: 500;">${i18n.t('expenses.net_breakdown')}</div>
-            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem;">
+        <div class="d-spacer"></div>
 
-                <!-- Income -->
-                <div>
-                    <div style="font-size: 0.75rem; color: var(--md-sys-color-secondary); margin-bottom: 4px;">${i18n.t('common.income')}</div>
-                    <div style="color: #16a34a; font-weight: 500; font-size: 1rem;">
-                        +${symbol}${this.monthlyStats.income.toFixed(2)}
-                    </div>
-                </div>
-
-                <!-- Expense -->
-                <div>
-                    <div style="font-size: 0.75rem; color: var(--md-sys-color-secondary); margin-bottom: 4px;">${i18n.t('common.expenses')}</div>
-                    <div style="color: var(--md-sys-color-error); font-weight: 500; font-size: 1rem;">
-                        -${symbol}${Math.abs(this.monthlyStats.expense).toFixed(2)}
-                    </div>
-                </div>
-
-                <!-- Balance (Income - Expenses) -->
-                <div>
-                    <div style="font-size: 0.75rem; color: var(--md-sys-color-secondary); margin-bottom: 4px;">${i18n.t('expenses.net_movements')}</div>
-                    <div style="color: ${movementNet >= 0 ? '#16a34a' : 'var(--md-sys-color-error)'}; font-weight: 500; font-size: 1rem;">
-                        ${movementNet >= 0 ? '+' : '-'}${symbol}${Math.abs(movementNet).toFixed(2)}
-                    </div>
-                </div>
-            </div>
-            <div style="font-size: 0.78rem; color: var(--md-sys-color-on-surface-variant);">
-                ${i18n.t('expenses.net_formula')} · ${i18n.t('expenses.net_calculation_hint')}
-            </div>
+        <div class="d-search">
+          ${icon('search', 20)}
+          <input
+            type="text"
+            placeholder="${i18n.t('desktop.search_transactions')}"
+            .value="${this.filterText}"
+            @input="${(e: any) => { this.filterText = e.target.value; this.currentPage = 1; }}" />
         </div>
 
-      ${this.isCredit && this.costObjectBreakdown.length > 0 ? html`
-        <div class="card" style="margin-bottom: 1rem;">
-          <h3 style="margin: 0 0 1rem 0; font-size: 1rem; color: var(--md-sys-color-on-surface);">
-            💼 ${i18n.t('cost_objects.breakdown_title')}
-          </h3>
-          <div style="display: flex; flex-direction: column; gap: 0.75rem;">
-            ${this.costObjectBreakdown.map(co => {
-              const total = this.costObjectBreakdown.reduce((sum, c) => sum + c.total, 0);
-              const pct = total > 0 ? ((co.total / total) * 100).toFixed(0) : 0;
+        <button
+          class="d-icon-btn"
+          title="${i18n.t('expenses.import_csv')}"
+          @click="${() => { this.showWizard = true; }}">
+          ${icon('upload_file', 20)}
+        </button>
+        <button
+          class="d-icon-btn"
+          title="${i18n.t('bank_sync.sync_all')}"
+          ?disabled="${this.bankSyncing}"
+          @click="${this.handleBankSync}">
+          ${icon(this.bankSyncing ? 'sync_problem' : 'sync', 20)}
+        </button>
+        <button
+          class="d-icon-btn"
+          title="${i18n.t('desktop.row_density')}"
+          @click="${() => this.toggleDensity()}">
+          ${icon(this.density === 'compact' ? 'density_small' : 'density_medium', 20)}
+        </button>
+
+        <button class="d-btn" @click="${() => { this.showAddForm = true; }}">
+          ${icon('add', 20)}
+          <span>${i18n.t('mobile.add_transaction')}</span>
+        </button>
+      </div>
+    `;
+  }
+
+  /** The month/year/custom picker behind the stepper's centre label. */
+  private renderPeriodPopover() {
+    const now = new Date();
+    const modes: { value: DateFilterMode; label: string }[] = [
+      { value: 'month', label: i18n.t('filters.mode_month') },
+      { value: 'year', label: i18n.t('filters.mode_year') },
+      { value: 'custom', label: i18n.t('filters.mode_custom') },
+      { value: 'all_time', label: i18n.t('filters.mode_all_time') },
+    ];
+
+    return html`
+      <div class="dx-pop wide">
+        <div class="dx-pop-title">${i18n.t('mobile.period')}</div>
+        <div style="display: flex; flex-wrap: wrap; gap: 6px; padding: 0 6px 8px">
+          ${modes.map(mode => html`
+            <button
+              class="d-chip ${this.sheetMode === mode.value ? '' : 'outlined'}"
+              @click="${() => { this.sheetMode = mode.value; }}">
+              <span>${mode.label}</span>
+            </button>
+          `)}
+        </div>
+
+        ${this.sheetMode === 'month' || this.sheetMode === 'year' ? html`
+          <div class="dx-year-row">
+            <button class="d-icon-btn small" @click="${() => { this.sheetYear -= 1; }}">
+              ${icon('chevron_left', 20)}
+            </button>
+            <span>${this.sheetYear}</span>
+            <button
+              class="d-icon-btn small"
+              ?disabled="${this.sheetYear >= now.getFullYear()}"
+              @click="${() => { this.sheetYear += 1; }}">
+              ${icon('chevron_right', 20)}
+            </button>
+          </div>
+        ` : nothing}
+
+        ${this.sheetMode === 'month' ? html`
+          <div class="dx-month-grid">
+            ${Array.from({ length: 12 }, (_, i) => i + 1).map(m => {
+              const name = new Date(this.sheetYear, m - 1, 1)
+                .toLocaleString(i18n.getLocale(), { month: 'short' })
+                .replace('.', '');
+              const future = this.sheetYear > now.getFullYear()
+                || (this.sheetYear === now.getFullYear() && m > now.getMonth() + 1);
               return html`
-                <div style="display: flex; align-items: center; gap: 0.75rem;">
-                  <span style="font-size: 1.25rem;">${co.icon}</span>
-                  <span style="flex: 1; font-weight: 500;">${co.name}</span>
-                  <span style="color: var(--md-sys-color-on-surface-variant);">${pct}%</span>
-                  <span style="font-weight: 600; min-width: 80px; text-align: right;">
-                    ${this.currency === 'EUR' ? '€' : '$'}${co.total.toFixed(2)}
-                  </span>
-                </div>
+                <button
+                  class="dx-month ${this.sheetMonth === m ? 'selected' : ''} ${future ? 'future' : ''}"
+                  @click="${() => { this.sheetMonth = m; }}">
+                  ${name.charAt(0).toUpperCase()}${name.slice(1)}
+                </button>
               `;
             })}
-            <div style="border-top: 1px solid var(--md-sys-color-outline-variant); padding-top: 0.75rem; margin-top: 0.5rem; display: flex; justify-content: space-between;">
-              <span style="font-weight: 600;">${i18n.t('cost_objects.total_owed')}</span>
-              <span style="font-weight: 700; color: var(--md-sys-color-error);">
-                ${this.currency === 'EUR' ? '€' : '$'}${this.costObjectBreakdown.reduce((sum, c) => sum + c.total, 0).toFixed(2)}
-              </span>
-            </div>
           </div>
-        </div>
-      ` : ''}
+        ` : nothing}
 
-      ${this.showAddForm ? html`
-        <div class="card" style="margin-bottom: 2rem; padding: 1rem; border-radius: 8px;">
-            <h3>${i18n.t('expenses.add_manual_title')}</h3>
-            <div style="display: flex; gap: 1rem; align-items: flex-end; flex-wrap: wrap;">
-                <label>
-                    ${i18n.t('common.date')}
-                    <input type="date"
-                        .value="${this.newTransaction.date}"
-                        @input="${(e: any) => this.newTransaction = { ...this.newTransaction, date: e.target.value }}"
-                        style="display: block; padding: 0.5rem; border: 1px solid var(--md-sys-color-outline); border-radius: 4px; background: var(--md-sys-color-surface-container); color: var(--md-sys-color-on-surface);"
-                    />
-                </label>
-                <label>
-                    ${i18n.t('common.description')}
-                    <input type="text" placeholder="${i18n.t('common.description')}"
-                        .value="${this.newTransaction.description}"
-                        @input="${(e: any) => this.newTransaction = { ...this.newTransaction, description: e.target.value }}"
-                        @blur="${this.handleDescriptionBlur}"
-                        style="display: block; padding: 0.5rem; border: 1px solid var(--md-sys-color-outline); border-radius: 4px; background: var(--md-sys-color-surface-container); color: var(--md-sys-color-on-surface);"
-                    />
-                </label>
-                <label>
-                    ${i18n.t('common.amount')}
-                    <input type="number" placeholder="-10.00"
-                        .value="${this.newTransaction.amount || ''}"
-                        @input="${(e: any) => this.newTransaction = { ...this.newTransaction, amount: parseFloat(e.target.value) }}"
-                        style="display: block; padding: 0.5rem; border: 1px solid var(--md-sys-color-outline); border-radius: 4px; background: var(--md-sys-color-surface-container); color: var(--md-sys-color-on-surface);"
-                    />
-                </label>
-                <label>
-                    ${i18n.t('common.category')}
-                    <filterable-select
-                        .value="${this.newTransaction.categoryId || 'uncategorized'}"
-                        .options="${this.getCategoryOptions(true)}"
-                        .placeholder="${i18n.t('common.category')}"
-                        @change="${(e: CustomEvent) => {
-          if (e.detail.value === 'new_category_inline') {
-            this.showAddCategoryModal = true;
-            return;
-          }
-          this.newTransaction = { ...this.newTransaction, categoryId: e.detail.value === 'uncategorized' ? '' : e.detail.value };
-        }}"
-                        style="display: block;">
-                    </filterable-select>
-                </label>
-                ${this.isCredit && this.costObjects.length > 0 ? html`
-                <label>
-                    ${i18n.t('cost_objects.funding_source')}
-                    <filterable-select
-                        .value="${this.newTransaction.costObjectId || ''}"
-                        .options="${this.getCostObjectOptions()}"
-                        .placeholder="${i18n.t('cost_objects.funding_source')}"
-                        @change="${(e: CustomEvent) => this.newTransaction = { ...this.newTransaction, costObjectId: e.detail.value }}"
-                        style="display: block;">
-                    </filterable-select>
-                </label>
-                ` : ''}
-                <label style="flex-grow: 1;">
-                    ${i18n.t('common.notes')}
-                    <input type="text" placeholder="${i18n.t('common.notes')}"
-                        .value="${this.newTransaction.notes || ''}"
-                        @input="${(e: any) => this.newTransaction = { ...this.newTransaction, notes: e.target.value }}"
-                        style="display: block; padding: 0.5rem; border: 1px solid var(--md-sys-color-outline); border-radius: 4px; width: 100%; background: var(--md-sys-color-surface-container); color: var(--md-sys-color-on-surface);"
-                    />
-                </label>
-                <button @click="${this.createTransaction}" style="background: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary); border: none; padding: 0.6rem 1rem; border-radius: 4px; cursor: pointer;">${i18n.t('common.save')}</button>
-            </div>
-        </div>
-      ` : ''
-      }
+        ${this.sheetMode === 'custom' ? html`
+          <div style="display: flex; gap: 8px; padding: 0 6px 8px">
+            <input
+              class="d-input mono"
+              type="text"
+              inputmode="numeric"
+              placeholder="yyyy-mm-dd"
+              .value="${this.sheetStartDate}"
+              @input="${(e: any) => { this.sheetStartDate = this.normalizeDateInput(e.target.value); }}" />
+            <input
+              class="d-input mono"
+              type="text"
+              inputmode="numeric"
+              placeholder="yyyy-mm-dd"
+              .value="${this.sheetEndDate}"
+              @input="${(e: any) => { this.sheetEndDate = this.normalizeDateInput(e.target.value); }}" />
+          </div>
+        ` : nothing}
 
-<div style="display: flex; flex-direction: column; gap: 16px; margin-bottom: 1rem;">
-
-            <!-- Simple search always visible -->
-            <input type="text" placeholder="${i18n.t('filters.search')}" .value="${this.filterText}" @input="${(e: any) => { this.filterText = e.target.value; this.currentPage = 1; }}" style="width: 100%; max-width: 400px; border-radius: 20px; padding: 0 20px;" />
-        </div>
-
-        <!-- Advanced Filters Row -->
-        <div style="display: flex; gap: 16px; align-items: center; flex-wrap: wrap; padding: 12px; background: var(--md-sys-color-surface-container); border-radius: 12px;">
-            <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
-                <button class="btn-primary" @click="${() => this.showAddForm = !this.showAddForm}">
-                    ${this.showAddForm ? i18n.t('common.cancel') : '+ ' + i18n.t('expenses.add_transaction')}
-                </button>
-                <button class="btn-secondary" @click="${() => this.showWizard = true}">${i18n.t('expenses.import_csv')}</button>
-                <button class="btn-secondary" @click="${this.handleBankSync}" ?disabled="${this.bankSyncing}" title="${i18n.t('bank_sync.sync_all')}">
-                    ${this.bankSyncing ? '⏳ ' + i18n.t('bank_sync.syncing') : '🔄 ' + i18n.t('bank_sync.sync_all')}
-                </button>
-            </div>
-
-            <div style="width: 1px; height: 32px; background: var(--md-sys-color-outline-variant);"></div>
-
-            <span style="font-size: 0.875rem; font-weight: 500;">${i18n.t('filters.filters')}:</span>
-            <select .value="${this.filterCategoryId}" @change="${(e: any) => { this.filterCategoryId = e.target.value; this.currentPage = 1; }}" style="width: 180px;">
-                <option value="">${i18n.t('filters.all_categories')}</option>
-                <option value="uncategorized">${i18n.t('common.uncategorized')}</option>
-                  ${this.categories.filter(c => !c.parentId && (c.type === 'EXPENSE' || !c.type)).map(parent => html`
-                      <option value="${parent.id}">${parent.icon} ${parent.name}</option>
-                      ${this.categories.filter(c => c.parentId === parent.id).map(child => html`
-                          <option value="${child.id}">&nbsp;&nbsp;&nbsp;&nbsp;${child.icon} ${child.name}</option>
-                      `)}
-                  `)}
-</select>
-  <input type="number" placeholder="${i18n.t('filters.min_amount')}" .value="${this.filterMinAmount ?? ''}" @input="${(e: any) => { this.filterMinAmount = e.target.value ? parseFloat(e.target.value) : null; this.currentPage = 1; }}" style="width: 120px;" />
-    <input type="number" placeholder="${i18n.t('filters.max_amount')}" .value="${this.filterMaxAmount ?? ''}" @input="${(e: any) => { this.filterMaxAmount = e.target.value ? parseFloat(e.target.value) : null; this.currentPage = 1; }}" style="width: 120px;" />
-      <div style="display: flex; align-items: center; gap: 8px;">
-        <div style="position: relative; width: 150px;">
-          <input type="text" inputmode="numeric" placeholder="yyyy-mm-dd" .value="${this.filterDateFrom}" @input="${(e: any) => { this.filterDateFrom = this.normalizeDateInput(e.target.value); this.currentPage = 1; }}" style="width: 100%; padding-right: 34px;" title="${i18n.t('filters.from_date')}" />
-          <span style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); pointer-events: none; color: var(--md-sys-color-on-surface-variant);">📅</span>
-          <input type="date" .value="${this.filterDateFrom}" @input="${(e: any) => { this.filterDateFrom = e.target.value; this.currentPage = 1; }}" style="position: absolute; top: 0; right: 0; width: 34px; height: 100%; opacity: 0; cursor: pointer; border: none; padding: 0;" title="${i18n.t('filters.from_date')}" />
-        </div>
-          <span style="color: var(--md-sys-color-on-surface-variant);"> -</span>
-        <div style="position: relative; width: 150px;">
-          <input type="text" inputmode="numeric" placeholder="yyyy-mm-dd" .value="${this.filterDateTo}" @input="${(e: any) => { this.filterDateTo = this.normalizeDateInput(e.target.value); this.currentPage = 1; }}" style="width: 100%; padding-right: 34px;" title="${i18n.t('filters.to_date')}" />
-          <span style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); pointer-events: none; color: var(--md-sys-color-on-surface-variant);">📅</span>
-          <input type="date" .value="${this.filterDateTo}" @input="${(e: any) => { this.filterDateTo = e.target.value; this.currentPage = 1; }}" style="position: absolute; top: 0; right: 0; width: 34px; height: 100%; opacity: 0; cursor: pointer; border: none; padding: 0;" title="${i18n.t('filters.to_date')}" />
+        <div style="display: flex; justify-content: flex-end; padding: 0 6px 4px">
+          <button class="d-btn small plain" @click="${() => this.applyPeriodSheet()}">
+            ${i18n.t('mobile.apply')}
+          </button>
         </div>
       </div>
-              <button class="btn-secondary" style="height: 32px; padding: 0 12px;" @click="${() => { this.filterCategoryId = ''; this.filterMinAmount = null; this.filterMaxAmount = null; this.filterText = ''; this.filterDateFrom = ''; this.filterDateTo = ''; }}">${i18n.t('filters.clear')}</button>
-                  </div>
+    `;
+  }
 
-                  <!--Bulk Actions-->
-                    ${this.selectedTransactions.size > 0 ? html`
-            <div style="display: flex; gap: 16px; align-items: center; padding: 12px; background: var(--md-sys-color-primary-container); color: var(--md-sys-color-on-primary-container); border-radius: 12px; flex-wrap: wrap;">
-                <span style="font-weight: 500;">${this.selectedTransactions.size} ${i18n.t('bulk_actions.selected')}</span>
-                <button class="btn-secondary" @click="${this.deleteSelected}" style="background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container); border: none;">${i18n.t('bulk_actions.delete_selected')}</button>
+  private renderDesktopStrip() {
+    const totalBalance = Number.isFinite(this.totalBalance) ? this.totalBalance : null;
+    const verified = Number.isFinite(this.verifiedBalance) ? this.verifiedBalance : null;
+    const difference = totalBalance !== null && verified !== null ? verified - totalBalance : null;
+    const balanced = difference !== null && Math.abs(difference) < 0.01;
+    const net = this.monthlyStats.income - this.monthlyStats.expense;
+    const reviewCount = this.needsReviewTransactions.length;
 
-                <div style="display: flex; align-items: center; gap: 8px; margin-left: auto;">
-                    <span style="font-size: 0.875rem;">${i18n.t('bulk_actions.move_to')}:</span>
-                    <filterable-select
-                        .value=""
-                        .options="${[
-                          { value: '', label: i18n.t('bulk_actions.select_category') },
-                          ...this.getCategoryOptions(false).filter(opt => opt.value !== 'uncategorized')
-                        ]}"
-                        .placeholder="${i18n.t('bulk_actions.select_category')}"
-                        @change="${(e: CustomEvent) => this.bulkUpdateCategory(e.detail.value)}"
-                        width="200px">
-                    </filterable-select>
-
-                    <span style="font-size: 0.875rem; margin-left: 16px;">${i18n.t('bulk_actions.assign_to')}:</span>
-                    <filterable-select
-                        .value=""
-                        .options="${[
-                          { value: '', label: i18n.t('bulk_actions.select_account') },
-                          { value: 'unassigned', label: i18n.t('bulk_actions.unassign') },
-                          ...this.accounts.map(account => ({
-                            value: account.id,
-                            label: account.name,
-                            icon: account.type === 'CREDIT' ? '💳' : '🏦'
-                          }))
-                        ]}"
-                        .placeholder="${i18n.t('bulk_actions.select_account')}"
-                        @change="${(e: CustomEvent) => this.bulkUpdateAccount(e.detail.value)}"
-                        width="200px">
-                    </filterable-select>
-                </div>
+    return html`
+      <div class="d-strip">
+        <div class="d-strip-cell">
+          <span
+            class="m-icon"
+            style="font-size: 20px; color: ${difference === null
+              ? 'var(--md-sys-color-outline)'
+              : balanced
+                ? 'var(--pf-positive)'
+                : 'var(--md-sys-color-error)'}">
+            ${difference === null ? 'help' : balanced ? 'check_circle' : 'warning'}
+          </span>
+          <div>
+            <div class="d-strip-label">${i18n.t('desktop.reconciled')}</div>
+            <div class="d-strip-value text">
+              ${difference === null
+                ? '—'
+                : balanced
+                  ? i18n.t('desktop.no_discrepancy')
+                  : i18n.t('desktop.off_by', { amount: this.money(difference) })}
             </div>
-          ` : ''
-      }
-</div>
-
-      ${this.renderColumnModal()}
-        ${this.renderAddCategoryModal()}
-
-        <csv-wizard
-            ?open="${this.showWizard}"
-            .accounts="${this.accounts}"
-            @close="${() => this.showWizard = false}"
-            @import="${this.handleWizardImport}">
-        </csv-wizard>
-
-        <split-transaction-modal
-            ?open="${this.showSplitModal}"
-            .transaction="${this.splitTransaction}"
-            .categories="${this.categories}"
-            .costObjects="${this.costObjects}"
-            @close="${this.closeSplitModal}"
-            @save="${this.handleSplitSave}">
-        </split-transaction-modal>
-
-        ${this.showRuleModal ? html`
-            <rule-editor
-                .rule="${this.ruleTransaction ? {
-                    name: this.ruleTransaction._suggestionData?.name || `Rule for ${this.ruleTransaction.description}`,
-                    mode: 'SUGGEST',
-                    categoryId: this.ruleTransaction._suggestionData?.categoryId || this.ruleTransaction.categoryId,
-                    conditionsJson: this.ruleTransaction._suggestionData?.conditionsJson || JSON.stringify({
-                        operator: 'AND',
-                        conditions: [
-                            { field: 'description', operator: 'contains', value: this.ruleTransaction.description }
-                        ]
-                    })
-                } : null}"
-                .categories="${this.categories}"
-                @save="${this.handleRuleSave}"
-                @cancel="${() => this.showRuleModal = false}"
-            ></rule-editor>
-        ` : ''}
-
-
-      ${this.transactionToDelete ? html`
-          <div class="modal-overlay" @click="${() => this.transactionToDelete = null}">
-              <div class="modal" @click="${(e: Event) => e.stopPropagation()}">
-                  <h3 style="margin-top: 0;">${i18n.t('common.delete')} Transaction</h3>
-                  <p>${i18n.t('common.confirm_delete')}</p>
-                  <div class="modal-actions">
-                      <button @click="${() => this.transactionToDelete = null}">${i18n.t('common.cancel')}</button>
-                      <button class="danger" style="background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container);" @click="${this.confirmDelete}">${i18n.t('common.delete')}</button>
-                  </div>
-              </div>
           </div>
-      ` : ''
-      }
+        </div>
 
-      ${this.loading ? html`<p>${i18n.t('common.loading')}</p>` : html`
-        ${this.renderPaginationControls()}
-        <div class="table-container">
-            <table>
-              <thead>
-                <tr>
-                  ${this.columnConfig.map(col => {
-        if (!col.visible) return '';
+        <div class="d-strip-divider"></div>
 
-        switch (col.id) {
-          case 'select':
-            return html`<th style="width: 40px;"><input type="checkbox" @change="${this.toggleSelectAll}" .checked="${this.selectedTransactions.size === this.pagedTransactions.length && this.pagedTransactions.length > 0}" /></th>`;
-          case 'date':
-            return html`<th @click="${() => this.toggleSort('date')}" style="cursor: pointer; position: relative; width: ${this.columnWidths['date'] ? this.columnWidths['date'] + 'px' : 'auto'}">
-                          ${i18n.t('common.date')} ${this.sortField === 'date' ? (this.sortDirection === 'asc' ? '↑' : '↓') : ''}
-                          <div class="resizer" @mousedown="${(e: MouseEvent) => this.startResize(e, 'date')}" @click="${(e: Event) => e.stopPropagation()}"></div>
-                        </th>`;
-          case 'description':
-            return html`<th @click="${() => this.toggleSort('description')}" style="cursor: pointer; position: relative; width: ${this.columnWidths['description'] ? this.columnWidths['description'] + 'px' : 'auto'}">
-                          ${i18n.t('common.description')} ${this.sortField === 'description' ? (this.sortDirection === 'asc' ? '↑' : '↓') : ''}
-                          <div class="resizer" @mousedown="${(e: MouseEvent) => this.startResize(e, 'description')}" @click="${(e: Event) => e.stopPropagation()}"></div>
-                        </th>`;
-          case 'categoryId':
-            return html`<th @click="${() => this.toggleSort('categoryId')}" style="cursor: pointer; position: relative; width: ${this.columnWidths['categoryId'] ? this.columnWidths['categoryId'] + 'px' : 'auto'}">
-                          ${i18n.t('common.category')} ${this.sortField === 'categoryId' ? (this.sortDirection === 'asc' ? '↑' : '↓') : ''}
-                          <div class="resizer" @mousedown="${(e: MouseEvent) => this.startResize(e, 'categoryId')}" @click="${(e: Event) => e.stopPropagation()}"></div>
-                        </th>`;
-          case 'costObjectId':
-            return html`<th style="position: relative; width: ${this.columnWidths['costObjectId'] ? this.columnWidths['costObjectId'] + 'px' : 'auto'}">
-                          ${i18n.t('cost_objects.funding_source')}
-                          <div class="resizer" @mousedown="${(e: MouseEvent) => this.startResize(e, 'costObjectId')}" @click="${(e: Event) => e.stopPropagation()}"></div>
-                        </th>`;
-          case 'amount':
-            return html`<th @click="${() => this.toggleSort('amount')}" style="cursor: pointer; position: relative; width: ${this.columnWidths['amount'] ? this.columnWidths['amount'] + 'px' : 'auto'}">
-                          ${i18n.t('common.amount')} ${this.sortField === 'amount' ? (this.sortDirection === 'asc' ? '↑' : '↓') : ''}
-                          <div class="resizer" @mousedown="${(e: MouseEvent) => this.startResize(e, 'amount')}" @click="${(e: Event) => e.stopPropagation()}"></div>
-                        </th>`;
-          case 'budget':
-            return html`<th style="width: ${this.columnWidths['budget'] ? this.columnWidths['budget'] + 'px' : 'auto'}">
-                          ${i18n.t('expenses.budget_remaining')}
-                        </th>`;
-          case 'notes':
-            return html`<th @click="${() => this.toggleSort('notes')}" style="cursor: pointer; position: relative; width: ${this.columnWidths['notes'] ? this.columnWidths['notes'] + 'px' : 'auto'}">
-                          ${i18n.t('common.notes')} ${this.sortField === 'notes' ? (this.sortDirection === 'asc' ? '↑' : '↓') : ''}
-                          <div class="resizer" @mousedown="${(e: MouseEvent) => this.startResize(e, 'notes')}" @click="${(e: Event) => e.stopPropagation()}"></div>
-                        </th>`;
-          case 'actions':
-            return html`<th>${i18n.t('common.actions')}</th>`;
-          default:
-            return '';
-        }
-      })}
-                </tr>
-              </thead>
-              <tbody>
-                ${this.pagedTransactions.map(tx => {
-        const isEditingDate = this.editingCell?.id === tx.id && this.editingCell?.field === 'date';
-        const isEditingDesc = this.editingCell?.id === tx.id && this.editingCell?.field === 'description';
-        const isEditingCat = this.editingCell?.id === tx.id && this.editingCell?.field === 'categoryId';
-        const isEditingAmount = this.editingCell?.id === tx.id && this.editingCell?.field === 'amount';
-        const txDate = new Date(tx.date).toISOString().split('T')[0];
+        <div class="d-strip-cell">
+          <div>
+            <div class="d-strip-label">${i18n.t('desktop.verified_balance')}</div>
+            <div class="d-strip-edit">
+              <span class="d-strip-prefix">${this.symbol}</span>
+              <input
+                class="d-strip-input"
+                style="width: 96px"
+                type="number"
+                step="0.01"
+                .value="${verified ?? ''}"
+                @change="${this.updateVerifiedBalance}" />
+            </div>
+          </div>
+        </div>
 
-        return html`
-                    <tr>
-                        ${this.columnConfig.map(col => {
-          if (!col.visible) return '';
+        <div class="d-strip-cell">
+          <div>
+            <div class="d-strip-label">
+              ${this.isCredit ? i18n.t('expenses.amount_owed') : i18n.t('desktop.system_balance')}
+            </div>
+            <div class="d-strip-value ${totalBalance === null ? 'muted' : ''}">
+              ${totalBalance === null ? '—' : this.signedMoney(totalBalance)}
+            </div>
+          </div>
+        </div>
 
-          switch (col.id) {
-            case 'select':
-              return html`<td><input type="checkbox" .checked="${this.selectedTransactions.has(tx.id)}" @change="${() => this.toggleSelection(tx.id)}" /></td>`;
-            case 'date':
-              return html`
-                                        <td class="editable col-date" @click="${() => !isEditingDate && this.startEditing(tx.id, 'date', txDate)}">
-                                            ${isEditingDate ? html`<input type="date" id="edit-${tx.id}-date" .value="${this.editValue}" @input="${(e: any) => this.editValue = e.target.value}" @blur="${() => this.saveCell(tx.id, 'date')}" @keydown="${(e: KeyboardEvent) => this.handleKeyDown(e, tx.id, 'date')}" />` : txDate}
-                                        </td>`;
-            case 'description':
-              return html`
-                                        <td class="${!tx.externalId ? 'editable' : ''} col-description" title="${tx.description}" @click="${() => !tx.externalId && !isEditingDesc && this.startEditing(tx.id, 'description', tx.description)}">
-                                            ${isEditingDesc ? html`<input type="text" id="edit-${tx.id}-description" .value="${this.editValue}" @input="${(e: any) => this.editValue = e.target.value}" @blur="${() => this.saveCell(tx.id, 'description')}" @keydown="${(e: KeyboardEvent) => this.handleKeyDown(e, tx.id, 'description')}" />` : html`${tx.description}${tx.externalId ? html`<span title="${i18n.t('common.verified_locked')}" style="cursor: help; margin-left: 4px; font-size: 0.8em; opacity: 0.5;">🔒</span>` : ''}`}
-                                        </td>`;
-            case 'categoryId':
-              return html`
-                                        <td class="editable" @click="${() => !isEditingCat && this.startEditing(tx.id, 'categoryId', tx.categoryId)}">
-                                            ${isEditingCat ? html`
-                                                <filterable-select
-                                                  id="edit-${tx.id}-categoryId"
-                                                  .value="${this.editValue || 'uncategorized'}"
-                                                  .options="${this.getCategoryOptions(true)}"
-                                                  .placeholder="${i18n.t('common.category')}"
-                                                  .compact="${true}"
-                                                  @change="${async (e: CustomEvent) => {
+        <div class="d-strip-divider"></div>
+
+        <div class="d-strip-cell">
+          <div>
+            <div class="d-strip-label">${i18n.t('common.income')}</div>
+            <div class="d-strip-value positive">+${this.money(this.monthlyStats.income)}</div>
+          </div>
+        </div>
+
+        <div class="d-strip-cell">
+          <div>
+            <div class="d-strip-label">${i18n.t('common.expenses')}</div>
+            <div class="d-strip-value negative">−${this.money(this.monthlyStats.expense)}</div>
+          </div>
+        </div>
+
+        <div class="d-strip-cell">
+          <div>
+            <div class="d-strip-label">${i18n.t('expenses.net')}</div>
+            <div class="d-strip-value ${net >= 0 ? 'positive' : 'negative'}">
+              ${this.signedMoney(net)}
+            </div>
+          </div>
+        </div>
+
+        <div class="d-spacer"></div>
+
+        ${reviewCount > 0 ? html`
+          <div class="d-strip-cell tight">
+            ${statusPill({
+              kind: 'attention',
+              glyph: 'help',
+              label: i18n.t('desktop.uncategorised_count', { count: reviewCount }),
+              onClick: () => {
+                this.filterCategoryId = this.filterCategoryId === 'uncategorized' ? '' : 'uncategorized';
+                this.currentPage = 1;
+              },
+            })}
+          </div>
+        ` : nothing}
+      </div>
+    `;
+  }
+
+  private renderDesktopFilterRow() {
+    const chips = this.filterChips;
+
+    return html`
+      <div class="d-chip-row">
+        ${icon('filter_list', 18)}
+        ${chips.map(chip => html`
+          <button class="d-chip" @click="${chip.clear}">
+            <span>${chip.label}</span>
+            ${icon('close', 16)}
+          </button>
+        `)}
+
+        <div class="dx-anchor" @click="${(e: Event) => e.stopPropagation()}">
+          <button
+            class="d-chip outlined"
+            @click="${() => {
+              const open = this.showFilterMenu;
+              this.closeDesktopMenus();
+              this.showFilterMenu = !open;
+            }}">
+            ${icon('add', 16)}
+            <span>${i18n.t('desktop.add_filter')}</span>
+          </button>
+          ${this.showFilterMenu ? this.renderFilterPopover() : nothing}
+        </div>
+
+        ${chips.length > 0 ? html`
+          <button class="d-link" style="padding: 0 8px" @click="${() => this.clearAllFilters()}">
+            ${i18n.t('mobile.clear_all')}
+          </button>
+        ` : nothing}
+
+        <div class="d-spacer"></div>
+        <span class="d-count">
+          ${i18n.t('desktop.match_count', {
+            shown: this.filteredTransactions.length,
+            total: this.transactions.length,
+          })}
+        </span>
+      </div>
+    `;
+  }
+
+  private renderFilterPopover() {
+    return html`
+      <div class="dx-pop wide" style="padding: 12px">
+        <div class="d-fields" style="grid-template-columns: repeat(2, minmax(120px, 1fr))">
+          ${formField(i18n.t('common.category'), html`
+            <select
+              class="d-input"
+              .value="${this.filterCategoryId}"
+              @change="${(e: any) => { this.filterCategoryId = e.target.value; this.currentPage = 1; }}">
+              <option value="">${i18n.t('filters.all_categories')}</option>
+              <option value="uncategorized">${i18n.t('common.uncategorized')}</option>
+              ${this.getCategoryOptions(false)
+                .filter(option => option.value !== 'uncategorized')
+                .map(option => html`
+                  <option value="${option.value}" ?selected="${option.value === this.filterCategoryId}">
+                    ${option.indent ? '— ' : ''}${option.icon ?? ''} ${option.label}
+                  </option>
+                `)}
+            </select>
+          `, true)}
+
+          ${formField(i18n.t('rules.min'), html`
+            <input
+              class="d-input amount"
+              type="number"
+              .value="${this.filterMinAmount ?? ''}"
+              @input="${(e: any) => {
+                this.filterMinAmount = e.target.value ? parseFloat(e.target.value) : null;
+                this.currentPage = 1;
+              }}" />
+          `)}
+          ${formField(i18n.t('rules.max'), html`
+            <input
+              class="d-input amount"
+              type="number"
+              .value="${this.filterMaxAmount ?? ''}"
+              @input="${(e: any) => {
+                this.filterMaxAmount = e.target.value ? parseFloat(e.target.value) : null;
+                this.currentPage = 1;
+              }}" />
+          `)}
+
+          ${formField(i18n.t('filters.from_date'), html`
+            <input
+              class="d-input mono"
+              type="text"
+              inputmode="numeric"
+              placeholder="yyyy-mm-dd"
+              .value="${this.filterDateFrom}"
+              @input="${(e: any) => {
+                this.filterDateFrom = this.normalizeDateInput(e.target.value);
+                this.currentPage = 1;
+              }}" />
+          `)}
+          ${formField(i18n.t('filters.to_date'), html`
+            <input
+              class="d-input mono"
+              type="text"
+              inputmode="numeric"
+              placeholder="yyyy-mm-dd"
+              .value="${this.filterDateTo}"
+              @input="${(e: any) => {
+                this.filterDateTo = this.normalizeDateInput(e.target.value);
+                this.currentPage = 1;
+              }}" />
+          `)}
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px">
+          <button class="d-btn-text" @click="${() => this.clearAllFilters()}">
+            ${i18n.t('filters.clear')}
+          </button>
+          <button class="d-btn small plain" @click="${() => { this.showFilterMenu = false; }}">
+            ${i18n.t('mobile.apply')}
+          </button>
+        </div>
+      </div>
+    `;
+  }
+
+  /** Replaces the filter row while rows are selected, so nothing shifts down. */
+  private renderDesktopBulkRow() {
+    return html`
+      <div class="d-chip-row">
+        ${icon('checklist', 18)}
+        <span class="d-strip-value text">
+          ${i18n.t('mobile.selected_count', { count: this.selectedTransactions.size })}
+        </span>
+
+        <div class="dx-anchor" @click="${(e: Event) => e.stopPropagation()}">
+          <filterable-select
+            .value=""
+            .options="${[
+              { value: '', label: i18n.t('bulk_actions.select_category') },
+              ...this.getCategoryOptions(false).filter(option => option.value !== 'uncategorized'),
+            ]}"
+            .placeholder="${i18n.t('bulk_actions.select_category')}"
+            .compact="${true}"
+            @change="${(e: CustomEvent) => this.bulkUpdateCategory(e.detail.value)}"
+            width="220px">
+          </filterable-select>
+        </div>
+
+        <div class="dx-anchor" @click="${(e: Event) => e.stopPropagation()}">
+          <filterable-select
+            .value=""
+            .options="${[
+              { value: '', label: i18n.t('bulk_actions.select_account') },
+              { value: 'unassigned', label: i18n.t('bulk_actions.unassign') },
+              ...this.accounts.map(account => ({
+                value: account.id,
+                label: account.name,
+                icon: account.type === 'CREDIT' ? '💳' : '🏦',
+              })),
+            ]}"
+            .placeholder="${i18n.t('bulk_actions.select_account')}"
+            .compact="${true}"
+            @change="${(e: CustomEvent) => this.bulkUpdateAccount(e.detail.value)}"
+            width="220px">
+          </filterable-select>
+        </div>
+
+        <button class="d-btn-text destructive" @click="${this.deleteSelected}">
+          ${icon('delete', 18)}
+          <span>${i18n.t('bulk_actions.delete_selected')}</span>
+        </button>
+
+        <div class="d-spacer"></div>
+        <button class="d-link" @click="${() => { this.selectedTransactions = new Set(); }}">
+          ${i18n.t('common.cancel')}
+        </button>
+      </div>
+    `;
+  }
+
+  private renderDesktopTable() {
+    const rows = this.pagedTransactions;
+    const allSelected = rows.length > 0 && rows.every(tx => this.selectedTransactions.has(tx.id));
+    const sortGlyph = this.sortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward';
+    const header = (label: string, sortField: string, right = false) => html`
+      <button
+        class="d-th ${this.sortField === sortField ? 'sorted' : ''} ${right ? 'right' : ''}"
+        @click="${() => this.toggleSort(sortField)}">
+        <span>${label}</span>
+        ${this.sortField === sortField ? icon(sortGlyph, 16) : nothing}
+      </button>
+    `;
+
+    return html`
+      <div class="d-panel">
+        <div style="flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden">
+          <div class="d-thead" style="grid-template-columns: ${this.tableColumns}">
+            <div class="d-check-cell">
+              <button
+                class="d-checkbox"
+                role="checkbox"
+                aria-checked="${allSelected}"
+                aria-label="${i18n.t('mobile.select_all')}"
+                @click="${(e: Event) => {
+                  e.stopPropagation();
+                  this.selectedTransactions = allSelected
+                    ? new Set()
+                    : new Set(rows.map(tx => tx.id));
+                }}">
+                ${allSelected ? icon('check', 14) : nothing}
+              </button>
+            </div>
+            ${header(i18n.t('common.date'), 'date')}
+            ${header(i18n.t('common.description'), 'description')}
+            ${header(i18n.t('common.category'), 'categoryId')}
+            ${header(i18n.t('common.amount'), 'amount', true)}
+            <div></div>
+          </div>
+
+          ${this.loading
+            ? this.renderDesktopSkeletons()
+            : rows.length === 0
+              ? html`
+                <div class="d-empty-row">
+                  ${i18n.t('mobile.no_transactions_for', { period: this.periodLabel() })}
+                </div>
+              `
+              : rows.map((tx, index) => this.renderDesktopRow(tx, index))}
+        </div>
+
+        ${this.renderDesktopTableFooter()}
+      </div>
+    `;
+  }
+
+  private renderDesktopSkeletons() {
+    const height = this.density === 'compact' ? 36 : 44;
+    return html`
+      ${Array.from({ length: 10 }, (_, i) => html`
+        <div
+          style="display: flex; align-items: center; gap: 16px; height: ${height}px; padding: 0 16px;
+            border-bottom: 1px solid var(--md-sys-color-surface-container-high)"
+          aria-hidden="true">
+          ${skeleton('84px', '12px', i % 2 === 1)}
+          ${skeleton('40%', '12px', i % 2 === 1)}
+          ${skeleton('120px', '12px', i % 2 === 1)}
+          <div style="flex: 1"></div>
+          ${skeleton('88px', '12px', i % 2 === 1)}
+        </div>
+      `)}
+    `;
+  }
+
+  private renderDesktopRow(tx: any, index: number) {
+    const open = this.openRowId === tx.id;
+    const selected = this.selectedTransactions.has(tx.id);
+    const amount = Number(tx.amount) || 0;
+    const height = this.density === 'compact' ? 36 : 44;
+    const rowClass = open ? 'open' : selected ? 'selected' : index % 2 === 1 ? 'zebra' : '';
+
+    return html`
+      <div>
+        <div
+          class="d-row ${rowClass}"
+          style="grid-template-columns: ${this.tableColumns}; height: ${height}px"
+          role="button"
+          tabindex="0"
+          @click="${() => this.toggleRow(tx)}">
+          <div class="d-check-cell">
+            <button
+              class="d-checkbox"
+              role="checkbox"
+              aria-checked="${selected}"
+              aria-label="${i18n.t('mobile.select_mode')}"
+              @click="${(e: Event) => { e.stopPropagation(); this.toggleSelection(tx.id); }}">
+              ${selected ? icon('check', 14) : nothing}
+            </button>
+          </div>
+
+          <div class="d-row-date">${new Date(tx.date).toISOString().split('T')[0]}</div>
+
+          <div style="min-width: 0; padding-right: 16px">
+            <div class="d-row-desc" title="${tx.description}">${tx.description}</div>
+          </div>
+
+          ${this.renderDesktopCategoryCell(tx)}
+
+          <div class="d-row-amount ${amount >= 0 ? 'positive' : ''}">${this.signedMoney(amount)}</div>
+
+          <div class="d-row-chevron">${icon(open ? 'expand_less' : 'expand_more', 20)}</div>
+        </div>
+
+        ${open ? this.renderDesktopRowExpand(tx) : nothing}
+      </div>
+    `;
+  }
+
+  /** Set / suggested / empty, and a one-click category picker on top of it. */
+  private renderDesktopCategoryCell(tx: any) {
+    const category = this.categories.find(c => c.id === tx.categoryId);
+    const suggestion = tx._suggestion
+      ? this.categories.find(c => c.id === tx._suggestion)
+      : null;
+    const editing = this.catCellFor === tx.id;
+
+    return html`
+      <button
+        class="dx-cat-cell"
+        title="${i18n.t('desktop.change_category')}"
+        @click="${(e: Event) => {
+          e.stopPropagation();
+          const wasOpen = editing;
+          this.closeDesktopMenus();
+          this.catCellFor = wasOpen ? null : tx.id;
+          this.rowCatQuery = '';
+        }}">
+        ${editing
+          ? html`
+            ${this.renderCategoryMenu(async id => {
+              this.catCellFor = null;
+              await this.updateCategory(tx.id, id);
+            })}
+            <span style="display: flex; align-items: center; gap: 8px; color: var(--md-sys-color-primary)">
+              ${icon('edit', 18)}
+              <span style="font: 400 14px/18px 'Roboto', sans-serif">${i18n.t('desktop.choose_category')}</span>
+            </span>
+          `
+          : tx.splits && tx.splits.length > 0
+            ? html`
+              <span class="d-emoji">🔀</span>
+              <span class="dx-cat-name">${i18n.t('mobile.split')} (${tx.splits.length})</span>
+            `
+            : category
+              ? html`
+                <span class="d-emoji">${category.icon || ''}</span>
+                <span class="dx-cat-name">${category.name}</span>
+              `
+              : suggestion
+                ? html`
+                  <span class="dx-suggestion">
+                    <span>${suggestion.name}?</span>
+                    <button
+                      class="dx-accept"
+                      title="${i18n.t('mobile.accept')}"
+                      @click="${(e: Event) => {
+                        e.stopPropagation();
+                        this.updateCategory(tx.id, tx._suggestion);
+                      }}">
+                      ${icon('check_circle', 16)}
+                    </button>
+                    <button
+                      class="dx-reject"
+                      title="${i18n.t('rules.reject')}"
+                      @click="${(e: Event) => { e.stopPropagation(); this.rejectSuggestion(tx); }}">
+                      ${icon('cancel', 16)}
+                    </button>
+                  </span>
+                `
+                : html`<span class="dx-cat-empty">${i18n.t('common.uncategorized')}</span>`}
+      </button>
+    `;
+  }
+
+  /** Searchable category list, shared by the row cell and the row expand. */
+  private renderCategoryMenu(onPick: (categoryId: string) => void) {
+    const query = this.rowCatQuery.trim().toLowerCase();
+    const options = this.getCategoryOptions(false)
+      .filter(option => !query || String(option.label).toLowerCase().includes(query));
+
+    return html`
+      <div class="dx-pop" style="min-width: 224px" @click="${(e: Event) => e.stopPropagation()}">
+        <div class="dx-pop-search">
+          ${icon('search', 18)}
+          <input
+            type="text"
+            placeholder="${i18n.t('mobile.search_categories')}"
+            .value="${this.rowCatQuery}"
+            @input="${(e: any) => { this.rowCatQuery = e.target.value; }}" />
+        </div>
+        <div class="dx-pop-list">
+          ${options.map(option => html`
+            <button
+              class="dx-pop-row ${option.indent ? 'child' : ''}"
+              @click="${(e: Event) => { e.stopPropagation(); onPick(option.value); }}">
+              <span class="d-emoji">${option.icon ?? ''}</span>
+              <span>${option.label}</span>
+            </button>
+          `)}
+        </div>
+      </div>
+    `;
+  }
+
+  private renderDesktopRowExpand(tx: any) {
+    const draft = this.rowDraft;
+    if (!draft) return nothing;
+
+    const category = this.categories.find(c => c.id === draft.categoryId);
+    const account = this.accounts.find(a => a.id === tx.accountId);
+    const provenance = tx.externalId
+      ? i18n.t('desktop.imported_from', {
+          source: `${account?.name ?? i18n.t('bank_sync.title')} · ${tx.description}`,
+        })
+      : i18n.t('desktop.manual_entry');
+
+    return html`
+      <div
+        class="d-expand"
+        style="padding: 16px 8px 18px ${this.tightTable ? 20 : 148}px"
+        @click="${(e: Event) => e.stopPropagation()}">
+        <div
+          class="d-fields"
+          style="grid-template-columns: minmax(160px, 216px) minmax(110px, 132px) minmax(110px, 132px) minmax(140px, 1fr)">
+          ${formField(i18n.t('common.category'), html`
+            <div class="dx-anchor" style="display: block">
+              <button
+                class="d-select primary"
+                @click="${(e: Event) => {
+                  e.stopPropagation();
+                  this.rowCatMenu = !this.rowCatMenu;
+                  this.rowCatQuery = '';
+                }}">
+                <span class="d-emoji">${category?.icon ?? ''}</span>
+                <span class="d-select-value ${category ? '' : 'muted'}">
+                  ${category?.name ?? i18n.t('common.uncategorized')}
+                </span>
+                ${icon('expand_more', 20)}
+              </button>
+              ${this.rowCatMenu
+                ? this.renderCategoryMenu(id => {
+                    this.rowDraft = { ...draft, categoryId: id };
+                    this.rowCatMenu = false;
+                  })
+                : nothing}
+            </div>
+          `)}
+
+          ${formField(i18n.t('common.date'), html`
+            <input
+              class="d-input mono"
+              type="text"
+              inputmode="numeric"
+              placeholder="yyyy-mm-dd"
+              .value="${draft.date}"
+              @input="${(e: any) => {
+                this.rowDraft = { ...draft, date: this.normalizeDateInput(e.target.value) };
+              }}" />
+          `)}
+
+          ${formField(i18n.t('common.amount'), html`
+            <input
+              class="d-input amount"
+              type="number"
+              step="0.01"
+              .value="${draft.amount}"
+              @input="${(e: any) => { this.rowDraft = { ...draft, amount: e.target.value }; }}" />
+          `)}
+
+          ${formField(i18n.t('common.notes'), html`
+            <input
+              class="d-input"
+              type="text"
+              placeholder="${i18n.t('common.notes')}"
+              .value="${draft.notes}"
+              @input="${(e: any) => { this.rowDraft = { ...draft, notes: e.target.value }; }}" />
+          `)}
+        </div>
+
+        <div class="d-actions">
+          <button class="d-btn small plain" @click="${() => this.saveOpenRow(tx)}">
+            ${i18n.t('common.save')}
+          </button>
+          <button class="d-btn-text" @click="${() => this.toggleRow(tx)}">
+            ${i18n.t('common.cancel')}
+          </button>
+
+          <div class="d-actions-divider"></div>
+
+          <button class="d-btn-tonal" @click="${() => this.openCreateRuleModal(tx)}">
+            ${icon('rule', 18)}
+            <span>${i18n.t('desktop.create_rule_from_this')}</span>
+          </button>
+          <button
+            class="d-icon-btn small"
+            title="${i18n.t('table.split_transaction')}"
+            @click="${() => this.openSplitModal(tx)}">
+            ${icon('call_split', 18)}
+          </button>
+          <button
+            class="d-icon-btn small"
+            title="${i18n.t('table.set_balance_from_here')}"
+            @click="${() => this.setStartingBalanceFromTransaction(tx)}">
+            ${icon('anchor', 18)}
+          </button>
+
+          <div class="d-spacer"></div>
+
+          <button class="d-btn-text destructive" @click="${() => this.deleteTransaction(tx.id)}">
+            ${icon('delete', 18)}
+            <span>${i18n.t('common.delete')}</span>
+          </button>
+        </div>
+
+        ${footnote(tx.externalId ? 'lock' : 'info', provenance)}
+      </div>
+    `;
+  }
+
+  private renderDesktopTableFooter() {
+    const total = this.filteredTransactions.length;
+    const from = total === 0 ? 0 : (this.currentPage - 1) * this.pageSize + 1;
+    const to = Math.min(this.currentPage * this.pageSize, total);
+
+    return html`
+      <div class="d-tfoot">
+        <span class="d-tfoot-label">${i18n.t('table.rows_per_page')}</span>
+
+        <div class="dx-anchor" @click="${(e: Event) => e.stopPropagation()}">
+          <button
+            class="d-pill-select"
+            @click="${() => {
+              const open = this.showPageSizeMenu;
+              this.closeDesktopMenus();
+              this.showPageSizeMenu = !open;
+            }}">
+            <span>${this.pageSize}</span>
+            ${icon('expand_more', 16)}
+          </button>
+          ${this.showPageSizeMenu ? html`
+            <div class="dx-pop" style="bottom: calc(100% + 6px); top: auto; min-width: 140px">
+              ${this.getPageSizeOptions().map(size => html`
+                <button
+                  class="dx-pop-row ${size === this.pageSize ? 'selected' : ''}"
+                  @click="${() => {
+                    this.pageSize = size;
+                    this.currentPage = 1;
+                    this.showPageSizeMenu = false;
+                  }}">
+                  <span>${size}${size === total ? ` (${i18n.t('common.total')})` : ''}</span>
+                </button>
+              `)}
+            </div>
+          ` : nothing}
+        </div>
+
+        <div class="d-spacer"></div>
+
+        <span class="d-tfoot-label">${i18n.t('desktop.range', { from, to, total })}</span>
+
+        <button
+          class="d-icon-btn small"
+          ?disabled="${this.currentPage === 1}"
+          aria-label="${i18n.t('mobile.prev_period')}"
+          @click="${() => { this.currentPage -= 1; this.openRowId = null; }}">
+          ${icon('chevron_left', 20)}
+        </button>
+        <button
+          class="d-icon-btn small"
+          ?disabled="${to >= total}"
+          aria-label="${i18n.t('mobile.next_period')}"
+          @click="${() => { this.currentPage += 1; this.openRowId = null; }}">
+          ${icon('chevron_right', 20)}
+        </button>
+      </div>
+    `;
+  }
+
+  private renderDesktopSide() {
+    const totals = this.filteredCategoryTotals;
+    const sum = totals.reduce((acc, entry) => acc + entry.total, 0);
+    const suggestions = this.pendingSuggestions;
+
+    return html`
+      <div style="display: flex; flex-direction: column; gap: 12px; min-height: 0">
+        <div class="d-panel pad grow">
+          <div class="d-panel-head">
+            <span class="d-panel-title small">${i18n.t('desktop.where_it_went')}</span>
+            <div class="d-spacer"></div>
+            <span class="d-panel-caption">${i18n.t('desktop.filtered_set')}</span>
+          </div>
+          <div class="d-panel-caption">
+            ${i18n.t(
+              totals.length === 1 ? 'desktop.across_category_one' : 'desktop.across_categories',
+              { amount: this.money(sum), count: totals.length })}
+          </div>
+
+          <div class="d-panel-body stack">
+            ${totals.length === 0
+              ? html`<div class="d-panel-caption">${i18n.t('reports.no_data')}</div>`
+              : totals.map(entry => {
+                  // One figure drives both the bar and its label.
+                  const share = sum > 0 ? (entry.total / sum) * 100 : 0;
+                  return rankedBar({
+                    emoji: entry.icon,
+                    name: entry.name,
+                    amount: this.money(entry.total),
+                    percent: share,
+                    share: `${Math.round(share)}%`,
+                    color: entry.unknown
+                      ? 'var(--md-sys-color-outline)'
+                      : 'var(--md-sys-color-primary)',
+                  });
+                })}
+          </div>
+        </div>
+
+        ${suggestions.rows > 0 ? html`
+          <div class="d-nudge">
+            <div class="d-nudge-head">
+              ${icon('auto_awesome', 20)}
+              <span>${i18n.t(
+                suggestions.rules === 1 ? 'desktop.rule_ready_one' : 'desktop.rules_ready',
+                { count: suggestions.rules })}</span>
+            </div>
+            <div class="d-nudge-body">
+              ${i18n.t('desktop.rules_ready_body', {
+                rows: suggestions.rows,
+                total: this.transactions.length,
+              })}
+            </div>
+            <button class="d-btn tiny plain" @click="${() => this.navigateToRules()}">
+              ${i18n.t('desktop.review_rules')}
+            </button>
+          </div>
+        ` : nothing}
+      </div>
+    `;
+  }
+
+  private navigateToRules() {
+    const basePath = getAppBasePath(document.baseURI);
+    window.location.href = new URL(`${basePath}rules`, window.location.origin).href;
+  }
+
+  /** The manual add form, as a dialog rather than a card that shoves the table down. */
+  private renderDesktopAddModal() {
+    const draft = this.newTransaction;
+
+    return html`
+      <div class="modal-overlay" @click="${() => { this.showAddForm = false; }}">
+        <div
+          class="modal"
+          style="max-width: 640px"
+          @click="${(e: Event) => e.stopPropagation()}">
+          <h3 style="margin-top: 0">${i18n.t('expenses.add_manual_title')}</h3>
+
+          <div class="d-screen" style="display: block; height: auto; padding: 0; overflow: visible">
+            <div class="d-fields">
+              ${formField(i18n.t('common.date'), html`
+                <input
+                  class="d-input mono"
+                  type="date"
+                  .value="${draft.date}"
+                  @input="${(e: any) => { this.newTransaction = { ...draft, date: e.target.value }; }}" />
+              `)}
+              ${formField(i18n.t('common.amount'), html`
+                <input
+                  class="d-input amount"
+                  type="number"
+                  step="0.01"
+                  placeholder="-10.00"
+                  .value="${draft.amount || ''}"
+                  @input="${(e: any) => {
+                    this.newTransaction = { ...draft, amount: parseFloat(e.target.value) };
+                  }}" />
+              `)}
+              ${formField(i18n.t('common.description'), html`
+                <input
+                  class="d-input"
+                  type="text"
+                  .value="${draft.description}"
+                  @input="${(e: any) => {
+                    this.newTransaction = { ...draft, description: e.target.value };
+                  }}"
+                  @blur="${this.handleDescriptionBlur}" />
+              `, true)}
+              ${formField(i18n.t('common.category'), html`
+                <filterable-select
+                  .value="${draft.categoryId || 'uncategorized'}"
+                  .options="${this.getCategoryOptions(true)}"
+                  .placeholder="${i18n.t('common.category')}"
+                  @change="${(e: CustomEvent) => {
                     if (e.detail.value === 'new_category_inline') {
-                      this.cancelEditing();
                       this.showAddCategoryModal = true;
                       return;
                     }
-                    this.editValue = e.detail.value === 'uncategorized' ? null : e.detail.value;
-                    await this.saveCell(tx.id, 'categoryId');
-                  }}"
-                                                  width="100%">
-                                                </filterable-select>
-                                            ` : html`${(() => {
-                  // Show split indicator if transaction has splits
-                  if (tx.splits && tx.splits.length > 0) {
-                    return html`<span style="cursor: pointer;" @click="${(e: Event) => { e.stopPropagation(); this.openSplitModal(tx); }}">🔀 Split (${tx.splits.length} items)</span>`;
-                  }
-                  const c = this.categories.find(c => c.id === tx.categoryId);
-                  if (c) { if (c.parentId) { const p = this.categories.find(cat => cat.id === c.parentId); return html`<small style="opacity: 0.7">${p?.name} ></small> ${c.icon} ${c.name}`; } return html`${c.icon} ${c.name}`; }
-                  if (tx._suggestion) { const sugg = this.categories.find(c => c.id === tx._suggestion); return html`<div style="display: flex; align-items: center; gap: 0.5rem; justify-content: flex-start;"><span style="opacity: 0.6; font-style: italic;">? ${sugg?.name}</span><div style="display: flex; gap: 2px;"><button @click="${(e: Event) => { e.stopPropagation(); this.updateCategory(tx.id, tx._suggestion); }}" title="Accept Suggestion" style="padding: 2px 6px; background: #22c55e; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.8rem;">✔</button><button @click="${async (e: Event) => { e.stopPropagation(); if (tx._suggestionConditionsJson) { try { await api.post('/rules/suggestions/reject-prompt', { conditionsJson: tx._suggestionConditionsJson, categoryId: tx._suggestion }); } catch (err) { console.error('Failed to reject suggestion:', err); } } tx._suggestion = null; this.requestUpdate(); }}" title="Reject" style="padding: 2px 6px; background: #94a3b8; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.8rem;">✖</button></div></div>`; }
-                  return html`<span style="color: #cbd5e1; font-style: italic;">${i18n.t('common.uncategorized')}</span>`;
-                })()}`}
-                                        </td>`;
-            case 'costObjectId':
-              const isEditingCostObj = this.editingCell?.id === tx.id && this.editingCell?.field === 'costObjectId';
-              return html`
-                                        <td class="editable" @click="${() => !isEditingCostObj && this.startEditing(tx.id, 'costObjectId', tx.costObjectId)}">
-                                            ${isEditingCostObj ? html`
-                                                <filterable-select
-                                                  id="edit-${tx.id}-costObjectId"
-                                                  .value="${this.editValue || ''}"
-                                                  .options="${this.getCostObjectOptions()}"
-                                                  .placeholder="${i18n.t('cost_objects.funding_source')}"
-                                                  .compact="${true}"
-                                                  @change="${async (e: CustomEvent) => {
-                    this.editValue = e.detail.value;
-                    await this.saveCell(tx.id, 'costObjectId');
-                  }}"
-                                                  width="100%">
-                                                </filterable-select>
-                                            ` : html`${(() => {
-                  const co = this.costObjects.find(c => c.id === tx.costObjectId);
-                  if (co) return html`${co.icon} ${co.name}`;
-                  return html`<span style="color: #cbd5e1; font-style: italic;">${i18n.t('cost_objects.unassigned')}</span>`;
-                })()}`}
-                                        </td>`;
-            case 'amount':
-              const symbol = this.currency === 'EUR' ? '€' : '$';
-              return html`
-                                        <td class="editable amount ${tx.amount < 0 ? 'negative' : 'positive'}" @click="${() => !isEditingAmount && this.startEditing(tx.id, 'amount', tx.amount)}">
-                                            ${isEditingAmount ? html`<input type="number" id="edit-${tx.id}-amount" step="0.01" .value="${this.editValue}" @input="${(e: any) => this.editValue = parseFloat(e.target.value)}" @blur="${() => this.saveCell(tx.id, 'amount')}" @keydown="${(e: KeyboardEvent) => this.handleKeyDown(e, tx.id, 'amount')}" />` : html`${tx.amount < 0 ? '-' : '+'}${symbol}${Math.abs(tx.amount).toFixed(2)}`}
-                                        </td>`;
-            case 'budget':
-              const budgetSymbol = this.currency === 'EUR' ? '€' : '$';
-              return html`
-                                        <td class="amount" style="color: var(--md-sys-color-on-surface-variant);">
-                                            ${(() => {
-                  if (tx._budgetRemaining === undefined) return '';
-                  const cat = this.categories.find(c => c.id === tx.categoryId);
-                  const budget = cat ? Number(cat.budget) : 0;
-                  return html`${budgetSymbol}${tx._budgetRemaining.toFixed(2)} / ${budget.toFixed(0)}`;
-                })()}
-                                        </td>`;
-            case 'notes':
-              return html`
-                                        <td class="editable col-notes" @click="${() => !this.editingCell && this.startEditing(tx.id, 'notes', tx.notes)}">
-                                            ${this.editingCell?.id === tx.id && this.editingCell?.field === 'notes' ? html`<input type="text" id="edit-${tx.id}-notes" .value="${this.editValue || ''}" @input="${(e: any) => this.editValue = e.target.value}" @blur="${() => this.saveCell(tx.id, 'notes')}" @keydown="${(e: KeyboardEvent) => this.handleKeyDown(e, tx.id, 'notes')}" />` : (tx.notes || '-')}
-                                        </td>`;
-            case 'actions':
-              return html`<td><div class="action-buttons"><button class="btn-secondary action-icon" @click="${(e: Event) => { e.stopPropagation(); this.setStartingBalanceFromTransaction(tx); }}" title="${i18n.t('table.set_balance_from_here')}">⚓</button><button class="btn-secondary action-icon" @click="${(e: Event) => { e.stopPropagation(); this.openCreateRuleModal(tx); }}" title="${i18n.t('table.create_rule')}">📏</button><button class="btn-secondary action-icon" @click="${(e: Event) => { e.stopPropagation(); this.openSplitModal(tx); }}" title="${i18n.t('table.split_transaction')}">🔀</button><button class="btn-danger action-icon" @click="${() => this.deleteTransaction(tx.id)}" title="${i18n.t('table.delete_transaction')}">✕</button></div></td>`;
-
-            default:
-              return '';
-          }
-        })}
-                    </tr>
-                    `;
-      })}
-              </tbody>
-            </table>
-        </div>
-
-        <div class="pagination-controls">
-            <span style="font-size: 0.875rem; color: var(--md-sys-color-on-surface-variant);">${i18n.t('table.rows_per_page')}:</span>
-            <select style="width: auto; height: 32px; padding: 0 8px;" 
-                .value="${String(this.pageSize)}" 
-                @change="${(e: any) => {
-                  const nextPageSize = parseInt(e.target.value, 10);
-                  if (Number.isNaN(nextPageSize) || nextPageSize <= 0) return;
-                  this.pageSize = nextPageSize;
-                  this.currentPage = 1;
-                }}">
-                ${this.getPageSizeOptions().map(size => html`
-                    <option value="${size}" ?selected=${size === this.pageSize}>${size}${size === this.filteredTransactions.length ? ` (${i18n.t('common.total')})` : ''}</option>
-                `)}
-            </select>
-
-            <button class="btn-secondary" style="width: auto; height: 32px; padding: 0 12px;" @click="${() => this.showColumnModal = true}">${i18n.t('filters.columns')}</button>
-
-            <span style="font-size: 0.875rem; color: var(--md-sys-color-on-surface-variant);">
-                ${(this.currentPage - 1) * this.pageSize + 1}-${Math.min(this.currentPage * this.pageSize, this.filteredTransactions.length)} of ${this.filteredTransactions.length}
-            </span>
-
-            <div style="display: flex; gap: 8px;">
-                <button class="btn-secondary" 
-                    ?disabled="${this.currentPage === 1}"
-                    @click="${() => this.currentPage--}">
-                    &lt;
-                </button>
-                <button class="btn-secondary" 
-                    ?disabled="${this.currentPage * this.pageSize >= this.filteredTransactions.length}"
-                    @click="${() => this.currentPage++}">
-                    &gt;
-                </button>
+                    this.newTransaction = {
+                      ...draft,
+                      categoryId: e.detail.value === 'uncategorized' ? '' : e.detail.value,
+                    };
+                  }}">
+                </filterable-select>
+              `)}
+              ${this.isCredit && this.costObjects.length > 0
+                ? formField(i18n.t('cost_objects.funding_source'), html`
+                  <filterable-select
+                    .value="${draft.costObjectId || ''}"
+                    .options="${this.getCostObjectOptions()}"
+                    .placeholder="${i18n.t('cost_objects.funding_source')}"
+                    @change="${(e: CustomEvent) => {
+                      this.newTransaction = { ...draft, costObjectId: e.detail.value };
+                    }}">
+                  </filterable-select>
+                `)
+                : nothing}
+              ${formField(i18n.t('common.notes'), html`
+                <input
+                  class="d-input"
+                  type="text"
+                  .value="${draft.notes || ''}"
+                  @input="${(e: any) => { this.newTransaction = { ...draft, notes: e.target.value }; }}" />
+              `, true)}
             </div>
+
+            <div class="d-actions">
+              <div class="d-spacer"></div>
+              <button class="d-btn-text" @click="${() => { this.showAddForm = false; }}">
+                ${i18n.t('common.cancel')}
+              </button>
+              <button class="d-btn small plain" @click="${this.createTransaction}">
+                ${i18n.t('common.save')}
+              </button>
+            </div>
+          </div>
         </div>
-      `}
-`;
+      </div>
+    `;
+  }
+
+  render() {
+    return this.isMobile ? this.renderMobile() : this.renderDesktop();
   }
 }

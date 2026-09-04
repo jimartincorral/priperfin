@@ -1,7 +1,6 @@
 import { LitElement, html, css, nothing } from 'lit';
 import { customElement, state, query } from 'lit/decorators.js';
 import { Chart, registerables } from 'chart.js';
-import { SankeyController, Flow } from 'chartjs-chart-sankey';
 import { api } from '../api/client';
 import '../components/filterable-select';
 import '../components/rule-editor';
@@ -12,14 +11,27 @@ import {
   icon,
   mobileUI,
   monthStepper,
+  skeleton,
   snackbar,
   watchMobileViewport,
   type SnackbarOptions,
 } from '../styles/mobile-ui';
+import {
+  CHART_PALETTE,
+  contentWidth,
+  desktopUI,
+  paletteColor,
+  periodStepper,
+  rankedBar,
+  statusPill,
+  watchViewportWidth,
+} from '../styles/desktop-ui';
 
 import { i18n } from '../i18n/i18n';
+import { getAppBasePath } from '../utils/router-paths';
+import { calculateMonthlyStats } from '../utils/expense-utils';
 
-Chart.register(...registerables, SankeyController, Flow);
+Chart.register(...registerables);
 
 // Helper function to get text color from CSS variables for dark mode support
 function getTextColor(): string {
@@ -31,18 +43,6 @@ function getTextColor(): string {
 
 type DateFilterMode = 'month' | 'year' | 'custom' | 'all_time';
 
-const CHART_PALETTE = [
-  '#006493', // Primary
-  '#65587b', // Tertiary
-  '#16a34a', // Green
-  '#eab308', // Yellow
-  '#0ea5e9', // Sky
-  '#8b5cf6', // Violet
-  '#f43f5e', // Rose
-  '#10b981', // Emerald
-  '#f59e0b', // Amber
-  '#6366f1', // Indigo
-];
 
 @customElement('view-reports')
 export class ViewReports extends LitElement {
@@ -54,12 +54,10 @@ export class ViewReports extends LitElement {
   @state() customEndDate = '';
   @state() accounts: any[] = [];
   @state() selectedAccountId = '';
-  @state() groupByCategory = false; // Toggle for parent category grouping
+  @state() groupByCategory = true; // Roll children up into their parent group
   @state() monthlyAverage = false; // Divide amounts by the months in the period
   @state() periodMonths = 1; // Months covered by the current period (for labels)
   @state() breakdownData: any[] = []; // Store raw API response
-  @state() legendItems: any[] = []; // For custom legend rendering
-  @state() sankeyData: { nodes: { id: string }[]; links: { source: string; target: string; value: number }[] } | null = null;
   @state() costObjectData: any[] = [];
 
   // --- Mobile layer (<= 600px). The desktop layout above the breakpoint is untouched. ---
@@ -76,6 +74,15 @@ export class ViewReports extends LitElement {
   @state() snack: SnackbarOptions | null = null;
   /** Total spend for the preceding period, for the delta pill. */
   @state() previousTotal: number | null = null;
+  /** Income for the period, for the desktop strip's income and net cells. */
+  @state() periodIncome = 0;
+
+  // --- Desktop layer (> 600px) ---
+  /** Families excluded from the doughnut and from every share it drives. */
+  @state() hiddenFamilies: Set<string> = new Set();
+  @state() private showAccountMenu = false;
+  /** Drives the responsive removal of the two side panels. */
+  @state() viewportWidth = window.innerWidth;
 
   // Period sheet holds its edits until Apply
   @state() private sheetMode: DateFilterMode = 'month';
@@ -86,17 +93,12 @@ export class ViewReports extends LitElement {
   @state() private sheetMonthlyAverage = false;
 
   private unwatchViewport?: () => void;
+  private unwatchWidth?: () => void;
   private snackTimer?: number;
 
   @query('#breakdownChart') breakdownCanvas!: HTMLCanvasElement;
-  @query('#sankeyChart') sankeyCanvas!: HTMLCanvasElement;
-  @query('#budgetChart') budgetCanvas!: HTMLCanvasElement;
-  @query('#costObjectChart') costObjectCanvas!: HTMLCanvasElement;
 
   private breakdownChart: Chart | null = null;
-  private sankeyChart: Chart | null = null;
-  private budgetChart: Chart | null = null;
-  private costObjectChart: Chart | null = null;
 
   static styles = [css`
     :host { display: block; }
@@ -471,7 +473,287 @@ export class ViewReports extends LitElement {
       padding: 4px 0 12px;
     }
     .r-drill-figure { font: 400 32px/40px 'Roboto', sans-serif; }
-  `, mobileUI];
+    /* ---------- desktop ---------- */
+
+    .dr-anchor { position: relative; display: flex; flex-shrink: 0; }
+    .dr-pop {
+      position: absolute;
+      top: calc(100% + 6px);
+      left: 0;
+      z-index: 20;
+      min-width: 240px;
+      padding: 8px;
+      background: var(--md-sys-color-surface-container-lowest);
+      border: 1px solid var(--md-sys-color-outline-variant);
+      border-radius: 12px;
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+      box-sizing: border-box;
+    }
+    .dr-pop.wide { min-width: 320px; }
+    .dr-pop-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      min-height: 36px;
+      padding: 0 10px;
+      border-radius: 8px;
+      box-sizing: border-box;
+      font: 400 13px/18px 'Roboto', sans-serif;
+      color: var(--md-sys-color-on-surface);
+      cursor: pointer;
+    }
+    .dr-pop-row:hover { background: var(--md-sys-color-surface-container); }
+    .dr-pop-row.selected {
+      background: var(--md-sys-color-secondary-container);
+      color: var(--md-sys-color-on-secondary-container);
+    }
+    .dr-pop-title {
+      font: 500 13px/18px 'Roboto', sans-serif;
+      color: var(--md-sys-color-on-surface);
+      padding: 4px 10px 8px;
+    }
+    .dr-month-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; padding: 0 6px 6px; }
+    .dr-month {
+      height: 36px;
+      border-radius: 8px;
+      background: var(--md-sys-color-surface-container);
+      color: var(--md-sys-color-on-surface);
+      font: 400 13px/18px 'Roboto', sans-serif;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+    .dr-month.selected { background: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary); }
+    .dr-month.future { color: var(--md-sys-color-outline); }
+    .dr-year-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 6px 6px;
+      font: 500 14px/20px 'Roboto', sans-serif;
+    }
+
+    /* Breakdown families, children and the transaction drill-down */
+    .dr-family {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding: 10px 8px;
+      margin: 0 -8px;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    .dr-family:hover { background: var(--md-sys-color-surface-container-low); }
+    /* A hidden family is dimmed and prints no share, never a >100% figure */
+    .dr-family.hidden { opacity: 0.4; }
+    .dr-family-head { display: flex; align-items: center; gap: 10px; }
+    .dr-family-name {
+      flex: 1;
+      min-width: 0;
+      font: 400 14px/20px 'Roboto', sans-serif;
+      color: var(--md-sys-color-on-surface);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .dr-family-amount {
+      font: 500 14px/20px 'Roboto Mono', ui-monospace, monospace;
+      color: var(--md-sys-color-on-surface);
+      white-space: nowrap;
+    }
+    .dr-family-share {
+      width: 38px;
+      text-align: right;
+      font: 400 12px/16px 'Roboto', sans-serif;
+      color: var(--md-sys-color-on-surface-variant);
+      flex-shrink: 0;
+    }
+    .dr-eye {
+      display: inline-flex;
+      align-items: center;
+      color: var(--md-sys-color-outline);
+      background: none;
+      padding: 0;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .dr-eye.static { cursor: default; }
+    .dr-eye:hover { color: var(--md-sys-color-on-surface); }
+
+    /* The swatch is the colour input itself, so the value is always the swatch */
+    .dr-swatch {
+      width: 14px;
+      height: 14px;
+      padding: 0;
+      border: none;
+      border-radius: 3px;
+      background: none;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+      -webkit-appearance: none;
+      appearance: none;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .dr-swatch::-webkit-color-swatch-wrapper { padding: 0; }
+    .dr-swatch::-webkit-color-swatch { border: none; border-radius: 3px; }
+
+    .dr-member {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      height: 34px;
+      padding: 0 8px;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    .dr-member:hover { background: var(--md-sys-color-surface-container-low); }
+    .dr-member-name {
+      flex: 1;
+      min-width: 0;
+      font: 400 13px/18px 'Roboto', sans-serif;
+      color: var(--md-sys-color-on-surface-variant);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .dr-member-amount {
+      font: 400 13px/18px 'Roboto Mono', ui-monospace, monospace;
+      color: var(--md-sys-color-on-surface);
+      white-space: nowrap;
+    }
+
+    .dr-drill {
+      margin: 4px 0 10px 8px;
+      padding: 8px 10px;
+      border-left: 2px solid var(--md-sys-color-secondary-container);
+      background: var(--md-sys-color-surface);
+      border-radius: 0 8px 8px 0;
+    }
+    .dr-tx { display: flex; align-items: center; gap: 12px; height: 28px; }
+    .dr-tx-date {
+      font: 400 12px/16px 'Roboto Mono', ui-monospace, monospace;
+      color: var(--md-sys-color-outline);
+      flex-shrink: 0;
+    }
+    .dr-tx-desc {
+      flex: 1;
+      min-width: 0;
+      font: 400 13px/18px 'Roboto', sans-serif;
+      color: var(--md-sys-color-on-surface);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .dr-tx-amount {
+      font: 400 13px/18px 'Roboto Mono', ui-monospace, monospace;
+      color: var(--md-sys-color-on-surface);
+      white-space: nowrap;
+    }
+    .dr-open { display: inline-flex; align-items: center; gap: 6px; margin-top: 6px; }
+
+    /* Composition */
+    .dr-donut-wrap {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 14px 0 12px;
+      flex-shrink: 0;
+    }
+    .dr-donut { position: relative; width: 168px; height: 168px; }
+    /* Taken out of flow so Chart.js can never size the panel from the canvas */
+    .dr-donut canvas { position: absolute; inset: 0; }
+    .dr-donut-hole {
+      position: absolute;
+      inset: 34px;
+      border-radius: 50%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+      pointer-events: none;
+    }
+    .dr-donut-total {
+      font: 500 16px/20px 'Roboto Mono', ui-monospace, monospace;
+      color: var(--md-sys-color-on-surface);
+    }
+    .dr-legend {
+      display: flex;
+      flex-shrink: 0;
+      align-items: center;
+      gap: 10px;
+      height: 30px;
+      padding: 0 4px;
+      border-radius: 6px;
+      width: 100%;
+      box-sizing: border-box;
+      cursor: pointer;
+      background: none;
+    }
+    .dr-legend:hover { background: var(--md-sys-color-surface-container-low); }
+    .dr-legend.hidden { opacity: 0.4; }
+    .dr-legend-name {
+      flex: 1;
+      min-width: 0;
+      text-align: left;
+      font: 400 13px/18px 'Roboto', sans-serif;
+      color: var(--md-sys-color-on-surface);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .dr-legend-share {
+      font: 400 12px/16px 'Roboto', sans-serif;
+      color: var(--md-sys-color-on-surface-variant);
+      flex-shrink: 0;
+    }
+
+    /* Budget vs actual */
+    .dr-budget-name {
+      flex: 1;
+      min-width: 0;
+      font: 400 13px/18px 'Roboto', sans-serif;
+      color: var(--md-sys-color-on-surface);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .dr-budget-spent {
+      font: 500 13px/18px 'Roboto Mono', ui-monospace, monospace;
+      color: var(--md-sys-color-on-surface);
+      white-space: nowrap;
+    }
+    .dr-budget-spent.over { color: var(--md-sys-color-error); }
+    .dr-budget-caption {
+      font: 400 12px/16px 'Roboto', sans-serif;
+      color: var(--md-sys-color-on-surface-variant);
+    }
+    .dr-budget-caption.over { color: var(--md-sys-color-error); }
+
+    /* Funding sources */
+    .dr-owed-label { font: 500 13px/18px 'Roboto', sans-serif; color: var(--md-sys-color-on-surface-variant); }
+    .dr-owed {
+      font: 500 15px/20px 'Roboto Mono', ui-monospace, monospace;
+      color: var(--md-sys-color-error);
+    }
+  `, mobileUI, desktopUI];
+
+  /**
+   * The doughnut is Chart.js, so it has to be redrawn whenever the data behind
+   * it changes — including a family being hidden or the grouping toggled, which
+   * never go through loadData().
+   */
+  updated(changed: Map<string, unknown>) {
+    super.updated(changed);
+    if (this.isMobile) return;
+    if (changed.has('breakdownData') || changed.has('hiddenFamilies')
+      || changed.has('groupByCategory') || changed.has('viewportWidth')
+      || changed.has('isMobile')) {
+      this.renderDoughnut();
+    }
+  }
 
   async firstUpdated() {
     this.loadFiltersFromURL();
@@ -544,12 +826,14 @@ export class ViewReports extends LitElement {
     super.connectedCallback();
     i18n.addEventListener('lang-change', () => this.requestUpdate());
     this.unwatchViewport = watchMobileViewport(this);
+    this.unwatchWidth = watchViewportWidth(this);
   }
 
   disconnectedCallback() {
     super.disconnectedCallback();
     i18n.removeEventListener('lang-change', () => this.requestUpdate());
     this.unwatchViewport?.();
+    this.unwatchWidth?.();
     if (this.snackTimer) window.clearTimeout(this.snackTimer);
   }
 
@@ -623,14 +907,11 @@ export class ViewReports extends LitElement {
         params.averageMonthly = true;
       }
 
-      // The Sankey chart is dropped on phones, so skip the request entirely there
-      const wantsSankey = !this.isMobile;
-      // Powers the "vs previous period" delta pill in the mobile total block
+      // Powers the "vs previous period" delta pill on both layouts
       const previousParams = this.getPreviousPeriodParams();
 
-      const [breakdown, sankey, costObjects, periodMonths, previousBreakdown] = await Promise.all([
+      const [breakdown, costObjects, periodMonths, previousBreakdown, transactions] = await Promise.all([
         api.get('/reports/category-breakdown', params),
-        wantsSankey ? api.get('/reports/sankey', params) : Promise.resolve(null),
         // Backend only computes cost objects for a specific account
         this.selectedAccountId
           ? api.get('/reports/cost-object-breakdown', params)
@@ -639,24 +920,26 @@ export class ViewReports extends LitElement {
         this.monthlyAverage
           ? api.get('/reports/period-months', params)
           : Promise.resolve({ months: 1 }),
-        this.isMobile && previousParams
+        previousParams
           ? api.get('/reports/category-breakdown', previousParams).catch(() => null)
           : Promise.resolve(null),
+        // The breakdown covers spend only; the desktop strip also prints income
+        // and net, which come from the period's own transactions.
+        this.isMobile ? Promise.resolve([]) : api.get('/transactions', params).catch(() => []),
       ]);
 
       this.breakdownData = breakdown;
-      if (wantsSankey) this.sankeyData = sankey;
       this.costObjectData = costObjects;
       this.periodMonths = periodMonths?.months || 1;
       this.previousTotal = Array.isArray(previousBreakdown)
         ? previousBreakdown.reduce((sum: number, d: any) => sum + Math.max(0, Number(d.spent) || 0), 0)
         : null;
+      this.periodIncome = Array.isArray(transactions)
+        ? calculateMonthlyStats(transactions as any[], []).income
+        : 0;
 
       await this.updateComplete; // Ensure DOM is ready
-      this.renderBreakdown();
-      if (wantsSankey) this.renderSankey();
-      this.renderBudget();
-      this.renderCostObjects();
+      this.renderDoughnut();
     } catch (e: any) {
       console.error(e);
       this.notify('Failed to load reports: ' + (e.message || e));
@@ -787,156 +1070,103 @@ export class ViewReports extends LitElement {
     this.loadData();
   }
 
-  renderBreakdown() {
+  /**
+   * The rows the breakdown list and the doughnut share. With "group by parent"
+   * on (the default) each row is a family that expands into its children; off,
+   * every category is its own row.
+   */
+  private breakdownRows(): {
+    id: string;
+    name: string;
+    icon: string;
+    color: string;
+    spent: number;
+    members: any[];
+  }[] {
+    if (this.groupByCategory) return this.getFamilyRows();
+
+    return (this.breakdownData || [])
+      .filter((d: any) => Number(d.spent) > 0)
+      .map((item: any, index: number) => ({
+        id: item.id,
+        name: item.name,
+        icon: item.icon || '',
+        color: this.barColor(item, index),
+        spent: Number(item.spent),
+        members: [{ ...item, _color: this.barColor(item, index) }],
+      }))
+      .sort((a, b) => b.spent - a.spent);
+  }
+
+  /** Rows still counted in the total: a hidden row is out of every share. */
+  private visibleBreakdownRows() {
+    return this.breakdownRows().filter(row => !this.hiddenFamilies.has(row.id));
+  }
+
+  private toggleFamilyVisibility(familyId: string) {
+    const next = new Set(this.hiddenFamilies);
+    if (next.has(familyId)) next.delete(familyId);
+    else next.add(familyId);
+    this.hiddenFamilies = next;
+  }
+
+  /**
+   * The Composition doughnut. Drawn over the same visible rows as the
+   * breakdown list, so the two panels can never disagree.
+   */
+  renderDoughnut() {
     try {
-      if (this.breakdownChart) this.breakdownChart.destroy();
+      if (this.breakdownChart) {
+        this.breakdownChart.destroy();
+        this.breakdownChart = null;
+      }
       if (!this.breakdownCanvas) return;
 
-      // Zero-spend categories may be present for the budget report; skip them here
-      let data = (this.breakdownData || []).filter((d: any) => d.spent > 0);
-
-      // Aggregation Logic
-      if (this.groupByCategory) {
-        const familyMap = new Map<string, { id: string, name: string, spent: number, color: string }>();
-        
-        data.forEach(item => {
-          const familyId = item.familyId || item.id; // Fallback to ID if no family
-          // Use familyName if available (from Backend update), else item.name
-          // If we grouped by parent on backend, we'd have this. 
-          // Since we are aggregating on frontend, we need to know the parent name.
-          // The updated backend returns 'familyName'.
-          const familyName = item.familyName || item.name;
-          
-          if (!familyMap.has(familyId)) {
-            familyMap.set(familyId, {
-              id: familyId,
-              name: familyName,
-              spent: 0,
-              color: item.color // Use color of first child (usually they share base hue)
-            });
-          }
-          
-          const entry = familyMap.get(familyId)!;
-          entry.spent += item.spent;
-        });
-
-        data = Array.from(familyMap.values()).sort((a, b) => b.spent - a.spent);
-      }
-
-      if (!data || data.length === 0) return;
-
-      const backgroundColors = data.map((d, i) => {
-        // Use category color if it exists and isn't default black
-        if (d.color && d.color !== '#000000' && d.color !== '#000') return d.color;
-        return CHART_PALETTE[i % CHART_PALETTE.length];
-      });
-
-      // Store category data for custom legend with parent grouping
-      // Group items by family
-      const familyGroups = new Map<string, any[]>();
-      
-      data.forEach((d: any, i: number) => {
-        const familyId = d.familyId || d.id;
-        if (!familyGroups.has(familyId)) {
-          familyGroups.set(familyId, []);
-        }
-        
-        familyGroups.get(familyId)!.push({
-          id: d.id,
-          name: d.name,
-          icon: d.icon || '',
-          color: backgroundColors[i],
-          hidden: false,
-          index: i,
-          parentId: d.parentId,
-          familyId: d.familyId,
-          familyName: d.familyName
-        });
-      });
-      
-      // Build legend items with parent headers
-      this.legendItems = [];
-      familyGroups.forEach((items, familyId) => {
-        // Check if this is a parent with children
-        const hasChildren = items.some(item => item.parentId);
-        
-        // Always show as parent header (whether it has children or not)
-        const parentItem = items.find(item => !item.parentId);
-        const firstItem = items[0];
-        
-        // Add parent header - familyName already includes icon
-        this.legendItems.push({
-          id: familyId,
-          name: firstItem.familyName || (parentItem ? `${parentItem.icon} ${parentItem.name}` : firstItem.name),
-          icon: '', // Don't show icon separately since it's in familyName
-          color: 'transparent',
-          hidden: false,
-          index: -1,
-          isParentHeader: true
-        });
-        
-        if (hasChildren) {
-          // Add all items as children (including parent if it has data)
-          items.forEach(item => {
-            this.legendItems.push({
-              ...item,
-              isChild: true
-            });
-          });
-        } else {
-          // Standalone category - add as child under its own header
-          items.forEach(item => {
-            this.legendItems.push({
-              ...item,
-              isChild: true
-            });
-          });
-        }
-      });
+      const rows = this.visibleBreakdownRows();
+      if (rows.length === 0) return;
 
       this.breakdownChart = new Chart(this.breakdownCanvas, {
         type: 'doughnut',
         data: {
-          labels: data.map((d: any) => d.name),
+          labels: rows.map(row => row.name),
           datasets: [{
-            data: data.map((d: any) => d.spent),
-            backgroundColor: backgroundColors,
-          }]
+            data: rows.map(row => row.spent),
+            backgroundColor: rows.map(row => row.color),
+            borderWidth: 0,
+          }],
         },
         options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    display: false, // Disable default legend, use custom HTML legend
+          responsive: true,
+          maintainAspectRatio: false,
+          // The centre hole carries the total, so it has to stay clear
+          cutout: '64%',
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              bodyColor: getTextColor(),
+              titleColor: getTextColor(),
+              callbacks: {
+                label: (context: any) => {
+                  const total = rows.reduce((sum, row) => sum + row.spent, 0);
+                  const share = total > 0 ? Math.round((context.parsed / total) * 100) : 0;
+                  return `${context.label}: ${this.money(context.parsed)} (${share}%)`;
                 },
-                tooltip: {
-                    bodyColor: getTextColor(), // Dynamic color for dark mode
-                    titleColor: getTextColor(),
-                    callbacks: {
-                        label: function(context: any) {
-                            let label = context.label || '';
-                            if (label) {
-                                label += ': ';
-                            }
-                            const value = context.parsed;
-                            const total = context.chart._metasets[context.datasetIndex].total;
-                            const percentage = ((value / total) * 100).toFixed(1) + '%';
-                            label += value + ' (' + percentage + ')';
-                            return label;
-                        }
-                    }
-                }
-            }
-        }
+              },
+            },
+          },
+        },
       });
     } catch (e: any) {
       console.error('Breakdown Chart Error', e);
     }
   }
 
-  private formatAmount(value: number): string {
-    return value.toLocaleString(i18n.getLocale(), { maximumFractionDigits: 2 });
+  /** Highlights one arc while its legend row is hovered. */
+  private highlightArc(index: number | null) {
+    if (!this.breakdownChart) return;
+    this.breakdownChart.setActiveElements(
+      index === null ? [] : [{ datasetIndex: 0, index }]);
+    this.breakdownChart.update('none');
   }
 
   // Suffix appended to chart titles while the monthly average view is active
@@ -973,233 +1203,6 @@ export class ViewReports extends LitElement {
       .sort((a: any, b: any) => b.spent / b.budget - a.spent / a.budget);
   }
 
-  renderBudget() {
-    try {
-      if (this.budgetChart) {
-        this.budgetChart.destroy();
-        this.budgetChart = null;
-      }
-      if (!this.budgetCanvas) return;
-
-      const items = this.getBudgetItems();
-      if (items.length === 0) return;
-
-      const textColor = getTextColor();
-      this.budgetChart = new Chart(this.budgetCanvas, {
-        type: 'bar',
-        data: {
-          labels: items.map(i => i.name),
-          datasets: [
-            {
-              label: i18n.t('reports.spent'),
-              data: items.map(i => i.spent),
-              backgroundColor: items.map(i => (i.spent > i.budget ? '#ef4444' : i.color)),
-            },
-            {
-              label: i18n.t('reports.budget'),
-              data: items.map(i => i.budget),
-              backgroundColor: 'rgba(148, 163, 184, 0.45)',
-            },
-          ],
-        },
-        options: {
-          indexAxis: 'y',
-          responsive: true,
-          maintainAspectRatio: false,
-          scales: {
-            x: {
-              beginAtZero: true,
-              ticks: { color: textColor },
-              grid: { color: 'rgba(148, 163, 184, 0.2)' },
-            },
-            y: {
-              ticks: { color: textColor },
-              grid: { display: false },
-            },
-          },
-          plugins: {
-            legend: { labels: { color: textColor } },
-            tooltip: {
-              bodyColor: textColor,
-              titleColor: textColor,
-              callbacks: {
-                label: (context: any) =>
-                  `${context.dataset.label}: ${this.formatAmount(context.parsed.x)}`,
-              },
-            },
-          },
-        },
-      });
-    } catch (e: any) {
-      console.error('Budget Chart Error', e);
-    }
-  }
-
-  renderSankey() {
-    try {
-      if (this.sankeyChart) {
-        this.sankeyChart.destroy();
-        this.sankeyChart = null;
-      }
-      if (!this.sankeyCanvas) return;
-
-      const links = this.sankeyData?.links || [];
-      if (links.length === 0) return;
-
-      // Stable color per node: fixed colors for the hub nodes, palette for the rest
-      const nodeColors = new Map<string, string>([
-        ['Income', '#16a34a'],
-        ['Savings', '#0ea5e9'],
-      ]);
-      let colorIndex = 0;
-      links.forEach(link => {
-        [link.source, link.target].forEach(id => {
-          if (!nodeColors.has(id)) {
-            nodeColors.set(id, CHART_PALETTE[colorIndex % CHART_PALETTE.length]);
-            colorIndex++;
-          }
-        });
-      });
-
-      this.sankeyChart = new Chart(this.sankeyCanvas, {
-        type: 'sankey',
-        data: {
-          datasets: [
-            {
-              data: links.map(l => ({ from: l.source, to: l.target, flow: l.value })),
-              colorFrom: (c: any) => nodeColors.get(c.dataset.data[c.dataIndex].from) || '#94a3b8',
-              colorTo: (c: any) => nodeColors.get(c.dataset.data[c.dataIndex].to) || '#94a3b8',
-              colorMode: 'gradient',
-              color: getTextColor(),
-            } as any,
-          ],
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: {
-            legend: { display: false },
-            tooltip: {
-              bodyColor: getTextColor(),
-              titleColor: getTextColor(),
-              callbacks: {
-                label: (context: any) => {
-                  const item = context.dataset.data[context.dataIndex];
-                  return `${item.from} → ${item.to}: ${this.formatAmount(item.flow)}`;
-                },
-              },
-            },
-          },
-        },
-      });
-    } catch (e: any) {
-      console.error('Sankey Chart Error', e);
-    }
-  }
-
-  renderCostObjects() {
-    try {
-      if (this.costObjectChart) {
-        this.costObjectChart.destroy();
-        this.costObjectChart = null;
-      }
-      if (!this.costObjectCanvas) return;
-
-      const data = this.costObjectData || [];
-      if (data.length === 0) return;
-
-      const textColor = getTextColor();
-      this.costObjectChart = new Chart(this.costObjectCanvas, {
-        type: 'doughnut',
-        data: {
-          labels: data.map((d: any) => `${d.icon || ''} ${d.name}`.trim()),
-          datasets: [
-            {
-              data: data.map((d: any) => d.total),
-              backgroundColor: data.map(
-                (d: any, i: number) => d.color || CHART_PALETTE[i % CHART_PALETTE.length],
-              ),
-            },
-          ],
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: {
-            legend: {
-              position: 'right',
-              labels: { color: textColor },
-            },
-            tooltip: {
-              bodyColor: textColor,
-              titleColor: textColor,
-              callbacks: {
-                label: (context: any) => {
-                  const item = data[context.dataIndex];
-                  const total = context.chart._metasets[context.datasetIndex].total;
-                  const percentage = ((context.parsed / total) * 100).toFixed(1) + '%';
-                  return `${this.formatAmount(context.parsed)} (${percentage}) · ${item.count} ${i18n.t('reports.transactions')}`;
-                },
-              },
-            },
-          },
-        },
-      });
-    } catch (e: any) {
-      console.error('Cost Object Chart Error', e);
-    }
-  }
-
-  toggleLegendItem(index: number) {
-    if (!this.breakdownChart) return;
-    
-    const meta = this.breakdownChart.getDatasetMeta(0);
-    const element = meta.data[index] as any;
-    element.hidden = !element.hidden;
-    
-    // Update legend items state
-    this.legendItems = this.legendItems.map((item, i) => 
-      i === index ? { ...item, hidden: !item.hidden } : item
-    );
-    
-    this.breakdownChart.update();
-  }
-
-  toggleParentGroup(familyId: string) {
-    if (!this.breakdownChart) return;
-    
-    // Find all children in this family
-    const childrenIndices = this.legendItems
-      .filter(item => !item.isParentHeader && item.familyId === familyId)
-      .map(item => item.index);
-    
-    if (childrenIndices.length === 0) return;
-    
-    // Check if any children are visible
-    const meta = this.breakdownChart.getDatasetMeta(0);
-    const anyVisible = childrenIndices.some(index => {
-      const element = meta.data[index] as any;
-      return !element.hidden;
-    });
-    
-    // Toggle all children to the opposite state
-    const newHiddenState = anyVisible;
-    childrenIndices.forEach(index => {
-      const element = meta.data[index] as any;
-      element.hidden = newHiddenState;
-    });
-    
-    // Update legend items state
-    this.legendItems = this.legendItems.map(item => {
-      if (!item.isParentHeader && item.familyId === familyId) {
-        return { ...item, hidden: newHiddenState };
-      }
-      return item;
-    });
-    
-    this.breakdownChart.update();
-  }
-
   async updateSingleCategoryColor(categoryId: string, color: string) {
     try {
       await api.patch(`/categories/${categoryId}`, { color });
@@ -1214,11 +1217,10 @@ export class ViewReports extends LitElement {
     try {
       console.log('Updating family color:', familyId, color);
       
-      // Find ALL categories in this family (including parent if it has data)
-      const familyCategories = this.legendItems.filter(
-        item => !item.isParentHeader && item.familyId === familyId
-      );
-      
+      // Every category that rolls up into this family, the parent included
+      const familyCategories = (this.getFamilyRows().find(f => f.id === familyId)?.members ?? [])
+        .map((member: any) => ({ id: member.id, name: member.name }));
+
       console.log('Found family categories to update:', familyCategories);
       
       if (familyCategories.length === 0) {
@@ -1298,7 +1300,7 @@ export class ViewReports extends LitElement {
       params.set('categoryId', familyId);
     }
     
-    window.location.href = `/?${params.toString()}`;
+    window.location.href = `${getAppBasePath(document.baseURI)}?${params.toString()}`;
   }
 
   navigateToCategory(categoryId: string) {
@@ -1323,7 +1325,7 @@ export class ViewReports extends LitElement {
       params.set('categoryId', categoryId);
     }
     
-    window.location.href = `/?${params.toString()}`;
+    window.location.href = `${getAppBasePath(document.baseURI)}?${params.toString()}`;
   }
 
   // ------------------------------------------------------------------
@@ -1920,166 +1922,626 @@ export class ViewReports extends LitElement {
     `;
   }
 
-  render() {
-    if (this.isMobile) return this.renderMobile();
+  // ------------------------------------------------------------------
+  // Desktop layout (> 600px)
+  // ------------------------------------------------------------------
+
+  /**
+   * The side column needs 380px and the chart panel still needs ~560px; below
+   * that the two right-hand panels are removed from the DOM (hiding them would
+   * leave their grid tracks reserved) and the grid drops to one column.
+   */
+  private get showSideCharts() {
+    return contentWidth(this.viewportWidth) - 400 >= 560;
+  }
+
+  private closeDesktopMenus() {
+    this.showAccountMenu = false;
+    this.showPeriodSheet = false;
+  }
+
+  /** Downloads the visible breakdown, which is what the panel actually shows. */
+  private exportBreakdown() {
+    const rows = this.visibleBreakdownRows();
+    const total = rows.reduce((sum, row) => sum + row.spent, 0);
+    const header = ['category', 'spent', 'share'];
+    const body = rows.map(row => [
+      row.name,
+      row.spent.toFixed(2),
+      total > 0 ? `${Math.round((row.spent / total) * 100)}%` : '0%',
+    ]);
+    const csv = [header, ...body]
+      .map(line => line.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+      .join('\n');
+
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `priperfin-${this.periodLabel().replace(/\s+/g, '-').toLowerCase()}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  private renderDesktop() {
+    const showSide = this.showSideCharts;
 
     return html`
-      <div class="header">
-        <h1>${i18n.t('reports.title')}</h1>
-        <div class="controls">
-            <filterable-select
-              .value="${this.selectedAccountId}"
-              .options="${this.getAccountOptions()}"
-              .placeholder="${i18n.t('reports.all_accounts')}"
-              @change="${(e: CustomEvent) => { this.selectedAccountId = e.detail.value; this.loadData(); }}"
-              width="200px">
-            </filterable-select>
-            <select @change="${(e: any) => {
-                this.dateFilterMode = e.target.value as DateFilterMode;
-                // A single month has nothing to average
-                if (this.dateFilterMode === 'month') this.monthlyAverage = false;
-                this.loadData();
-            }}" .value="${this.dateFilterMode}">
-                <option value="month">${i18n.t('filters.mode_month')}</option>
-                <option value="year">${i18n.t('filters.mode_year')}</option>
-                <option value="custom">${i18n.t('filters.mode_custom')}</option>
-                <option value="all_time">${i18n.t('filters.mode_all_time')}</option>
-            </select>
-            ${this.dateFilterMode === 'month' ? html`
-                <select @change="${(e: any) => { this.month = parseInt(e.target.value); this.loadData(); }}" .value="${this.month}">
-                    ${Array.from({ length: 12 }, (_, i) => i + 1).map(m => {
-                        const monthName = new Date(this.year, m - 1, 1).toLocaleString(i18n.getLocale(), { month: 'long' });
-                        const label = monthName.charAt(0).toUpperCase() + monthName.slice(1);
-                        return html`<option value="${m}" ?selected=${this.month === m}>${label}</option>`;
-                    })}
-                </select>
-            ` : ''}
-            ${this.dateFilterMode === 'month' || this.dateFilterMode === 'year' ? html`
-                <select @change="${(e: any) => { this.year = parseInt(e.target.value); this.loadData(); }}" .value="${this.year}">
-                    ${this.getYearOptions().map(y => html`<option value="${y}">${y}</option>`)}
-                </select>
-            ` : ''}
-            ${this.dateFilterMode === 'custom' ? html`
-                <input type="date" .value="${this.customStartDate}" @change="${(e: any) => { this.customStartDate = e.target.value; this.loadData(); }}" style="padding: 0.5rem;" />
-                <span style="color: var(--md-sys-color-on-surface-variant);">-</span>
-                <input type="date" .value="${this.customEndDate}" @change="${(e: any) => { this.customEndDate = e.target.value; this.loadData(); }}" style="padding: 0.5rem;" />
-            ` : ''}
-            <label style="display: flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer; color: var(--md-sys-color-on-surface);">
-                <input type="checkbox" .checked="${this.groupByCategory}" @change="${(e: any) => { this.groupByCategory = e.target.checked; this.renderBreakdown(); }}" />
-                ${i18n.t('reports.group_by_parent') || 'Group by Parent'}
-            </label>
-            ${this.dateFilterMode !== 'month' ? html`
-                <label
-                  style="display: flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer; color: var(--md-sys-color-on-surface);"
-                  title="${i18n.t('reports.monthly_average_hint')}">
-                    <input type="checkbox" .checked="${this.monthlyAverage}" @change="${(e: any) => { this.monthlyAverage = e.target.checked; this.loadData(); }}" />
-                    ${i18n.t('reports.monthly_average')}
-                </label>
-            ` : ''}
-            <button @click="${this.loadData}">${i18n.t('reports.refresh')}</button>
+      <div class="d-screen" @click="${() => this.closeDesktopMenus()}">
+        ${this.renderDesktopHeader()}
+        ${this.renderDesktopStrip()}
+
+        <div
+          class="d-content scroll"
+          style="grid-template-columns: ${showSide ? 'minmax(0, 1fr) 380px' : 'minmax(0, 1fr)'};
+            grid-template-rows: ${showSide
+              ? 'minmax(300px, 1.15fr) minmax(260px, 1fr)'
+              : 'minmax(320px, 1.2fr) minmax(260px, 1fr)'}">
+          ${this.renderBreakdownPanel()}
+          ${showSide ? this.renderCompositionPanel() : nothing}
+          ${this.renderBudgetPanel()}
+          ${showSide ? this.renderFundingPanel() : nothing}
         </div>
+
+        ${this.renderRuleModal()}
       </div>
-      
-      <div class="charts-container">
-        <div class="chart-card">
-            <h3>${i18n.t('reports.category_breakdown')}${this.averageSuffix()}</h3>
-            <div class="chart-with-legend" style="height: 500px;">
-                <div class="chart-canvas" style="position: relative; height: 100%;">
-                    <canvas id="breakdownChart"></canvas>
-                </div>
-                <div class="custom-legend">
-                    ${this.legendItems.map(item => {
-                      if (item.isParentHeader) {
-                        // Check if any children are hidden
-                        const children = this.legendItems.filter(child => !child.isParentHeader && child.familyId === item.id);
-                        const anyHidden = children.some(child => child.hidden);
-                        // Get the color from the first child (they share the same base color)
-                        const baseColor = children.length > 0 ? children[0].color : '#cccccc';
-                        
-                        return html`
-                          <div class="legend-item parent-header">
-                              <input 
-                                type="color" 
-                                class="color-picker"
-                                .value="${baseColor}"
-                                @change="${(e: any) => this.updateCategoryColor(item.id, e.target.value)}"
-                                title="Change category color"
-                              />
-                              <div style="flex: 1;">${item.name}</div>
-                              <span class="legend-icon eye-icon" @click="${() => this.toggleParentGroup(item.id)}" title="Toggle all children visibility">
-                                  ${anyHidden ? '👁️' : '👁'}
-                              </span>
-                              <span class="legend-icon nav-icon" @click="${() => this.navigateToParentCategory(item.id)}" title="View all children transactions">
-                                  →
-                              </span>
-                          </div>
-                        `;
-                      } else {
-                        return html`
-                          <div class="legend-item ${item.isChild ? 'child' : ''} ${item.hidden ? 'hidden' : ''}">
-                              <div class="legend-color" style="background-color: ${item.color}"></div>
-                              <div class="legend-text">${item.icon} ${item.name}</div>
-                              ${!item.isChild ? html`
-                                <input 
-                                  type="color" 
-                                  class="color-picker-small"
-                                  .value="${item.color}"
-                                  @change="${(e: any) => this.updateSingleCategoryColor(item.id, e.target.value)}"
-                                  title="Change color"
-                                />
-                              ` : ''}
-                              <span class="legend-icon eye-icon" @click="${() => this.toggleLegendItem(item.index)}" title="Toggle visibility">
-                                  ${item.hidden ? '👁️' : '👁'}
-                              </span>
-                              <span class="legend-icon nav-icon" @click="${() => this.navigateToCategory(item.id)}" title="View transactions">
-                                  →
-                              </span>
-                          </div>
-                        `;
-                      }
-                    })}
-                </div>
+    `;
+  }
+
+  private renderDesktopHeader() {
+    const account = this.accounts.find(a => a.id === this.selectedAccountId);
+    // A single month has nothing to average over, so the chip is inert there
+    const averageDisabled = this.dateFilterMode === 'month';
+
+    return html`
+      <div class="d-header">
+        <h1>${i18n.t('nav.reports')}</h1>
+
+        <div class="dr-anchor" @click="${(e: Event) => e.stopPropagation()}">
+          <button
+            class="d-account-chip"
+            @click="${() => {
+              const open = this.showAccountMenu;
+              this.closeDesktopMenus();
+              this.showAccountMenu = !open;
+            }}">
+            ${icon('account_balance', 18)}
+            <span>${account ? account.name : i18n.t('reports.all_accounts')}</span>
+            ${icon('expand_more', 18)}
+          </button>
+          ${this.showAccountMenu ? html`
+            <div class="dr-pop">
+              ${this.getAccountOptions().map(option => html`
+                <button
+                  class="dr-pop-row ${option.value === this.selectedAccountId ? 'selected' : ''}"
+                  @click="${() => {
+                    this.showAccountMenu = false;
+                    if (option.value === this.selectedAccountId) return;
+                    this.selectedAccountId = option.value;
+                    this.loadData();
+                  }}">
+                  <span class="d-emoji">${option.icon ?? ''}</span>
+                  <span style="flex: 1; min-width: 0">${option.label}</span>
+                  ${option.value === this.selectedAccountId ? icon('check', 18) : nothing}
+                </button>
+              `)}
             </div>
+          ` : nothing}
         </div>
 
-        <div class="chart-card">
-            <h3>${i18n.t('reports.budget_vs_actual')}${this.averageSuffix()}</h3>
-            ${(() => {
-              const budgetItems = this.getBudgetItems();
-              if (!this.canCompareBudget()) {
-                return html`<p class="empty-hint">${i18n.t('reports.budget_hint_period')}</p>`;
-              }
-              if (budgetItems.length === 0) {
-                return html`<p class="empty-hint">${i18n.t('reports.budget_empty')}</p>`;
-              }
+        <div class="dr-anchor" @click="${(e: Event) => e.stopPropagation()}">
+          ${periodStepper({
+            label: this.periodLabel(),
+            open: this.showPeriodSheet,
+            onPrev: () => this.stepPeriod(-1),
+            onNext: () => this.stepPeriod(1),
+            nextDisabled: this.isAtLatestPeriod(),
+            prevLabel: i18n.t('mobile.prev_period'),
+            nextLabel: i18n.t('mobile.next_period'),
+            onLabel: () => {
+              const open = this.showPeriodSheet;
+              this.closeDesktopMenus();
+              if (!open) this.openPeriodSheet();
+            },
+          })}
+          ${this.showPeriodSheet ? this.renderPeriodPopover() : nothing}
+        </div>
+
+        <button
+          class="d-chip ${this.groupByCategory ? '' : 'outlined'}"
+          @click="${() => {
+            this.groupByCategory = !this.groupByCategory;
+            this.expandedFamilyId = null;
+            this.drillCategoryId = null;
+          }}">
+          ${icon(this.groupByCategory ? 'check' : 'add', 16)}
+          <span>${i18n.t('desktop.group_by_parent')}</span>
+        </button>
+
+        <button
+          class="d-chip ${averageDisabled ? 'muted' : this.monthlyAverage ? '' : 'outlined'}"
+          ?disabled="${averageDisabled}"
+          title="${averageDisabled
+            ? i18n.t('desktop.monthly_average_disabled')
+            : i18n.t('reports.monthly_average_hint')}"
+          @click="${() => {
+            if (averageDisabled) return;
+            this.monthlyAverage = !this.monthlyAverage;
+            this.loadData();
+          }}">
+          ${!averageDisabled && this.monthlyAverage ? icon('check', 16) : nothing}
+          <span>${i18n.t('reports.monthly_average')}</span>
+        </button>
+
+        <div class="d-spacer"></div>
+
+        <button
+          class="d-icon-btn"
+          title="${i18n.t('desktop.export')}"
+          @click="${() => this.exportBreakdown()}">
+          ${icon('download', 20)}
+        </button>
+        <button
+          class="d-icon-btn"
+          title="${i18n.t('reports.refresh')}"
+          @click="${() => this.loadData()}">
+          ${icon('refresh', 20)}
+        </button>
+      </div>
+    `;
+  }
+
+  /** The month/year/custom picker behind the stepper's centre label. */
+  private renderPeriodPopover() {
+    const now = new Date();
+    const modes: { value: DateFilterMode; label: string }[] = [
+      { value: 'month', label: i18n.t('filters.mode_month') },
+      { value: 'year', label: i18n.t('filters.mode_year') },
+      { value: 'custom', label: i18n.t('filters.mode_custom') },
+      { value: 'all_time', label: i18n.t('filters.mode_all_time') },
+    ];
+
+    return html`
+      <div class="dr-pop wide">
+        <div class="dr-pop-title">${i18n.t('mobile.period')}</div>
+        <div style="display: flex; flex-wrap: wrap; gap: 6px; padding: 0 6px 8px">
+          ${modes.map(mode => html`
+            <button
+              class="d-chip ${this.sheetMode === mode.value ? '' : 'outlined'}"
+              @click="${() => { this.sheetMode = mode.value; }}">
+              <span>${mode.label}</span>
+            </button>
+          `)}
+        </div>
+
+        ${this.sheetMode === 'month' || this.sheetMode === 'year' ? html`
+          <div class="dr-year-row">
+            <button class="d-icon-btn small" @click="${() => { this.sheetYear -= 1; }}">
+              ${icon('chevron_left', 20)}
+            </button>
+            <span>${this.sheetYear}</span>
+            <button
+              class="d-icon-btn small"
+              ?disabled="${this.sheetYear >= now.getFullYear()}"
+              @click="${() => { this.sheetYear += 1; }}">
+              ${icon('chevron_right', 20)}
+            </button>
+          </div>
+        ` : nothing}
+
+        ${this.sheetMode === 'month' ? html`
+          <div class="dr-month-grid">
+            ${Array.from({ length: 12 }, (_, i) => i + 1).map(m => {
+              const name = new Date(this.sheetYear, m - 1, 1)
+                .toLocaleString(i18n.getLocale(), { month: 'short' })
+                .replace('.', '');
+              const future = this.sheetYear > now.getFullYear()
+                || (this.sheetYear === now.getFullYear() && m > now.getMonth() + 1);
               return html`
-                <div style="position: relative; height: ${Math.min(800, Math.max(180, budgetItems.length * 44 + 80))}px;">
-                    <canvas id="budgetChart"></canvas>
-                </div>
+                <button
+                  class="dr-month ${this.sheetMonth === m ? 'selected' : ''} ${future ? 'future' : ''}"
+                  @click="${() => { this.sheetMonth = m; }}">
+                  ${name.charAt(0).toUpperCase()}${name.slice(1)}
+                </button>
               `;
-            })()}
-        </div>
+            })}
+          </div>
+        ` : nothing}
 
-        <div class="chart-card">
-            <h3>${i18n.t('reports.sankey_chart')}${this.averageSuffix()}</h3>
-            ${this.sankeyData && this.sankeyData.links.length > 0 ? html`
-                <div style="position: relative; height: 460px;">
-                    <canvas id="sankeyChart"></canvas>
-                </div>
-            ` : html`<p class="empty-hint">${i18n.t('reports.no_data')}</p>`}
-        </div>
+        ${this.sheetMode === 'custom' ? html`
+          <div style="display: flex; gap: 8px; padding: 0 6px 8px">
+            <input
+              class="d-input mono"
+              type="date"
+              .value="${this.sheetStartDate}"
+              @input="${(e: any) => { this.sheetStartDate = e.target.value; }}" />
+            <input
+              class="d-input mono"
+              type="date"
+              .value="${this.sheetEndDate}"
+              @input="${(e: any) => { this.sheetEndDate = e.target.value; }}" />
+          </div>
+        ` : nothing}
 
-        <div class="chart-card">
-            <h3>${i18n.t('reports.cost_object_breakdown')}${this.averageSuffix()}</h3>
-            ${!this.selectedAccountId
-              ? html`<p class="empty-hint">${i18n.t('reports.cost_object_hint')}</p>`
-              : this.costObjectData.length > 0 ? html`
-                <div style="position: relative; height: 400px;">
-                    <canvas id="costObjectChart"></canvas>
-                </div>
-              ` : html`<p class="empty-hint">${i18n.t('reports.no_data')}</p>`}
+        <div style="display: flex; justify-content: flex-end; padding: 0 6px 4px">
+          <button class="d-btn small plain" @click="${() => this.applyPeriodSheet()}">
+            ${i18n.t('mobile.apply')}
+          </button>
         </div>
       </div>
     `;
+  }
+
+  private renderDesktopStrip() {
+    const rows = this.visibleBreakdownRows();
+    const total = rows.reduce((sum, row) => sum + row.spent, 0);
+    const delta = this.previousTotal !== null && this.previousTotal > 0
+      ? ((total - this.previousTotal) / this.previousTotal) * 100
+      : null;
+
+    // Averaged spend is per month, so income has to be scaled the same way
+    const income = this.monthlyAverage && this.periodMonths > 1
+      ? this.periodIncome / this.periodMonths
+      : this.periodIncome;
+    const net = income - total;
+
+    const budgetItems = this.getBudgetItems();
+    const budgetTotal = budgetItems.reduce((sum, item) => sum + item.budget, 0);
+    const budgetSpent = budgetItems.reduce((sum, item) => sum + item.spent, 0);
+    const usedPct = budgetTotal > 0 ? Math.round((budgetSpent / budgetTotal) * 100) : null;
+    const overCount = budgetItems.filter(item => item.spent > item.budget).length;
+
+    return html`
+      <div class="d-strip">
+        <div class="d-strip-cell" style="gap: 12px">
+          <div>
+            <div class="d-strip-label">
+              ${i18n.t('desktop.spent_in', { period: this.periodLabel() })}
+            </div>
+            <div class="d-strip-value lead">${this.money(total)}</div>
+          </div>
+          ${delta !== null && Math.abs(delta) >= 1 ? html`
+            <span class="d-pill delta ${delta > 0 ? '' : 'down'}">
+              ${icon(delta > 0 ? 'arrow_upward' : 'arrow_downward', 14)}
+              <span>
+                ${Math.abs(Math.round(delta))}%
+                ${i18n.t('mobile.vs_previous', { period: this.previousPeriodLabel() })}
+              </span>
+            </span>
+          ` : nothing}
+        </div>
+
+        <div class="d-strip-divider"></div>
+
+        <div class="d-strip-cell">
+          <div>
+            <div class="d-strip-label">${i18n.t('common.income')}</div>
+            <div class="d-strip-value positive">+${this.money(income)}</div>
+          </div>
+        </div>
+
+        <div class="d-strip-cell">
+          <div>
+            <div class="d-strip-label">${i18n.t('expenses.net')}</div>
+            <div class="d-strip-value ${net >= 0 ? 'positive' : 'negative'}">
+              ${net >= 0 ? '+' : '−'}${this.money(net)}
+            </div>
+          </div>
+        </div>
+
+        <div class="d-strip-divider"></div>
+
+        <div class="d-strip-cell">
+          <div>
+            <div class="d-strip-label">${i18n.t('mobile.budget_used')}</div>
+            <div class="d-strip-value ${usedPct === null ? 'muted' : ''}">
+              ${usedPct === null ? '—' : `${usedPct}%`}
+            </div>
+          </div>
+        </div>
+
+        <div class="d-spacer"></div>
+
+        ${overCount > 0 ? html`
+          <div class="d-strip-cell tight">
+            ${statusPill({
+              kind: 'warning',
+              glyph: 'warning',
+              label: i18n.t(
+                overCount === 1 ? 'desktop.over_budget_category_one' : 'desktop.over_budget_categories',
+                { count: overCount }),
+            })}
+          </div>
+        ` : nothing}
+      </div>
+    `;
+  }
+
+  private renderBreakdownPanel() {
+    const rows = this.breakdownRows();
+    const visibleTotal = this.visibleBreakdownRows().reduce((sum, row) => sum + row.spent, 0);
+
+    return html`
+      <div class="d-panel">
+        <div class="d-panel-head">
+          <span class="d-panel-title">${i18n.t('desktop.where_money_went')}</span>
+          <span class="d-panel-sub">
+            ${i18n.t(
+              rows.length === 1 ? 'desktop.category_period_one' : 'desktop.categories_period',
+              { count: rows.length, period: this.periodLabel() })}${this.averageSuffix()}
+          </span>
+          <div class="d-spacer"></div>
+          <span class="d-panel-hint">${i18n.t('desktop.click_row_hint')}</span>
+        </div>
+
+        <div class="d-panel-body">
+          ${this.loading
+            ? html`
+              <div style="display: flex; flex-direction: column; gap: 18px; padding-top: 10px">
+                ${Array.from({ length: 6 }, () => html`
+                  <div style="display: flex; flex-direction: column; gap: 8px">
+                    ${skeleton('45%', '14px')}
+                    ${skeleton('100%', '8px', true)}
+                  </div>
+                `)}
+              </div>
+            `
+            : rows.length === 0
+              ? html`<div class="d-empty-row">${i18n.t('reports.no_data')}</div>`
+              : rows.map(row => this.renderBreakdownFamily(row, visibleTotal))}
+        </div>
+      </div>
+    `;
+  }
+
+  private renderBreakdownFamily(row: {
+    id: string; name: string; icon: string; color: string; spent: number; members: any[];
+  }, visibleTotal: number) {
+    const hidden = this.hiddenFamilies.has(row.id);
+    // A hidden family is out of the total, so it has no share to print
+    const share = hidden || visibleTotal <= 0 ? 0 : (row.spent / visibleTotal) * 100;
+    const members = row.members
+      .filter((member: any) => Number(member.spent) > 0)
+      .sort((a: any, b: any) => Number(b.spent) - Number(a.spent));
+    const expandable = members.length > 1;
+    const expanded = this.expandedFamilyId === row.id;
+
+    return html`
+      <div style="border-bottom: 1px solid var(--md-sys-color-surface-container-high)">
+        <div
+          class="dr-family ${hidden ? 'hidden' : ''}"
+          role="button"
+          tabindex="0"
+          @click="${() => {
+            if (expandable) this.expandedFamilyId = expanded ? null : row.id;
+            else this.openDrillDown(members[0]?.id ?? row.id);
+          }}">
+          <div class="dr-family-head">
+            <input
+              class="dr-swatch"
+              type="color"
+              .value="${row.color}"
+              title="${i18n.t('desktop.change_category_colour')}"
+              @click="${(e: Event) => e.stopPropagation()}"
+              @change="${(e: any) => {
+                if (this.groupByCategory) this.updateCategoryColor(row.id, e.target.value);
+                else this.updateSingleCategoryColor(row.id, e.target.value);
+              }}" />
+            <span class="d-emoji">${row.icon}</span>
+            <span class="dr-family-name">${row.name}</span>
+            <span class="dr-family-amount">${this.money(row.spent)}</span>
+            <span class="dr-family-share">${hidden ? '—' : `${Math.round(share)}%`}</span>
+            <button
+              class="dr-eye"
+              title="${i18n.t('desktop.hide_from_chart')}"
+              @click="${(e: Event) => { e.stopPropagation(); this.toggleFamilyVisibility(row.id); }}">
+              ${icon(hidden ? 'visibility_off' : 'visibility', 18)}
+            </button>
+            <span class="dr-eye static">
+              ${expandable ? icon(expanded ? 'expand_less' : 'expand_more', 18) : icon('chevron_right', 18)}
+            </span>
+          </div>
+          <div class="d-bar thick">
+            <div class="d-bar-fill" style="width: ${share}%; background: ${row.color}"></div>
+          </div>
+        </div>
+
+        ${expanded ? html`
+          <div style="padding: 2px 0 12px 32px">
+            ${members.map((member: any) => this.renderBreakdownMember(member))}
+          </div>
+        ` : nothing}
+      </div>
+    `;
+  }
+
+  private renderBreakdownMember(member: any) {
+    const drilled = this.drillCategoryId === member.id;
+
+    return html`
+      <div>
+        <div
+          class="dr-member"
+          role="button"
+          tabindex="0"
+          @click="${() => {
+            if (drilled) {
+              this.drillCategoryId = null;
+              this.drillTransactions = [];
+            } else {
+              this.openDrillDown(member.id);
+            }
+          }}">
+          <span class="d-emoji" style="font-size: 13px">${member.icon || ''}</span>
+          <span class="dr-member-name">${member.name}</span>
+          <span class="dr-member-amount">${this.money(Number(member.spent))}</span>
+          <span class="d-link small">
+            ${drilled ? i18n.t('desktop.hide') : `${i18n.t('mobile.see')} ›`}
+          </span>
+        </div>
+
+        ${drilled ? html`
+          <div class="dr-drill">
+            ${this.drillLoading
+              ? html`<div class="m-progress-bar" style="margin: 0"></div>`
+              : this.drillTransactions.length === 0
+                ? html`<div class="d-panel-caption">${i18n.t('reports.no_data')}</div>`
+                : html`
+                  ${this.drillTransactions.slice(0, 8).map(tx => html`
+                    <div class="dr-tx">
+                      <span class="dr-tx-date">
+                        ${new Date(tx.date).toISOString().slice(5, 10)}
+                      </span>
+                      <span class="dr-tx-desc">${tx.description}</span>
+                      <span class="dr-tx-amount">
+                        ${Number(tx.amount) < 0 ? '−' : '+'}${this.money(Math.abs(Number(tx.amount)))}
+                      </span>
+                    </div>
+                  `)}
+                `}
+            <button class="d-link small dr-open" @click="${() => this.navigateToCategory(member.id)}">
+              <span>${i18n.t('desktop.open_in_expenses')}</span>
+              ${icon('arrow_forward', 14)}
+            </button>
+          </div>
+        ` : nothing}
+      </div>
+    `;
+  }
+
+  private renderCompositionPanel() {
+    const rows = this.breakdownRows();
+    const visible = this.visibleBreakdownRows();
+    const total = visible.reduce((sum, row) => sum + row.spent, 0);
+
+    return html`
+      <div class="d-panel pad">
+        <div class="d-panel-title">${i18n.t('desktop.composition')}</div>
+
+        <div class="dr-donut-wrap">
+          <div class="dr-donut">
+            <canvas id="breakdownChart"></canvas>
+            <div class="dr-donut-hole">
+              <span class="d-micro">${i18n.t('common.total')}</span>
+              <span class="dr-donut-total">${this.money(total)}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="d-panel-body" style="padding: 0; display: flex; flex-direction: column; gap: 2px">
+          ${rows.map(row => {
+            const hidden = this.hiddenFamilies.has(row.id);
+            const share = hidden || total <= 0 ? 0 : (row.spent / total) * 100;
+            const arcIndex = visible.findIndex(entry => entry.id === row.id);
+            return html`
+              <button
+                class="dr-legend ${hidden ? 'hidden' : ''}"
+                @mouseenter="${() => this.highlightArc(arcIndex === -1 ? null : arcIndex)}"
+                @mouseleave="${() => this.highlightArc(null)}"
+                @click="${() => this.toggleFamilyVisibility(row.id)}">
+                <span class="d-dot" style="background: ${row.color}"></span>
+                <span class="dr-legend-name">${row.icon} ${row.name}</span>
+                <span class="dr-legend-share">${hidden ? '—' : `${Math.round(share)}%`}</span>
+              </button>
+            `;
+          })}
+        </div>
+      </div>
+    `;
+  }
+
+  private renderBudgetPanel() {
+    const items = this.getBudgetItems();
+    const totalSpent = items.reduce((sum, item) => sum + item.spent, 0);
+    const totalBudget = items.reduce((sum, item) => sum + item.budget, 0);
+
+    return html`
+      <div class="d-panel">
+        <div class="d-panel-head">
+          <span class="d-panel-title">${i18n.t('reports.budget_vs_actual')}</span>
+          ${items.length > 0 ? html`
+            <span class="d-panel-sub">
+              ${i18n.t('desktop.of_budget', {
+                spent: this.money(totalSpent),
+                budget: this.money(totalBudget),
+              })}
+            </span>
+          ` : nothing}
+        </div>
+
+        <div class="d-panel-body stack">
+          ${!this.canCompareBudget()
+            ? html`<div class="d-empty-row">${i18n.t('reports.budget_hint_period')}</div>`
+            : items.length === 0
+              ? html`<div class="d-empty-row">${i18n.t('reports.budget_empty')}</div>`
+              : items.map(item => {
+                  const over = item.spent > item.budget;
+                  const pct = item.budget > 0 ? Math.min(100, (item.spent / item.budget) * 100) : 0;
+                  const diff = Math.abs(item.budget - item.spent);
+                  return html`
+                    <div style="display: flex; flex-direction: column; gap: 5px">
+                      <div style="display: flex; align-items: baseline; gap: 8px">
+                        <span class="dr-budget-name">${item.name}</span>
+                        <span class="dr-budget-spent ${over ? 'over' : ''}">${this.money(item.spent)}</span>
+                        <span class="d-panel-hint">
+                          ${i18n.t('desktop.of_amount', { amount: this.money(item.budget) })}
+                        </span>
+                      </div>
+                      <div class="d-bar thick">
+                        <div
+                          class="d-bar-fill ${over ? 'over' : ''}"
+                          style="width: ${pct}%${over ? '' : `; background: ${item.color}`}"></div>
+                      </div>
+                      <div class="dr-budget-caption ${over ? 'over' : ''}">
+                        ${over
+                          ? i18n.t('desktop.over_by', { amount: this.money(diff) })
+                          : i18n.t('mobile.left_over', { amount: this.money(diff) })}
+                      </div>
+                    </div>
+                  `;
+                })}
+        </div>
+      </div>
+    `;
+  }
+
+  private renderFundingPanel() {
+    const data = this.costObjectData || [];
+    const total = data.reduce((sum: number, entry: any) => sum + Number(entry.total), 0);
+
+    return html`
+      <div class="d-panel pad">
+        <div class="d-panel-title">${i18n.t('cost_objects.title')}</div>
+        <div class="d-panel-caption">${i18n.t('desktop.funding_sub')}</div>
+
+        <div class="d-panel-body stack">
+          ${!this.selectedAccountId
+            ? html`<div class="d-panel-caption">${i18n.t('reports.cost_object_hint')}</div>`
+            : data.length === 0
+              ? html`<div class="d-panel-caption">${i18n.t('reports.no_data')}</div>`
+              : data.map((entry: any, index: number) => {
+                  const share = total > 0 ? (Number(entry.total) / total) * 100 : 0;
+                  return rankedBar({
+                    emoji: entry.icon || '',
+                    name: entry.name,
+                    amount: this.money(Number(entry.total)),
+                    percent: share,
+                    share: `${Math.round(share)}%`,
+                    color: entry.color || paletteColor(index),
+                  });
+                })}
+        </div>
+
+        ${this.selectedAccountId && data.length > 0 ? html`
+          <div class="d-panel-foot">
+            <span class="dr-owed-label">${i18n.t('cost_objects.total_owed')}</span>
+            <span class="dr-owed">${this.money(total)}</span>
+          </div>
+        ` : nothing}
+      </div>
+    `;
+  }
+
+  render() {
+    return this.isMobile ? this.renderMobile() : this.renderDesktop();
   }
 }
