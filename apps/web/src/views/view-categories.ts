@@ -402,8 +402,15 @@ export class ViewCategories extends LitElement {
     this.loading = true;
     try {
       this.categories = await api.get('/categories');
-      const currencySetting = await api.get('/settings/currency');
-      this.currency = currencySetting?.value || 'USD';
+
+      // /settings/:key answers with a bare string, which the client's
+      // JSON.parse rejects — so this must not be allowed to fail the whole
+      // load, the way the other views already guard it.
+      const currencySetting = await api.get('/settings/currency').catch(() => null);
+      const currency = typeof currencySetting === 'string'
+        ? currencySetting
+        : currencySetting?.value;
+      this.currency = currency || localStorage.getItem('priperfin_currency') || 'USD';
     } catch (e) {
       console.error(e);
       this.notify('Failed to load categories');
