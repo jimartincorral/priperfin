@@ -1,5 +1,18 @@
 # Changelog
 
+## v1.18.0 - 2026-09-04
+
+Mobile redesign. Every screen now has a phone layout below 600px; the desktop layout above that width is unchanged.
+
+- **Reports** lead with "where did my money go" as a ranked bar list instead of the doughnut chart, with one report per screen via Breakdown / Budget / Funding tabs. Tapping a parent category expands its children inline and drills down to the transactions behind it. The Sankey chart is dropped on phones.
+- **Expenses** replace the horizontally scrolling table with date-grouped rows showing date, amount and category. Suggested categories can be accepted with one tap; tapping a row opens a full-screen category sheet. Search, filters, reconciliation and bulk selection all moved into sheets, and rows now append on scroll instead of paginating.
+- **Goals** lead with progress at a glance and an on-track / behind badge based on the target date, plus goal detail and new-goal screens.
+- **Categories, Rules and Settings** were reworked in the same language: category tabs with parent/child rows, rule cards with mode badges, and a grouped navigation list for Settings instead of one long scroll.
+- A month stepper replaces the control row that used to run off the side of the screen, and every tap target is now at least 44px.
+- Native `alert()` and `confirm()` dialogs are replaced on phones by an inline snackbar and confirmation sheets; form validation shows errors under the field.
+- Status pills use new translucent colours that meet contrast requirements on the dark theme.
+- Fixed manual transaction creation, which the API rejected when the category or funding source was left empty.
+
 ## v1.17.17 - 2026-09-01
 
 - Configured `home-assistant/builder` to use architecture-matched builder images (`image: ${{ matrix.arch }}`) on native runners.
