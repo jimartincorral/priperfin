@@ -44,6 +44,19 @@ export class PriPerFinApp extends LitElement {
       --md-sys-color-outline: #72777f;
       --md-sys-color-outline-variant: #c2c7cf;
 
+      /* App-specific colors used by the mobile layouts.
+         Status pills need translucent fills that read on surface-container. */
+      --pf-positive: #16a34a;
+      --pf-over-budget: #ef4444;
+      --pf-status-ok-bg: rgba(22, 163, 74, 0.18);
+      --pf-status-ok-text: #14532d;
+      --pf-status-behind-bg: rgba(186, 26, 26, 0.12);
+      --pf-status-behind-text: #93000a;
+      --pf-status-evergreen-bg: rgba(101, 88, 123, 0.16);
+      --pf-status-evergreen-text: #4f378b;
+      --pf-delta-up-bg: rgba(186, 26, 26, 0.10);
+      --pf-skeleton-secondary: #e9ebef;
+
       /* Typography - Type Scale */
       --md-sys-typescale-display-large: 400 57px/64px 'Roboto', sans-serif;
       --md-sys-typescale-display-medium: 400 45px/52px 'Roboto', sans-serif;
@@ -117,6 +130,15 @@ export class PriPerFinApp extends LitElement {
 
         --md-sys-color-outline: #8c9199;
         --md-sys-color-outline-variant: #42474e;
+
+        --pf-status-ok-bg: rgba(22, 163, 74, 0.28);
+        --pf-status-ok-text: #dcfce7;
+        --pf-status-behind-bg: rgba(147, 0, 10, 0.50);
+        --pf-status-behind-text: #ffdad6;
+        --pf-status-evergreen-bg: rgba(79, 55, 139, 0.60);
+        --pf-status-evergreen-text: #ebddff;
+        --pf-delta-up-bg: rgba(147, 0, 10, 0.35);
+        --pf-skeleton-secondary: #232629;
     }
 
     @media (prefers-color-scheme: dark) {
@@ -154,6 +176,15 @@ export class PriPerFinApp extends LitElement {
 
         --md-sys-color-outline: #8c9199;
         --md-sys-color-outline-variant: #42474e;
+
+        --pf-status-ok-bg: rgba(22, 163, 74, 0.28);
+        --pf-status-ok-text: #dcfce7;
+        --pf-status-behind-bg: rgba(147, 0, 10, 0.50);
+        --pf-status-behind-text: #ffdad6;
+        --pf-status-evergreen-bg: rgba(79, 55, 139, 0.60);
+        --pf-status-evergreen-text: #ebddff;
+        --pf-delta-up-bg: rgba(147, 0, 10, 0.35);
+        --pf-skeleton-secondary: #232629;
       }
     }
 

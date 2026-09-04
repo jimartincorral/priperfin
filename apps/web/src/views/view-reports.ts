@@ -1,10 +1,21 @@
-import { LitElement, html, css } from 'lit';
+import { LitElement, html, css, nothing } from 'lit';
 import { customElement, state, query } from 'lit/decorators.js';
 import { Chart, registerables } from 'chart.js';
 import { SankeyController, Flow } from 'chartjs-chart-sankey';
 import { api } from '../api/client';
 import '../components/filterable-select';
+import '../components/rule-editor';
 import type { SelectOption } from '../components/filterable-select';
+import {
+  appBar,
+  bottomSheet,
+  icon,
+  mobileUI,
+  monthStepper,
+  snackbar,
+  watchMobileViewport,
+  type SnackbarOptions,
+} from '../styles/mobile-ui';
 
 import { i18n } from '../i18n/i18n';
 
@@ -51,6 +62,32 @@ export class ViewReports extends LitElement {
   @state() sankeyData: { nodes: { id: string }[]; links: { source: string; target: string; value: number }[] } | null = null;
   @state() costObjectData: any[] = [];
 
+  // --- Mobile layer (<= 600px). The desktop layout above the breakpoint is untouched. ---
+  @state() isMobile = false;
+  @state() activeTab: 'breakdown' | 'budget' | 'funding' = 'breakdown';
+  @state() expandedFamilyId: string | null = null;
+  @state() showPeriodSheet = false;
+  /** Category (or family) being drilled into, or null for the list. */
+  @state() drillCategoryId: string | null = null;
+  @state() drillTransactions: any[] = [];
+  @state() drillLoading = false;
+  @state() showRuleModal = false;
+  @state() showAccountSheet = false;
+  @state() snack: SnackbarOptions | null = null;
+  /** Total spend for the preceding period, for the delta pill. */
+  @state() previousTotal: number | null = null;
+
+  // Period sheet holds its edits until Apply
+  @state() private sheetMode: DateFilterMode = 'month';
+  @state() private sheetYear = new Date().getFullYear();
+  @state() private sheetMonth = new Date().getMonth() + 1;
+  @state() private sheetStartDate = '';
+  @state() private sheetEndDate = '';
+  @state() private sheetMonthlyAverage = false;
+
+  private unwatchViewport?: () => void;
+  private snackTimer?: number;
+
   @query('#breakdownChart') breakdownCanvas!: HTMLCanvasElement;
   @query('#sankeyChart') sankeyCanvas!: HTMLCanvasElement;
   @query('#budgetChart') budgetCanvas!: HTMLCanvasElement;
@@ -61,10 +98,10 @@ export class ViewReports extends LitElement {
   private budgetChart: Chart | null = null;
   private costObjectChart: Chart | null = null;
 
-  static styles = css`
+  static styles = [mobileUI, css`
     :host { display: block; }
-    
-    .header { 
+
+    .header {
         display: flex; 
         justify-content: space-between; 
         align-items: center; 
@@ -288,7 +325,150 @@ export class ViewReports extends LitElement {
       margin: 0;
       padding: 16px 0;
     }
-  `;
+
+    /* ---------- mobile ---------- */
+
+    .r-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      padding: 16px 0 0;
+    }
+
+    .r-total {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .r-total-figure {
+      font: var(--md-sys-typescale-display-small);
+      color: var(--md-sys-color-on-surface);
+    }
+
+    .r-bar-row {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 12px 0;
+      border: none;
+      border-bottom: 1px solid var(--md-sys-color-surface-container-high);
+      background: none;
+      width: 100%;
+      text-align: left;
+      color: inherit;
+      font: inherit;
+      cursor: pointer;
+    }
+    .r-bar-head {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .r-bar-icon {
+      width: 24px;
+      font-size: 18px;
+      flex-shrink: 0;
+      text-align: center;
+    }
+    .r-bar-name {
+      flex: 1;
+      min-width: 0;
+      font: var(--md-sys-typescale-body-large);
+      color: var(--md-sys-color-on-surface);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .r-bar-amount {
+      font: 500 16px/24px 'Roboto', sans-serif;
+      color: var(--md-sys-color-on-surface);
+      white-space: nowrap;
+    }
+    .r-bar-pct {
+      width: 32px;
+      text-align: right;
+      font: 500 12px/16px 'Roboto', sans-serif;
+      color: var(--md-sys-color-on-surface-variant);
+      flex-shrink: 0;
+    }
+    .r-bar-caption {
+      font: 400 12px/16px 'Roboto', sans-serif;
+      color: var(--md-sys-color-on-surface-variant);
+    }
+
+    .r-children {
+      background: var(--md-sys-color-surface-container);
+      border-radius: 12px;
+      padding: 4px 12px;
+      margin: 0 0 12px;
+    }
+    .r-child {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 0;
+    }
+    .r-child + .r-child { border-top: 1px solid var(--md-sys-color-surface-container-high); }
+    .r-child-icon { width: 20px; font-size: 15px; text-align: center; flex-shrink: 0; }
+    .r-child-name {
+      flex: 1;
+      min-width: 0;
+      font: 400 14px/20px 'Roboto', sans-serif;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .r-child-amount { font: 500 14px/20px 'Roboto', sans-serif; white-space: nowrap; }
+
+    .r-month-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+    }
+    .r-month-cell {
+      height: 48px;
+      border: none;
+      border-radius: 12px;
+      background: var(--md-sys-color-surface-container);
+      color: var(--md-sys-color-on-surface);
+      font: var(--md-sys-typescale-body-large);
+      cursor: pointer;
+    }
+    .r-month-cell.selected {
+      background: var(--md-sys-color-primary);
+      color: var(--md-sys-color-on-primary);
+    }
+    .r-month-cell.future { color: var(--md-sys-color-on-surface-variant); }
+
+    .r-year-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .r-year-btn {
+      width: 44px;
+      height: 44px;
+      border-radius: 22px;
+      border: none;
+      background: var(--md-sys-color-surface-container);
+      color: var(--md-sys-color-on-surface);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+    .r-year-label { font: 500 16px/24px 'Roboto', sans-serif; }
+
+    .r-drill-total {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 4px 0 12px;
+    }
+    .r-drill-figure { font: 400 32px/40px 'Roboto', sans-serif; }
+  `];
 
   async firstUpdated() {
     this.loadFiltersFromURL();
@@ -360,11 +540,27 @@ export class ViewReports extends LitElement {
   connectedCallback() {
     super.connectedCallback();
     i18n.addEventListener('lang-change', () => this.requestUpdate());
+    this.unwatchViewport = watchMobileViewport(this);
   }
 
   disconnectedCallback() {
     super.disconnectedCallback();
     i18n.removeEventListener('lang-change', () => this.requestUpdate());
+    this.unwatchViewport?.();
+    if (this.snackTimer) window.clearTimeout(this.snackTimer);
+  }
+
+  /** Inline snackbar above the nav; replaces alert() on the mobile path. */
+  private notify(message: string, action?: { label: string; run: () => void }) {
+    if (!this.isMobile) {
+      alert(message);
+      return;
+    }
+    if (this.snackTimer) window.clearTimeout(this.snackTimer);
+    this.snack = action
+      ? { message, actionLabel: action.label, onAction: () => { this.snack = null; action.run(); } }
+      : { message };
+    this.snackTimer = window.setTimeout(() => { this.snack = null; }, 4000);
   }
 
   getYearOptions(): number[] {
@@ -424,9 +620,14 @@ export class ViewReports extends LitElement {
         params.averageMonthly = true;
       }
 
-      const [breakdown, sankey, costObjects, periodMonths] = await Promise.all([
+      // The Sankey chart is dropped on phones, so skip the request entirely there
+      const wantsSankey = !this.isMobile;
+      // Powers the "vs previous period" delta pill in the mobile total block
+      const previousParams = this.getPreviousPeriodParams();
+
+      const [breakdown, sankey, costObjects, periodMonths, previousBreakdown] = await Promise.all([
         api.get('/reports/category-breakdown', params),
-        api.get('/reports/sankey', params),
+        wantsSankey ? api.get('/reports/sankey', params) : Promise.resolve(null),
         // Backend only computes cost objects for a specific account
         this.selectedAccountId
           ? api.get('/reports/cost-object-breakdown', params)
@@ -435,24 +636,152 @@ export class ViewReports extends LitElement {
         this.monthlyAverage
           ? api.get('/reports/period-months', params)
           : Promise.resolve({ months: 1 }),
+        this.isMobile && previousParams
+          ? api.get('/reports/category-breakdown', previousParams).catch(() => null)
+          : Promise.resolve(null),
       ]);
 
       this.breakdownData = breakdown;
-      this.sankeyData = sankey;
+      if (wantsSankey) this.sankeyData = sankey;
       this.costObjectData = costObjects;
       this.periodMonths = periodMonths?.months || 1;
+      this.previousTotal = Array.isArray(previousBreakdown)
+        ? previousBreakdown.reduce((sum: number, d: any) => sum + Math.max(0, Number(d.spent) || 0), 0)
+        : null;
 
       await this.updateComplete; // Ensure DOM is ready
       this.renderBreakdown();
-      this.renderSankey();
+      if (wantsSankey) this.renderSankey();
       this.renderBudget();
       this.renderCostObjects();
     } catch (e: any) {
       console.error(e);
-      alert('Failed to load reports: ' + (e.message || e));
+      this.notify('Failed to load reports: ' + (e.message || e));
     } finally {
       this.loading = false;
     }
+  }
+
+  // ------------------------------------------------------------------
+  // Period navigation (mobile stepper + period sheet)
+  // ------------------------------------------------------------------
+
+  /** Query params for the period immediately before the current one, or null. */
+  private getPreviousPeriodParams(): any | null {
+    const base: any = { filterMode: this.dateFilterMode };
+    if (this.selectedAccountId) base.accountId = this.selectedAccountId;
+
+    switch (this.dateFilterMode) {
+      case 'month': {
+        const prev = this.month === 1 ? 12 : this.month - 1;
+        const prevYear = this.month === 1 ? this.year - 1 : this.year;
+        return { ...base, month: prev, year: prevYear };
+      }
+      case 'year':
+        return { ...base, year: this.year - 1 };
+      case 'custom': {
+        if (!this.customStartDate || !this.customEndDate) return null;
+        const start = new Date(`${this.customStartDate}T00:00:00`);
+        const end = new Date(`${this.customEndDate}T00:00:00`);
+        const span = end.getTime() - start.getTime();
+        if (!Number.isFinite(span) || span < 0) return null;
+        const prevEnd = new Date(start.getTime() - 86400000);
+        const prevStart = new Date(prevEnd.getTime() - span);
+        return {
+          ...base,
+          startDate: prevStart.toISOString().split('T')[0],
+          endDate: prevEnd.toISOString().split('T')[0],
+        };
+      }
+      default:
+        return null;
+    }
+  }
+
+  /** Short label for the preceding period, e.g. "Aug" or "2025". */
+  private previousPeriodLabel(): string {
+    if (this.dateFilterMode === 'year') return String(this.year - 1);
+    const prev = this.month === 1 ? 12 : this.month - 1;
+    const prevYear = this.month === 1 ? this.year - 1 : this.year;
+    return new Date(prevYear, prev - 1, 1)
+      .toLocaleString(i18n.getLocale(), { month: 'short' })
+      .replace('.', '');
+  }
+
+  /** The stepper's centre label for the active period. */
+  periodLabel(): string {
+    switch (this.dateFilterMode) {
+      case 'month': {
+        const name = new Date(this.year, this.month - 1, 1)
+          .toLocaleString(i18n.getLocale(), { month: 'long' });
+        return `${name.charAt(0).toUpperCase()}${name.slice(1)} ${this.year}`;
+      }
+      case 'year':
+        return String(this.year);
+      case 'custom':
+        return this.customStartDate && this.customEndDate
+          ? `${this.customStartDate} – ${this.customEndDate}`
+          : i18n.t('filters.mode_custom');
+      default:
+        return i18n.t('mobile.all_time_label');
+    }
+  }
+
+  /** Moves the period one step. Custom ranges shift by their own span. */
+  stepPeriod(direction: -1 | 1) {
+    if (this.dateFilterMode === 'month') {
+      const next = this.month + direction;
+      if (next < 1) { this.month = 12; this.year -= 1; }
+      else if (next > 12) { this.month = 1; this.year += 1; }
+      else { this.month = next; }
+    } else if (this.dateFilterMode === 'year') {
+      this.year += direction;
+    } else if (this.dateFilterMode === 'custom') {
+      if (!this.customStartDate || !this.customEndDate) return;
+      const start = new Date(`${this.customStartDate}T00:00:00`);
+      const end = new Date(`${this.customEndDate}T00:00:00`);
+      const span = end.getTime() - start.getTime() + 86400000;
+      this.customStartDate = new Date(start.getTime() + direction * span).toISOString().split('T')[0];
+      this.customEndDate = new Date(end.getTime() + direction * span).toISOString().split('T')[0];
+    } else {
+      return; // all_time has no steps
+    }
+    this.expandedFamilyId = null;
+    this.loadData();
+  }
+
+  /** True once the forward chevron would move past the current month/year. */
+  private isAtLatestPeriod(): boolean {
+    const now = new Date();
+    if (this.dateFilterMode === 'month') {
+      return this.year > now.getFullYear()
+        || (this.year === now.getFullYear() && this.month >= now.getMonth() + 1);
+    }
+    if (this.dateFilterMode === 'year') return this.year >= now.getFullYear();
+    return this.dateFilterMode === 'all_time';
+  }
+
+  openPeriodSheet() {
+    this.sheetMode = this.dateFilterMode;
+    this.sheetYear = this.year;
+    this.sheetMonth = this.month;
+    this.sheetStartDate = this.customStartDate;
+    this.sheetEndDate = this.customEndDate;
+    this.sheetMonthlyAverage = this.monthlyAverage;
+    this.showPeriodSheet = true;
+  }
+
+  applyPeriodSheet() {
+    this.dateFilterMode = this.sheetMode;
+    this.year = this.sheetYear;
+    this.month = this.sheetMonth;
+    this.customStartDate = this.sheetStartDate;
+    this.customEndDate = this.sheetEndDate;
+    // A single month has nothing to average
+    this.monthlyAverage = this.sheetMode === 'month' ? false : this.sheetMonthlyAverage;
+    this.showPeriodSheet = false;
+    this.expandedFamilyId = null;
+    this.loadData();
   }
 
   renderBreakdown() {
@@ -874,7 +1203,7 @@ export class ViewReports extends LitElement {
       await this.loadData();
     } catch (e: any) {
       console.error('Failed to update category color:', e);
-      alert('Failed to update color: ' + (e.message || e));
+      this.notify('Failed to update color: ' + (e.message || e));
     }
   }
 
@@ -916,7 +1245,7 @@ export class ViewReports extends LitElement {
       await this.loadData();
     } catch (e: any) {
       console.error('Failed to update category color:', e);
-      alert('Failed to update color: ' + (e.message || e));
+      this.notify('Failed to update color: ' + (e.message || e));
     }
   }
 
@@ -994,7 +1323,603 @@ export class ViewReports extends LitElement {
     window.location.href = `/?${params.toString()}`;
   }
 
+  // ------------------------------------------------------------------
+  // Mobile layout
+  // ------------------------------------------------------------------
+
+  private currencySymbol(): string {
+    return localStorage.getItem('priperfin_currency') === 'EUR' ? '€' : '$';
+  }
+
+  private money(value: number, decimals = 2): string {
+    return `${this.currencySymbol()}${Math.abs(value).toLocaleString(i18n.getLocale(), {
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals,
+    })}`;
+  }
+
+  private barColor(item: any, index: number): string {
+    if (item.color && item.color !== '#000000' && item.color !== '#000') return item.color;
+    return CHART_PALETTE[index % CHART_PALETTE.length];
+  }
+
+  /**
+   * Rolls the flat breakdown payload up into one row per family, keeping the
+   * members so a tap can expand them inline.
+   */
+  private getFamilyRows(): {
+    id: string;
+    name: string;
+    icon: string;
+    color: string;
+    spent: number;
+    members: any[];
+  }[] {
+    const spending = (this.breakdownData || []).filter((d: any) => Number(d.spent) > 0);
+    const families = new Map<string, { id: string; name: string; icon: string; color: string; spent: number; members: any[] }>();
+
+    spending.forEach((item: any, index: number) => {
+      const familyId = item.familyId || item.id;
+      if (!families.has(familyId)) {
+        // familyName already carries the parent's icon, so split it back out
+        const rawName: string = item.familyName || `${item.icon || ''} ${item.name}`.trim();
+        const [maybeIcon, ...rest] = rawName.split(' ');
+        const hasLeadingIcon = rest.length > 0 && !/^[\w(]/.test(maybeIcon);
+        families.set(familyId, {
+          id: familyId,
+          name: hasLeadingIcon ? rest.join(' ') : rawName,
+          icon: hasLeadingIcon ? maybeIcon : (item.icon || ''),
+          color: this.barColor(item, index),
+          spent: 0,
+          members: [],
+        });
+      }
+      const family = families.get(familyId)!;
+      family.spent += Number(item.spent);
+      family.members.push({ ...item, _color: this.barColor(item, index) });
+    });
+
+    return Array.from(families.values()).sort((a, b) => b.spent - a.spent);
+  }
+
+  /** All category ids that roll up into the given family. */
+  private familyMemberIds(familyId: string): string[] {
+    const ids = (this.breakdownData || [])
+      .filter((d: any) => (d.familyId || d.id) === familyId)
+      .map((d: any) => d.id);
+    return ids.length > 0 ? ids : [familyId];
+  }
+
+  private drillLabel(): { icon: string; name: string; parentName: string | null } {
+    const item = (this.breakdownData || []).find((d: any) => d.id === this.drillCategoryId);
+    if (!item) return { icon: '', name: '', parentName: null };
+    const family = item.familyId && item.familyId !== item.id
+      ? (this.breakdownData || []).find((d: any) => d.id === item.familyId)
+      : null;
+    return { icon: item.icon || '', name: item.name, parentName: family ? family.name : null };
+  }
+
+  async openDrillDown(categoryId: string) {
+    this.drillCategoryId = categoryId;
+    this.drillTransactions = [];
+    this.drillLoading = true;
+    try {
+      const params: any = { filterMode: this.dateFilterMode };
+      if (this.dateFilterMode === 'month') { params.month = this.month; params.year = this.year; }
+      else if (this.dateFilterMode === 'year') { params.year = this.year; }
+      else if (this.dateFilterMode === 'custom') {
+        if (this.customStartDate) params.startDate = this.customStartDate;
+        if (this.customEndDate) params.endDate = this.customEndDate;
+      }
+      if (this.selectedAccountId) params.accountId = this.selectedAccountId;
+
+      // The API has no category filter, so narrow the period's transactions here
+      const all = await api.get('/transactions', params);
+      const ids = this.familyMemberIds(categoryId);
+      const wanted = new Set(ids.includes(categoryId) ? ids : [categoryId, ...ids]);
+      this.drillTransactions = (Array.isArray(all) ? all : [])
+        .filter((t: any) => wanted.has(t.categoryId)
+          || (t.splits || []).some((s: any) => wanted.has(s.categoryId)))
+        .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    } catch (e: any) {
+      console.error('Failed to load category transactions', e);
+      this.notify(i18n.t('reports.no_data'));
+    } finally {
+      this.drillLoading = false;
+    }
+  }
+
+  /** Short label for the account chip: "🏦 All" or the account's own name. */
+  private accountChipLabel(): string {
+    const account = this.accounts.find(a => a.id === this.selectedAccountId);
+    if (!account) return '🏦 All';
+    return `${account.type === 'CREDIT' ? '💳' : '🏦'} ${account.name}`;
+  }
+
+  /** Account picker as a sheet, sharing getAccountOptions() with the desktop select. */
+  private renderAccountSheet() {
+    return bottomSheet({
+      open: this.showAccountSheet,
+      onDismiss: () => { this.showAccountSheet = false; },
+      content: html`
+        <div class="m-sheet-title">${i18n.t('reports.all_accounts')}</div>
+        <div>
+          ${this.getAccountOptions().map(option => html`
+            <button
+              class="m-row"
+              style="${option.value === this.selectedAccountId
+                ? 'background: var(--md-sys-color-secondary-container)'
+                : ''}"
+              @click="${() => {
+                this.showAccountSheet = false;
+                if (option.value === this.selectedAccountId) return;
+                this.selectedAccountId = option.value;
+                this.loadData();
+              }}">
+              ${option.icon ? html`<span class="m-avatar">${option.icon}</span>` : nothing}
+              <span class="m-row-main"><span class="m-row-primary">${option.label}</span></span>
+              ${option.value === this.selectedAccountId ? icon('check', 20) : nothing}
+            </button>
+          `)}
+        </div>
+      `,
+    });
+  }
+
+  private renderMobileHeader() {
+    return html`
+      <div class="m-title-row">
+        <h1 class="m-title">${i18n.t('mobile.reports_short')}</h1>
+        <button class="m-chip" @click="${() => { this.showAccountSheet = true; }}">
+          <span>${this.accountChipLabel()}</span>
+          ${icon('expand_more', 18)}
+        </button>
+      </div>
+
+      ${monthStepper({
+        label: this.periodLabel(),
+        open: this.showPeriodSheet,
+        onPrev: () => this.stepPeriod(-1),
+        onNext: () => this.stepPeriod(1),
+        nextDisabled: this.isAtLatestPeriod(),
+        onLabel: () => this.openPeriodSheet(),
+      })}
+    `;
+  }
+
+  private renderBreakdownTab() {
+    const families = this.getFamilyRows();
+    const total = families.reduce((sum, f) => sum + f.spent, 0);
+
+    if (families.length === 0) {
+      return html`<p class="empty-hint">${i18n.t('reports.no_data')}</p>`;
+    }
+
+    const delta = this.previousTotal !== null && this.previousTotal > 0
+      ? ((total - this.previousTotal) / this.previousTotal) * 100
+      : null;
+
+    return html`
+      <div class="r-panel">
+        <div class="r-total">
+          <div>
+            <div class="m-section-label">${i18n.t('mobile.spent_this_month')}</div>
+            <div class="r-total-figure">${this.money(total)}</div>
+          </div>
+          ${delta !== null && Math.abs(delta) >= 1 ? html`
+            <span class="m-pill ${delta > 0 ? 'up' : 'down'}">
+              ${delta > 0 ? '▲' : '▼'} ${Math.abs(Math.round(delta))}%
+              ${i18n.t('mobile.vs_previous', { period: this.previousPeriodLabel() })}
+            </span>
+          ` : nothing}
+        </div>
+
+        <div>
+          ${families.map(family => {
+            const pct = total > 0 ? (family.spent / total) * 100 : 0;
+            const spendingMembers = family.members.filter(m => Number(m.spent) > 0);
+            const expandable = spendingMembers.length > 1;
+            const expanded = this.expandedFamilyId === family.id;
+
+            return html`
+              <button
+                class="r-bar-row"
+                @click="${() => expandable
+                  ? (this.expandedFamilyId = expanded ? null : family.id)
+                  : this.openDrillDown(spendingMembers[0]?.id ?? family.id)}">
+                <div class="r-bar-head">
+                  <span class="r-bar-icon">${family.icon}</span>
+                  <span class="r-bar-name">${family.name}</span>
+                  <span class="r-bar-amount">${this.money(family.spent)}</span>
+                  <span class="r-bar-pct">${Math.round(pct)}%</span>
+                </div>
+                <div class="m-track">
+                  <div class="m-track-fill" style="width: ${pct}%; background: ${family.color}"></div>
+                </div>
+              </button>
+
+              ${expanded ? html`
+                <div class="r-children">
+                  ${spendingMembers
+                    .sort((a, b) => Number(b.spent) - Number(a.spent))
+                    .map(member => html`
+                      <div class="r-child">
+                        <span class="r-child-icon">${member.icon || ''}</span>
+                        <span class="r-child-name">${member.name}</span>
+                        <span class="r-child-amount">${this.money(Number(member.spent))}</span>
+                        <button class="m-link" @click="${() => this.openDrillDown(member.id)}">
+                          ${i18n.t('mobile.see')} ›
+                        </button>
+                      </div>
+                    `)}
+                </div>
+              ` : nothing}
+            `;
+          })}
+        </div>
+      </div>
+    `;
+  }
+
+  private renderBudgetTab() {
+    if (!this.canCompareBudget()) {
+      return html`<p class="empty-hint">${i18n.t('reports.budget_hint_period')}</p>`;
+    }
+    const items = this.getBudgetItems();
+    if (items.length === 0) {
+      return html`<p class="empty-hint">${i18n.t('reports.budget_empty')}</p>`;
+    }
+
+    const totalSpent = items.reduce((sum, i) => sum + i.spent, 0);
+    const totalBudget = items.reduce((sum, i) => sum + i.budget, 0);
+    const usedPct = totalBudget > 0 ? Math.round((totalSpent / totalBudget) * 100) : 0;
+    const overCount = items.filter(i => i.spent > i.budget).length;
+
+    return html`
+      <div class="r-panel">
+        <div class="r-total">
+          <div>
+            <div class="m-section-label">${i18n.t('mobile.budget_used')}</div>
+            <div class="r-total-figure">${usedPct}%</div>
+          </div>
+          ${overCount > 0 ? html`
+            <span class="m-pill behind">${i18n.t('mobile.over_budget_count', { count: overCount })}</span>
+          ` : nothing}
+        </div>
+
+        <div>
+          ${items.map(item => {
+            const over = item.spent > item.budget;
+            const pct = item.budget > 0 ? Math.min(100, (item.spent / item.budget) * 100) : 0;
+            const diff = Math.abs(item.budget - item.spent);
+            return html`
+              <div class="r-bar-row" style="cursor: default">
+                <div class="r-bar-head">
+                  <span class="r-bar-name">${item.name}</span>
+                  <span class="r-bar-amount" style="${over ? 'color: var(--md-sys-color-error)' : ''}">
+                    ${this.money(item.spent, 0)}
+                  </span>
+                  <span class="r-bar-pct">/ ${this.money(item.budget, 0)}</span>
+                </div>
+                <div class="m-track">
+                  <div
+                    class="m-track-fill"
+                    style="width: ${pct}%; background: ${over ? 'var(--pf-over-budget)' : item.color}"></div>
+                </div>
+                <div class="r-bar-caption">
+                  ${over
+                    ? i18n.t('mobile.over_by', { amount: this.money(diff, 0) })
+                    : i18n.t('mobile.left_over', { amount: this.money(diff, 0) })}
+                </div>
+              </div>
+            `;
+          })}
+        </div>
+      </div>
+    `;
+  }
+
+  private renderFundingTab() {
+    if (!this.selectedAccountId) {
+      return html`
+        <div class="r-panel">
+          <p class="empty-hint">${i18n.t('reports.cost_object_hint')}</p>
+          <button
+            class="m-field"
+            style="display: flex; align-items: center; justify-content: space-between; cursor: pointer;"
+            @click="${() => { this.showAccountSheet = true; }}">
+            <span>${this.accountChipLabel()}</span>
+            ${icon('expand_more', 20)}
+          </button>
+        </div>
+      `;
+    }
+
+    const data = this.costObjectData || [];
+    if (data.length === 0) {
+      return html`<p class="empty-hint">${i18n.t('reports.no_data')}</p>`;
+    }
+    const total = data.reduce((sum: number, d: any) => sum + Number(d.total), 0);
+
+    return html`
+      <div class="r-panel">
+        <div class="r-total">
+          <div>
+            <div class="m-section-label">${i18n.t('mobile.spent')}</div>
+            <div class="r-total-figure">${this.money(total)}</div>
+          </div>
+        </div>
+        <div>
+          ${data.map((co: any, index: number) => {
+            const pct = total > 0 ? (Number(co.total) / total) * 100 : 0;
+            return html`
+              <div class="r-bar-row" style="cursor: default">
+                <div class="r-bar-head">
+                  <span class="r-bar-icon">${co.icon || ''}</span>
+                  <span class="r-bar-name">${co.name}</span>
+                  <span class="r-bar-amount">${this.money(Number(co.total))}</span>
+                  <span class="r-bar-pct">${Math.round(pct)}%</span>
+                </div>
+                <div class="m-track">
+                  <div
+                    class="m-track-fill"
+                    style="width: ${pct}%; background: ${co.color || CHART_PALETTE[index % CHART_PALETTE.length]}"></div>
+                </div>
+                <div class="r-bar-caption">
+                  ${i18n.t('mobile.transactions_count', { count: co.count ?? 0 })}
+                </div>
+              </div>
+            `;
+          })}
+        </div>
+      </div>
+    `;
+  }
+
+  private renderPeriodSheet() {
+    const now = new Date();
+    const modes: { value: DateFilterMode; label: string }[] = [
+      { value: 'month', label: i18n.t('filters.mode_month') },
+      { value: 'year', label: i18n.t('filters.mode_year') },
+      { value: 'custom', label: i18n.t('filters.mode_custom') },
+      { value: 'all_time', label: i18n.t('filters.mode_all_time') },
+    ];
+
+    return bottomSheet({
+      open: this.showPeriodSheet,
+      onDismiss: () => { this.showPeriodSheet = false; },
+      content: html`
+        <div class="m-sheet-title">${i18n.t('mobile.period')}</div>
+
+        <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+          ${modes.map(mode => html`
+            <button
+              class="m-filter-chip ${this.sheetMode === mode.value ? 'selected' : ''}"
+              style="${this.sheetMode === mode.value
+                ? 'background: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary)'
+                : ''}"
+              @click="${() => { this.sheetMode = mode.value; }}">
+              ${mode.label}
+            </button>
+          `)}
+        </div>
+
+        ${this.sheetMode === 'month' || this.sheetMode === 'year' ? html`
+          <div class="r-year-row">
+            <button class="r-year-btn" @click="${() => { this.sheetYear -= 1; }}" aria-label="${i18n.t('mobile.prev_period')}">
+              ${icon('chevron_left', 22)}
+            </button>
+            <span class="r-year-label">${this.sheetYear}</span>
+            <button
+              class="r-year-btn"
+              ?disabled="${this.sheetYear >= now.getFullYear()}"
+              @click="${() => { this.sheetYear += 1; }}"
+              aria-label="${i18n.t('mobile.next_period')}">
+              ${icon('chevron_right', 22)}
+            </button>
+          </div>
+        ` : nothing}
+
+        ${this.sheetMode === 'month' ? html`
+          <div class="r-month-grid">
+            ${Array.from({ length: 12 }, (_, i) => i + 1).map(m => {
+              const name = new Date(this.sheetYear, m - 1, 1)
+                .toLocaleString(i18n.getLocale(), { month: 'short' })
+                .replace('.', '');
+              const future = this.sheetYear > now.getFullYear()
+                || (this.sheetYear === now.getFullYear() && m > now.getMonth() + 1);
+              return html`
+                <button
+                  class="r-month-cell ${this.sheetMonth === m ? 'selected' : ''} ${future ? 'future' : ''}"
+                  @click="${() => { this.sheetMonth = m; }}">
+                  ${name.charAt(0).toUpperCase()}${name.slice(1)}
+                </button>
+              `;
+            })}
+          </div>
+        ` : nothing}
+
+        ${this.sheetMode === 'custom' ? html`
+          <div style="display: flex; gap: 12px;">
+            <label class="m-field-with-icon" style="flex: 1">
+              <input
+                class="m-field"
+                type="text"
+                inputmode="numeric"
+                placeholder="yyyy-mm-dd"
+                .value="${this.sheetStartDate}"
+                @input="${(e: any) => { this.sheetStartDate = e.target.value; }}" />
+              ${icon('calendar_month', 20)}
+            </label>
+            <label class="m-field-with-icon" style="flex: 1">
+              <input
+                class="m-field"
+                type="text"
+                inputmode="numeric"
+                placeholder="yyyy-mm-dd"
+                .value="${this.sheetEndDate}"
+                @input="${(e: any) => { this.sheetEndDate = e.target.value; }}" />
+              ${icon('calendar_month', 20)}
+            </label>
+          </div>
+        ` : nothing}
+
+        ${this.sheetMode !== 'month' ? html`
+          <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
+            <button
+              class="m-checkbox"
+              role="checkbox"
+              aria-checked="${this.sheetMonthlyAverage}"
+              @click="${(e: Event) => { e.preventDefault(); this.sheetMonthlyAverage = !this.sheetMonthlyAverage; }}">
+              ${this.sheetMonthlyAverage ? icon('check', 16) : nothing}
+            </button>
+            <span>${i18n.t('reports.monthly_average')}</span>
+          </label>
+        ` : nothing}
+
+        <button class="m-btn block" @click="${() => this.applyPeriodSheet()}">
+          ${i18n.t('mobile.apply')}
+        </button>
+      `,
+    });
+  }
+
+  private renderDrillDown() {
+    const label = this.drillLabel();
+    const total = this.drillTransactions.reduce(
+      (sum, t) => sum + Math.abs(Math.min(0, Number(t.amount) || 0)), 0);
+    const familyTotal = label.parentName
+      ? this.getFamilyRows().find(f => f.members.some((m: any) => m.id === this.drillCategoryId))?.spent ?? 0
+      : 0;
+    const share = familyTotal > 0 ? Math.round((total / familyTotal) * 100) : null;
+
+    return html`
+      <div class="m-screen">
+        ${appBar({
+          title: html`${label.icon} ${label.name}`,
+          subtitle: `${this.periodLabel()} · ${i18n.t('mobile.transactions_count', { count: this.drillTransactions.length })}`,
+          onBack: () => { this.drillCategoryId = null; this.drillTransactions = []; },
+          action: html`
+            <button
+              class="m-icon-btn"
+              title="${i18n.t('mobile.create_rule_from_category')}"
+              @click="${() => { this.showRuleModal = true; }}">
+              ${icon('rule', 24)}
+            </button>
+          `,
+        })}
+
+        <div class="r-drill-total">
+          <div>
+            <div class="m-section-label">${i18n.t('mobile.spent')}</div>
+            <div class="r-drill-figure">${this.money(total)}</div>
+          </div>
+          ${share !== null && label.parentName ? html`
+            <span class="m-row-value">
+              ${i18n.t('mobile.percent_of', { percent: share, name: label.parentName })}
+            </span>
+          ` : nothing}
+        </div>
+
+        ${this.drillLoading
+          ? html`<div class="m-progress-bar"></div>`
+          : this.drillTransactions.length === 0
+            ? html`<p class="empty-hint">${i18n.t('reports.no_data')}</p>`
+            : this.drillTransactions.map(tx => html`
+              <div class="m-row" style="min-height: 60px; cursor: default">
+                <span class="m-avatar" style="width: 36px; height: 36px; border-radius: 18px; font-size: 16px">
+                  ${label.icon}
+                </span>
+                <div class="m-row-main">
+                  <div class="m-row-primary">${tx.description}</div>
+                  <div class="m-row-secondary">
+                    ${new Date(tx.date).toLocaleDateString(i18n.getLocale(), {
+                      weekday: 'short', day: 'numeric', month: 'short',
+                    })}
+                  </div>
+                </div>
+                <span class="m-amount ${Number(tx.amount) >= 0 ? 'positive' : ''}">
+                  ${Number(tx.amount) < 0 ? '−' : '+'}${Math.abs(Number(tx.amount)).toFixed(2)}
+                </span>
+              </div>
+            `)}
+
+        ${this.renderRuleModal()}
+        ${snackbar(this.snack)}
+      </div>
+    `;
+  }
+
+  private renderRuleModal() {
+    if (!this.showRuleModal) return nothing;
+    const label = this.drillLabel();
+    return html`
+      <rule-editor
+        .rule="${{
+          name: label.name,
+          mode: 'SUGGEST',
+          categoryId: this.drillCategoryId,
+          conditionsJson: JSON.stringify({
+            operator: 'AND',
+            conditions: [{ field: 'description', operator: 'contains', value: '' }],
+          }),
+        }}"
+        .categories="${this.breakdownData}"
+        @save="${async (e: CustomEvent) => {
+          try {
+            await api.post('/rules', e.detail);
+            this.showRuleModal = false;
+            this.notify(i18n.t('rules.rule_applied_count', { count: 0 }));
+          } catch (err: any) {
+            this.notify(i18n.t('rules.errors.save_failed') + ': ' + (err.message || err));
+          }
+        }}"
+        @cancel="${() => { this.showRuleModal = false; }}">
+      </rule-editor>
+    `;
+  }
+
+  private renderMobile() {
+    if (this.drillCategoryId) return this.renderDrillDown();
+
+    const tabs: { id: 'breakdown' | 'budget' | 'funding'; label: string }[] = [
+      { id: 'breakdown', label: i18n.t('mobile.tab_breakdown') },
+      { id: 'budget', label: i18n.t('mobile.tab_budget') },
+      { id: 'funding', label: i18n.t('mobile.tab_funding') },
+    ];
+
+    return html`
+      <div class="m-screen">
+        ${this.renderMobileHeader()}
+
+        <div class="m-tabs" role="tablist">
+          ${tabs.map(tab => html`
+            <button
+              class="m-tab"
+              role="tab"
+              aria-selected="${this.activeTab === tab.id}"
+              @click="${() => { this.activeTab = tab.id; }}">
+              ${tab.label}
+            </button>
+          `)}
+        </div>
+
+        ${this.loading
+          ? html`<div class="m-progress-bar"></div>`
+          : this.activeTab === 'breakdown' ? this.renderBreakdownTab()
+            : this.activeTab === 'budget' ? this.renderBudgetTab()
+              : this.renderFundingTab()}
+
+        ${this.renderPeriodSheet()}
+        ${this.renderAccountSheet()}
+        ${snackbar(this.snack)}
+      </div>
+    `;
+  }
+
   render() {
+    if (this.isMobile) return this.renderMobile();
+
     return html`
       <div class="header">
         <h1>${i18n.t('reports.title')}</h1>
