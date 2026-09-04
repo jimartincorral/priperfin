@@ -983,18 +983,19 @@ export const desktopUI = css`
   .d-add-row {
     display: flex;
     align-items: center;
-    justify-content: center;
     gap: 8px;
     width: 100%;
     height: 48px;
+    padding: 0 16px;
     background: transparent;
     color: var(--md-sys-color-primary);
-    font: 500 13px/16px 'Roboto', sans-serif;
+    font: 500 14px/20px 'Roboto', sans-serif;
     box-sizing: border-box;
     cursor: pointer;
   }
   .d-add-row:hover { background: var(--md-sys-color-surface-container-low); }
   .d-add-row.dashed {
+    justify-content: center;
     height: 52px;
     border: 1px dashed var(--md-sys-color-outline);
     border-radius: 16px;
