@@ -56,6 +56,11 @@ export class PriPerFinApp extends LitElement {
       --pf-status-evergreen-text: #4f378b;
       --pf-delta-up-bg: rgba(186, 26, 26, 0.10);
       --pf-skeleton-secondary: #e9ebef;
+      /* Amber "needs attention but not an error" pill (expiring bank consent). */
+      --pf-status-warn-bg: rgba(234, 179, 8, 0.18);
+      --pf-status-warn-text: #713f12;
+      /* Error-tinted card border: a card that is behind or destructive. */
+      --pf-error-border: #f5b5b0;
 
       /* Typography - Type Scale */
       --md-sys-typescale-display-large: 400 57px/64px 'Roboto', sans-serif;
@@ -139,6 +144,9 @@ export class PriPerFinApp extends LitElement {
         --pf-status-evergreen-text: #ebddff;
         --pf-delta-up-bg: rgba(147, 0, 10, 0.35);
         --pf-skeleton-secondary: #232629;
+        --pf-status-warn-bg: rgba(234, 179, 8, 0.28);
+        --pf-status-warn-text: #fef3c7;
+        --pf-error-border: #7f2f2c;
     }
 
     @media (prefers-color-scheme: dark) {
@@ -185,6 +193,9 @@ export class PriPerFinApp extends LitElement {
         --pf-status-evergreen-text: #ebddff;
         --pf-delta-up-bg: rgba(147, 0, 10, 0.35);
         --pf-skeleton-secondary: #232629;
+        --pf-status-warn-bg: rgba(234, 179, 8, 0.28);
+        --pf-status-warn-text: #fef3c7;
+        --pf-error-border: #7f2f2c;
       }
     }
 
@@ -262,6 +273,11 @@ export class PriPerFinApp extends LitElement {
       text-align: center;
     }
 
+    /* Settings sits apart from the rest of the rail, at the bottom. */
+    @media (min-width: 601px) {
+      nav .nav-item:last-child { margin-top: auto; }
+    }
+
     main {
       flex: 1;
       padding: 1.5rem 2rem;
@@ -270,6 +286,23 @@ export class PriPerFinApp extends LitElement {
       box-sizing: border-box;
       background-color: var(--md-sys-color-surface);
       border-top-left-radius: 28px; /* Optional: distinctive M3 shape for content area if nav is side */
+    }
+
+    /*
+     * The redesigned desktop screens are full-height app layouts: each owns its
+     * own padding and scrolls its panels individually, so the pane must not pad
+     * them (which would push them past 100% height) or scroll around them.
+     * Views still on the older desktop layout keep the padded, scrolling pane.
+     */
+    @media (min-width: 601px) {
+      main:has(> view-expenses),
+      main:has(> view-reports),
+      main:has(> view-goals),
+      main:has(> view-categories),
+      main:has(> view-settings) {
+        padding: 0;
+        overflow: hidden;
+      }
     }
 
     /* Full width when nav is hidden (login/setup pages) */
