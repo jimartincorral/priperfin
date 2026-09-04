@@ -500,8 +500,11 @@ export const mobileUI = css`
     font: inherit;
     cursor: pointer;
   }
-  .m-row-main { flex: 1; min-width: 0; }
+  /* These are rendered as spans in places, so force block flow or the primary
+     and secondary lines run together on one line. */
+  .m-row-main { display: block; flex: 1; min-width: 0; }
   .m-row-primary {
+    display: block;
     font: var(--md-sys-typescale-body-large);
     color: var(--md-sys-color-on-surface);
     white-space: nowrap;
@@ -509,6 +512,7 @@ export const mobileUI = css`
     text-overflow: ellipsis;
   }
   .m-row-secondary {
+    display: block;
     font: 500 13px/16px 'Roboto', sans-serif;
     color: var(--md-sys-color-on-surface-variant);
     white-space: nowrap;
