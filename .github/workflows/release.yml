@@ -4,9 +4,19 @@ on:
   push:
     tags:
       - 'v*'
+  # Cut a release from the Actions tab when a tag cannot be pushed directly.
+  # The version defaults to config.yaml — the file Home Assistant reads to
+  # decide which image tag to pull — so the release, the git tag and the
+  # published image tag cannot drift apart.
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release, without the leading v (defaults to config.yaml)'
+        required: false
+        type: string
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: release-${{ inputs.version || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -19,9 +29,53 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      - name: Resolve release tag
+        id: resolve
+        env:
+          # Via env rather than direct interpolation, so the input cannot be
+          # injected into the script.
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+
+          config_version="$(
+            grep -E '^version:' config.yaml \
+              | head -1 \
+              | sed -E 's/^version:[[:space:]]*"?([^"[:space:]]+)"?.*$/\1/'
+          )"
+
+          if [ -n "${INPUT_VERSION}" ]; then
+            version="${INPUT_VERSION}"
+          elif [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            version="${GITHUB_REF_NAME}"
+          else
+            version="${config_version}"
+          fi
+          version="${version#v}"
+
+          if [ -z "${version}" ]; then
+            echo "::error::Could not determine which version to release."
+            exit 1
+          fi
+
+          # Home Assistant pulls priperfin-{arch}:<config.yaml version>, and the
+          # builder below tags the image from that same file. Releasing a tag
+          # that disagrees with it publishes an image nobody will pull.
+          if [ "${version}" != "${config_version}" ]; then
+            echo "::error::config.yaml is ${config_version} but this run would release v${version}. Bump config.yaml first so the release, the tag and the image tag agree."
+            exit 1
+          fi
+
+          echo "tag=v${version}" >> "$GITHUB_OUTPUT"
+          echo "Releasing v${version} (config.yaml: ${config_version})"
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
+          # Explicit, because on workflow_dispatch github.ref is a branch.
+          # The action creates the tag at target_commitish if it is missing.
+          tag_name: ${{ steps.resolve.outputs.tag }}
+          target_commitish: ${{ github.sha }}
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
