@@ -1851,6 +1851,10 @@ export class ViewExpenses extends LitElement {
       await api.post('/transactions', {
         ...this.newTransaction,
         date: new Date(this.newTransaction.date).toISOString(),
+        // The DTO validates these as UUIDs unless they are explicitly null,
+        // so empty strings from the form have to be normalised away
+        categoryId: this.newTransaction.categoryId || null,
+        costObjectId: this.newTransaction.costObjectId || null,
         accountId: this.selectedAccountId || null
       });
       this.showAddForm = false;

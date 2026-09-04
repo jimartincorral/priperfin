@@ -1,10 +1,28 @@
-import { LitElement, html, css } from 'lit';
+import { LitElement, html, css, nothing } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import { api, getApiBaseUrl, authApi, bankSyncApi } from '../api/client';
 import { i18n } from '../i18n/i18n';
 import { getAppBasePath } from '../utils/router-paths';
+import {
+  appBar,
+  bottomSheet,
+  icon,
+  mobileUI,
+  snackbar,
+  watchMobileViewport,
+  type SnackbarOptions,
+} from '../styles/mobile-ui';
 
 import 'emoji-picker-element';
+
+/** The sub-screens the mobile settings list drills into. */
+type SettingsSection =
+  | 'profile'
+  | 'accounts'
+  | 'bankSync'
+  | 'costObjects'
+  | 'backup'
+  | 'danger';
 
 @customElement('view-settings')
 export class ViewSettings extends LitElement {
@@ -73,7 +91,19 @@ export class ViewSettings extends LitElement {
     @state() costObjectToDelete: string | null = null;
     @state() showCostObjectEmojiPicker = false;
 
-    static styles = css`
+    // --- Mobile layer (<= 600px). The desktop scroll above the breakpoint is untouched. ---
+    @state() isMobile = false;
+    /** Sub-screen being shown, or null for the navigation list. */
+    @state() mobileSection: SettingsSection | null = null;
+    /** Which single-choice picker sheet is open, if any. */
+    @state() enumSheet: 'language' | 'currency' | 'theme' | null = null;
+    @state() theme = localStorage.getItem('priperfin_theme') || 'auto';
+    @state() snack: SnackbarOptions | null = null;
+
+    private unwatchViewport?: () => void;
+    private snackTimer?: number;
+
+    static styles = [mobileUI, css`
         :host {
             display: block;
         }
@@ -383,7 +413,73 @@ export class ViewSettings extends LitElement {
                 margin-right: -1rem;
             }
         }
-    `;
+
+        /* ---------- mobile ---------- */
+
+        .s-group + .s-group { margin-top: 20px; }
+        .s-group-label { padding: 0 0 6px; }
+
+        .s-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            min-height: 56px;
+            padding: 8px 16px;
+            margin: 0 -16px;
+            width: calc(100% + 32px);
+            box-sizing: border-box;
+            border: none;
+            border-bottom: 1px solid var(--md-sys-color-surface-container-high);
+            background: none;
+            text-align: left;
+            color: var(--md-sys-color-on-surface);
+            font: inherit;
+            cursor: pointer;
+        }
+        .s-row:last-child { border-bottom: none; }
+        .s-row .m-icon { color: var(--md-sys-color-on-surface-variant); }
+        .s-row.danger,
+        .s-row.danger .m-icon { color: var(--md-sys-color-error); }
+
+        .s-row-label {
+            flex: 1;
+            min-width: 0;
+            font: var(--md-sys-typescale-body-large);
+        }
+        .s-row-value {
+            font: 400 14px/20px 'Roboto', sans-serif;
+            color: var(--md-sys-color-on-surface-variant);
+            white-space: nowrap;
+        }
+        .s-row-caption {
+            font: 400 13px/16px 'Roboto', sans-serif;
+            color: var(--md-sys-color-on-surface-variant);
+        }
+
+        .s-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 18px;
+            background: var(--md-sys-color-primary-container);
+            color: var(--md-sys-color-on-primary-container);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font: 500 16px/1 'Roboto', sans-serif;
+            flex-shrink: 0;
+        }
+
+        /* Sub-screens reuse the desktop section markup, so undo its outer chrome */
+        .s-subscreen .section-title { display: none; }
+        .s-subscreen .settings-group {
+            background: none;
+            box-shadow: none;
+            padding: 0;
+            margin: 0;
+            border-radius: 0;
+        }
+        .s-subscreen .table-container { margin: 0; border-right: none; }
+    `];
 
     async firstUpdated() {
         const storedCurrency = localStorage.getItem('priperfin_currency');
@@ -411,11 +507,48 @@ export class ViewSettings extends LitElement {
     connectedCallback() {
         super.connectedCallback();
         i18n.addEventListener('lang-change', () => this.requestUpdate());
+        this.unwatchViewport = watchMobileViewport(this);
     }
 
     disconnectedCallback() {
         super.disconnectedCallback();
         i18n.removeEventListener('lang-change', () => this.requestUpdate());
+        this.unwatchViewport?.();
+        if (this.snackTimer) window.clearTimeout(this.snackTimer);
+    }
+
+    /** Inline snackbar above the nav; replaces alert() on the mobile path. */
+    private notify(message: string) {
+        if (!this.isMobile) {
+            alert(message);
+            return;
+        }
+        if (this.snackTimer) window.clearTimeout(this.snackTimer);
+        this.snack = { message };
+        this.snackTimer = window.setTimeout(() => { this.snack = null; }, 4000);
+    }
+
+    @state() private pendingConfirm: { message: string; confirmLabel: string } | null = null;
+    private confirmResolver: ((ok: boolean) => void) | null = null;
+
+    /**
+     * Same contract as window.confirm(), but on mobile it resolves through a
+     * bottom sheet instead of a native dialog.
+     */
+    private askConfirm(message: string, confirmLabel?: string): Promise<boolean> {
+        if (!this.isMobile) return Promise.resolve(confirm(message));
+        return new Promise<boolean>(resolve => {
+            this.confirmResolver?.(false); // only one dialog at a time
+            this.confirmResolver = resolve;
+            this.pendingConfirm = { message, confirmLabel: confirmLabel || i18n.t('common.save') };
+        });
+    }
+
+    private settleConfirm(ok: boolean) {
+        this.pendingConfirm = null;
+        const resolve = this.confirmResolver;
+        this.confirmResolver = null;
+        resolve?.(ok);
     }
 
     async loadData() {
@@ -469,105 +602,105 @@ export class ViewSettings extends LitElement {
 
     // ============= Delete Operations =============
     async deleteProfileData() {
-        if (!confirm(`⚠️ ${i18n.t('auth.settings.profileDataDeleteConfirm')}`)) return;
+        if (!(await this.askConfirm(`⚠️ ${i18n.t('auth.settings.profileDataDeleteConfirm')}`, i18n.t('common.delete')))) return;
 
         try {
             await api.delete('/admin/reset');
             localStorage.removeItem('priperfin_total_savings');
-            alert(i18n.t('auth.settings.profileDataResetSuccess'));
+            this.notify(i18n.t('auth.settings.profileDataResetSuccess'));
             const basePath = getAppBasePath(document.baseURI);
             window.location.href = new URL(basePath, window.location.origin).href;
         } catch (e: any) {
             console.error('Failed to reset profile data', e);
-            alert(i18n.t('auth.settings.profileDataResetFailed') + ': ' + (e.message || i18n.t('common.unknown_error')));
+            this.notify(i18n.t('auth.settings.profileDataResetFailed') + ': ' + (e.message || i18n.t('common.unknown_error')));
         }
     }
 
     async handleDeleteProfile() {
         if (!this.deleteProfilePin) {
-            alert(i18n.t('auth.settings.deleteProfilePinRequired'));
+            this.notify(i18n.t('auth.settings.deleteProfilePinRequired'));
             return;
         }
 
         try {
             await api.delete('/auth/profile', { pin: this.deleteProfilePin });
-            alert(i18n.t('auth.settings.profileDeletedSuccess'));
+            this.notify(i18n.t('auth.settings.profileDeletedSuccess'));
             this.showDeleteProfileModal = false;
             this.deleteProfilePin = '';
             const basePath = getAppBasePath(document.baseURI);
             window.location.href = new URL(basePath + 'login', window.location.origin).href;
         } catch (e: any) {
-            alert(i18n.t('auth.settings.deleteProfileFailed') + ': ' + (e.message || i18n.t('common.unknown_error')));
+            this.notify(i18n.t('auth.settings.deleteProfileFailed') + ': ' + (e.message || i18n.t('common.unknown_error')));
         }
     }
 
     async handleDeleteAllData() {
         if (this.deleteAllDataConfirmText !== 'DELETE ALL') {
-            alert(i18n.t('auth.settings.deleteAllConfirmError'));
+            this.notify(i18n.t('auth.settings.deleteAllConfirmError'));
             return;
         }
 
         try {
             await api.delete('/admin/reset-all');
             localStorage.clear();
-            alert(i18n.t('auth.settings.deleteAllSuccess'));
+            this.notify(i18n.t('auth.settings.deleteAllSuccess'));
             this.showDeleteAllDataModal = false;
             this.deleteAllDataConfirmText = '';
             const basePath = getAppBasePath(document.baseURI);
             window.location.href = new URL(basePath + 'setup', window.location.origin).href;
         } catch (e: any) {
-            alert(i18n.t('auth.settings.deleteAllFailed') + ': ' + (e.message || i18n.t('common.unknown_error')));
+            this.notify(i18n.t('auth.settings.deleteAllFailed') + ': ' + (e.message || i18n.t('common.unknown_error')));
         }
     }
 
     // ============= Profile Management =============
     async handleChangePin() {
         if (this.changePinForm.newPin !== this.changePinForm.confirmPin) {
-            alert(i18n.t('auth.setup.pinMismatch'));
+            this.notify(i18n.t('auth.setup.pinMismatch'));
             return;
         }
 
         if (this.changePinForm.newPin.length < 4 || this.changePinForm.newPin.length > 6) {
-            alert(i18n.t('auth.settings.pinLengthError'));
+            this.notify(i18n.t('auth.settings.pinLengthError'));
             return;
         }
 
         try {
             await authApi.changePin(this.changePinForm.oldPin, this.changePinForm.newPin);
-            alert(i18n.t('auth.settings.pinChangedSuccess'));
+            this.notify(i18n.t('auth.settings.pinChangedSuccess'));
             this.showChangePinModal = false;
             this.changePinForm = { oldPin: '', newPin: '', confirmPin: '' };
             const basePath = getAppBasePath(document.baseURI);
             window.location.href = new URL(basePath + 'login', window.location.origin).href;
         } catch (e: any) {
-            alert(i18n.t('auth.settings.changePinFailed') + ': ' + (e.message || i18n.t('common.unknown_error')));
+            this.notify(i18n.t('auth.settings.changePinFailed') + ': ' + (e.message || i18n.t('common.unknown_error')));
         }
     }
 
     async handleCreateProfile() {
         if (!this.createProfileForm.name || this.createProfileForm.name.length < 3) {
-            alert(i18n.t('auth.settings.profileNameLengthError'));
+            this.notify(i18n.t('auth.settings.profileNameLengthError'));
             return;
         }
 
         if (this.createProfileForm.pin !== this.createProfileForm.confirmPin) {
-            alert(i18n.t('auth.setup.pinMismatch'));
+            this.notify(i18n.t('auth.setup.pinMismatch'));
             return;
         }
 
         if (this.createProfileForm.pin.length < 4 || this.createProfileForm.pin.length > 6) {
-            alert(i18n.t('auth.settings.pinLengthError'));
+            this.notify(i18n.t('auth.settings.pinLengthError'));
             return;
         }
 
         try {
             await authApi.createProfile(this.createProfileForm.name, this.createProfileForm.pin);
-            alert(i18n.t('auth.settings.createProfileSuccess').replace('{name}', this.createProfileForm.name));
+            this.notify(i18n.t('auth.settings.createProfileSuccess').replace('{name}', this.createProfileForm.name));
             this.showCreateProfileModal = false;
             this.createProfileForm = { name: '', pin: '', confirmPin: '' };
             await this.loadData();
         } catch (e: any) {
-            alert(i18n.t('auth.settings.createProfileFailed') + ': ' + (e.message || i18n.t('common.unknown_error')));
+            this.notify(i18n.t('auth.settings.createProfileFailed') + ': ' + (e.message || i18n.t('common.unknown_error')));
         }
     }
 
@@ -603,11 +736,11 @@ export class ViewSettings extends LitElement {
             document.body.removeChild(a);
             window.URL.revokeObjectURL(blobUrl);
 
-            alert(i18n.t('settings.backup_created'));
+            this.notify(i18n.t('settings.backup_created'));
             this.encryptionKey = '';
         } catch (e: any) {
             console.error('[ViewSettings] Backup creation failed:', e);
-            alert(i18n.t('settings.backup_failed') + ': ' + (e.message || 'Unknown error'));
+            this.notify(i18n.t('settings.backup_failed') + ': ' + (e.message || 'Unknown error'));
         } finally {
             this.backupLoading = false;
         }
@@ -619,7 +752,7 @@ export class ViewSettings extends LitElement {
 
         const file = input.files[0];
 
-        if (!confirm(i18n.t('settings.restore_warning'))) {
+        if (!(await this.askConfirm(i18n.t('settings.restore_warning'), i18n.t('settings.restore_backup')))) {
             input.value = '';
             return;
         }
@@ -677,12 +810,12 @@ export class ViewSettings extends LitElement {
                 throw new Error(errorMessage);
             }
 
-            alert(i18n.t('settings.backup_restored'));
+            this.notify(i18n.t('settings.backup_restored'));
             this.decryptionKey = '';
             window.location.reload();
         } catch (e: any) {
             console.error('Failed to restore backup', e);
-            alert(i18n.t('settings.restore_failed') + ':\n\n' + e.message);
+            this.notify(i18n.t('settings.restore_failed') + ':\n\n' + e.message);
         } finally {
             this.restoreLoading = false;
             input.value = '';
@@ -692,7 +825,7 @@ export class ViewSettings extends LitElement {
     // ============= Bank Sync Management (Enable Banking) =============
     async saveBankCredentials() {
         if (!this.bankAppId && !this.bankKey && !this.bankRedirectUrl) {
-            alert('Please fill in at least one field');
+            this.notify('Please fill in at least one field');
             return;
         }
 
@@ -706,10 +839,10 @@ export class ViewSettings extends LitElement {
             this.bankSyncSettings = result;
             this.showBankCredentialsForm = false;
             this.bankKey = '';
-            alert(i18n.t('bank_sync.credentials_saved'));
+            this.notify(i18n.t('bank_sync.credentials_saved'));
         } catch (e: any) {
             console.error('Failed to save bank credentials', e);
-            alert(i18n.t('bank_sync.save_failed') + ': ' + (e.message || 'Unknown error'));
+            this.notify(i18n.t('bank_sync.save_failed') + ': ' + (e.message || 'Unknown error'));
         } finally {
             this.loading = false;
         }
@@ -724,7 +857,7 @@ export class ViewSettings extends LitElement {
         } catch (e: any) {
             console.error('Failed to update auto-sync setting', e);
             checkbox.checked = !autoSyncEnabled;
-            alert(i18n.t('bank_sync.save_failed') + ': ' + (e.message || 'Unknown error'));
+            this.notify(i18n.t('bank_sync.save_failed') + ': ' + (e.message || 'Unknown error'));
         }
     }
 
@@ -735,7 +868,7 @@ export class ViewSettings extends LitElement {
             this.bankSyncSettings = { ...this.bankSyncSettings, ...result };
         } catch (e: any) {
             console.error('Failed to update initial lookback setting', e);
-            alert(i18n.t('bank_sync.save_failed') + ': ' + (e.message || 'Unknown error'));
+            this.notify(i18n.t('bank_sync.save_failed') + ': ' + (e.message || 'Unknown error'));
         }
     }
 
@@ -754,7 +887,7 @@ export class ViewSettings extends LitElement {
 
     async openConnectBankModal() {
         if (!this.bankSyncSettings.hasAppId || !this.bankSyncSettings.hasKey) {
-            alert('Please configure your Enable Banking Application ID and Private Key first.');
+            this.notify('Please configure your Enable Banking Application ID and Private Key first.');
             this.showBankCredentialsForm = true;
             return;
         }
@@ -776,7 +909,7 @@ export class ViewSettings extends LitElement {
             }
         } catch (e: any) {
             console.error('Failed to load banks', e);
-            alert(i18n.t('bank_sync.loading_banks') + ' ' + (e.message || 'Unknown error'));
+            this.notify(i18n.t('bank_sync.loading_banks') + ' ' + (e.message || 'Unknown error'));
         } finally {
             this.loadingBanks = false;
         }
@@ -784,7 +917,7 @@ export class ViewSettings extends LitElement {
 
     async connectBank() {
         if (!this.selectedBankName) {
-            alert('Please select a bank');
+            this.notify('Please select a bank');
             return;
         }
 
@@ -819,7 +952,7 @@ export class ViewSettings extends LitElement {
             }
         } catch (e: any) {
             console.error('Failed to start bank authorization', e);
-            alert(i18n.t('bank_sync.sync_failed') + ': ' + (e.message || 'Unknown error'));
+            this.notify(i18n.t('bank_sync.sync_failed') + ': ' + (e.message || 'Unknown error'));
         } finally {
             this.bankConnecting = false;
         }
@@ -829,11 +962,11 @@ export class ViewSettings extends LitElement {
         this.bankSyncLoading = true;
         try {
             const result = await bankSyncApi.handleCallback(code);
-            alert(`Bank ${result.aspspName} connected successfully! Detected ${result.accounts?.length || 0} account(s).`);
+            this.notify(`Bank ${result.aspspName} connected successfully! Detected ${result.accounts?.length || 0} account(s).`);
             await this.loadData();
         } catch (e: any) {
             console.error('Failed to complete bank connection callback', e);
-            alert('Bank connection callback failed: ' + (e.message || 'Unknown error'));
+            this.notify('Bank connection callback failed: ' + (e.message || 'Unknown error'));
         } finally {
             this.bankSyncLoading = false;
         }
@@ -853,7 +986,7 @@ export class ViewSettings extends LitElement {
     }
 
     async disconnectBank(connectionId: string, bankName: string) {
-        if (!confirm(i18n.t('bank_sync.disconnect_confirm').replace('{bank}', bankName))) {
+        if (!(await this.askConfirm(i18n.t('bank_sync.disconnect_confirm').replace('{bank}', bankName), i18n.t('bank_sync.disconnect')))) {
             return;
         }
 
@@ -862,29 +995,29 @@ export class ViewSettings extends LitElement {
             await this.loadData();
         } catch (e: any) {
             console.error('Failed to disconnect bank', e);
-            alert('Failed to disconnect bank: ' + (e.message || 'Unknown error'));
+            this.notify('Failed to disconnect bank: ' + (e.message || 'Unknown error'));
         }
     }
 
     async handleLinkAccount(accountId: string, bankAccountUid: string, connectionId: string) {
         try {
             await bankSyncApi.linkAccount(accountId, bankAccountUid, connectionId);
-            alert(i18n.t('bank_sync.account_linked'));
+            this.notify(i18n.t('bank_sync.account_linked'));
             await this.loadData();
         } catch (e: any) {
             console.error('Failed to link account', e);
-            alert('Failed to link account: ' + (e.message || 'Unknown error'));
+            this.notify('Failed to link account: ' + (e.message || 'Unknown error'));
         }
     }
 
     async handleUnlinkAccount(accountId: string) {
         try {
             await bankSyncApi.unlinkAccount(accountId);
-            alert(i18n.t('bank_sync.account_unlinked'));
+            this.notify(i18n.t('bank_sync.account_unlinked'));
             await this.loadData();
         } catch (e: any) {
             console.error('Failed to unlink account', e);
-            alert('Failed to unlink account: ' + (e.message || 'Unknown error'));
+            this.notify('Failed to unlink account: ' + (e.message || 'Unknown error'));
         }
     }
 
@@ -896,19 +1029,19 @@ export class ViewSettings extends LitElement {
             const errorAcc = result?.accountsSynced?.find((a: any) => a.status === 'ERROR');
 
             if (expiredAcc) {
-                alert(`⚠️ ${expiredAcc.accountName}: ${expiredAcc.message || 'La sesión del banco ha expirado. Por favor, haz clic en "Re-autenticar" en Configuración.'}`);
+                this.notify(`⚠️ ${expiredAcc.accountName}: ${expiredAcc.message || 'La sesión del banco ha expirado. Por favor, haz clic en "Re-autenticar" en Configuración.'}`);
             } else if (errorAcc && (result?.newCount ?? 0) === 0 && (result?.duplicateCount ?? 0) === 0) {
-                alert(`⚠️ ${errorAcc.accountName}: ${errorAcc.message || 'Error al sincronizar con el banco.'}`);
+                this.notify(`⚠️ ${errorAcc.accountName}: ${errorAcc.message || 'Error al sincronizar con el banco.'}`);
             } else {
                 const msg = i18n.t('bank_sync.sync_success')
                     .replace('{newCount}', String(result?.newCount || '0'))
                     .replace('{duplicateCount}', String(result?.duplicateCount || '0'));
-                alert(msg);
+                this.notify(msg);
             }
             await this.loadData();
         } catch (e: any) {
             console.error('Bank sync failed', e);
-            alert(i18n.t('bank_sync.sync_failed') + ': ' + (e.message || 'Unknown error'));
+            this.notify(i18n.t('bank_sync.sync_failed') + ': ' + (e.message || 'Unknown error'));
         } finally {
             this.bankSyncLoading = false;
         }
@@ -969,7 +1102,7 @@ export class ViewSettings extends LitElement {
             await this.loadData();
         } catch (e: any) {
             console.error('Failed to save category', e);
-            alert('Failed to save category: ' + (e.message || 'Unknown error'));
+            this.notify('Failed to save category: ' + (e.message || 'Unknown error'));
         }
     }
 
@@ -987,7 +1120,7 @@ export class ViewSettings extends LitElement {
             this.categoryToDelete = null;
         } catch (e: any) {
             console.error('Failed to delete category', e);
-            alert('Failed to delete category: ' + (e.message || 'Unknown error'));
+            this.notify('Failed to delete category: ' + (e.message || 'Unknown error'));
         }
     }
 
@@ -1010,7 +1143,7 @@ export class ViewSettings extends LitElement {
 
     async saveAccount() {
         if (!this.accountForm.name) {
-            alert('Please enter an account name');
+            this.notify('Please enter an account name');
             return;
         }
 
@@ -1031,7 +1164,7 @@ export class ViewSettings extends LitElement {
             await this.loadData();
         } catch (e: any) {
             console.error('Failed to save account', e);
-            alert('Failed to save account: ' + (e.message || 'Unknown error'));
+            this.notify('Failed to save account: ' + (e.message || 'Unknown error'));
         }
     }
 
@@ -1044,7 +1177,7 @@ export class ViewSettings extends LitElement {
             this.accountToDelete = null;
         } catch (e: any) {
             console.error('Failed to delete account', e);
-            alert('Failed to delete account: ' + (e.message || 'Unknown error'));
+            this.notify('Failed to delete account: ' + (e.message || 'Unknown error'));
         }
     }
 
@@ -1068,7 +1201,7 @@ export class ViewSettings extends LitElement {
 
     async saveCostObject() {
         if (!this.costObjectForm.name || !this.costObjectForm.icon) {
-            alert('Please enter a name and select an icon');
+            this.notify('Please enter a name and select an icon');
             return;
         }
 
@@ -1089,7 +1222,7 @@ export class ViewSettings extends LitElement {
             await this.loadData();
         } catch (e: any) {
             console.error('Failed to save cost object', e);
-            alert('Failed to save cost object: ' + (e.message || 'Unknown error'));
+            this.notify('Failed to save cost object: ' + (e.message || 'Unknown error'));
         }
     }
 
@@ -1102,7 +1235,7 @@ export class ViewSettings extends LitElement {
             this.costObjectToDelete = null;
         } catch (e: any) {
             console.error('Failed to delete cost object', e);
-            alert('Failed to delete cost object: ' + (e.message || 'Unknown error'));
+            this.notify('Failed to delete cost object: ' + (e.message || 'Unknown error'));
         }
     }
 
@@ -1177,6 +1310,298 @@ export class ViewSettings extends LitElement {
     }
 
     render() {
+        if (this.isMobile) return this.renderMobile();
+
+        return html`
+            <div class="header">
+                <h1>${i18n.t('settings.title')}</h1>
+            </div>
+
+            ${this.renderGeneralSection()}
+            ${this.renderProfileSection()}
+            ${this.renderAccountsSection()}
+            ${this.renderBankSyncSection()}
+            ${this.renderCostObjectsSection()}
+            ${this.renderCategoriesSection()}
+            ${this.renderBackupSection()}
+            ${this.renderDangerSection()}
+
+            ${this.renderModals()}
+        `;
+    }
+
+    // ------------------------------------------------------------------
+    // Mobile layout: a navigation list that drills into the sections
+    // ------------------------------------------------------------------
+
+    private currencyLabel(): string {
+        const labels: Record<string, string> = {
+            USD: 'USD ($)', EUR: 'EUR (€)', GBP: 'GBP (£)',
+            JPY: 'JPY (¥)', CAD: 'CAD ($)', AUD: 'AUD ($)',
+        };
+        return labels[this.currency] || this.currency;
+    }
+
+    private themeLabel(): string {
+        if (this.theme === 'light') return i18n.t('settings.theme_light');
+        if (this.theme === 'dark') return i18n.t('settings.theme_dark');
+        return i18n.t('settings.theme_auto');
+    }
+
+    private lastSyncLabel(): string {
+        const dates = this.accounts
+            .map(a => a.lastSyncedAt)
+            .filter(Boolean)
+            .map(d => new Date(d).getTime());
+        if (dates.length === 0) return i18n.t('bank_sync.never_synced');
+        const latest = new Date(Math.max(...dates));
+        return i18n.t('bank_sync.last_synced').replace(
+            '{date}',
+            latest.toLocaleString(i18n.getLocale(), {
+                day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
+            }),
+        );
+    }
+
+    private bankStatus(): { label: string; ok: boolean } | null {
+        if (this.bankConnections.length === 0) return null;
+        const expired = this.bankConnections.some((c: any) => c.status === 'EXPIRED');
+        return expired
+            ? { label: i18n.t('bank_sync.status_expired'), ok: false }
+            : { label: i18n.t('bank_sync.status_active'), ok: true };
+    }
+
+    private settingsRow(opts: {
+        glyph: string;
+        label: string;
+        value?: unknown;
+        caption?: string;
+        pill?: { label: string; ok: boolean };
+        danger?: boolean;
+        avatar?: string;
+        onSelect: () => void;
+    }) {
+        return html`
+            <button class="s-row ${opts.danger ? 'danger' : ''}" @click="${opts.onSelect}">
+                ${opts.avatar
+                    ? html`<span class="s-avatar">${opts.avatar}</span>`
+                    : icon(opts.glyph, 22)}
+                <span class="s-row-label">
+                    ${opts.label}
+                    ${opts.caption ? html`<div class="s-row-caption">${opts.caption}</div>` : nothing}
+                </span>
+                ${opts.pill
+                    ? html`<span class="m-pill ${opts.pill.ok ? 'ok' : 'behind'}">${opts.pill.label}</span>`
+                    : nothing}
+                ${opts.value !== undefined ? html`<span class="s-row-value">${opts.value}</span>` : nothing}
+                ${icon('chevron_right', 22)}
+            </button>
+        `;
+    }
+
+    /** Single-choice pickers for the three enum settings. */
+    private renderEnumSheet() {
+        const configs = {
+            language: {
+                title: i18n.t('settings.language'),
+                options: [
+                    { value: 'en', label: 'English' },
+                    { value: 'es', label: 'Español' },
+                ],
+                current: i18n.getLocale(),
+                apply: (value: string) => this.handleLanguageChange({ target: { value } } as any),
+            },
+            currency: {
+                title: i18n.t('common.currency'),
+                options: [
+                    { value: 'USD', label: 'USD ($)' },
+                    { value: 'EUR', label: 'EUR (€)' },
+                    { value: 'GBP', label: 'GBP (£)' },
+                    { value: 'JPY', label: 'JPY (¥)' },
+                    { value: 'CAD', label: 'CAD ($)' },
+                    { value: 'AUD', label: 'AUD ($)' },
+                ],
+                current: this.currency,
+                apply: (value: string) => this.handleCurrencyChange({ target: { value } } as any),
+            },
+            theme: {
+                title: i18n.t('settings.theme'),
+                options: [
+                    { value: 'auto', label: i18n.t('settings.theme_auto') },
+                    { value: 'light', label: i18n.t('settings.theme_light') },
+                    { value: 'dark', label: i18n.t('settings.theme_dark') },
+                ],
+                current: this.theme,
+                apply: (value: string) => { this.theme = value; this.handleThemeChange(value); },
+            },
+        };
+
+        const config = this.enumSheet ? configs[this.enumSheet] : null;
+
+        return bottomSheet({
+            open: config !== null,
+            onDismiss: () => { this.enumSheet = null; },
+            content: config
+                ? html`
+                    <div class="m-sheet-title">${config.title}</div>
+                    <div>
+                        ${config.options.map(option => html`
+                            <button
+                                class="m-row"
+                                @click="${() => {
+                                    this.enumSheet = null;
+                                    if (option.value !== config.current) config.apply(option.value);
+                                }}">
+                                <span class="m-row-main">
+                                    <span class="m-row-primary">${option.label}</span>
+                                </span>
+                                ${option.value === config.current ? icon('check', 20) : nothing}
+                            </button>
+                        `)}
+                    </div>
+                `
+                : nothing,
+        });
+    }
+
+    private renderConfirmSheet() {
+        return bottomSheet({
+            open: this.pendingConfirm !== null,
+            onDismiss: () => this.settleConfirm(false),
+            content: html`
+                <div class="m-subtitle" style="white-space: pre-line">
+                    ${this.pendingConfirm?.message ?? ''}
+                </div>
+                <div style="display: flex; gap: 12px;">
+                    <button class="m-btn outlined" style="flex: 1" @click="${() => this.settleConfirm(false)}">
+                        ${i18n.t('common.cancel')}
+                    </button>
+                    <button class="m-btn" style="flex: 1" @click="${() => this.settleConfirm(true)}">
+                        ${this.pendingConfirm?.confirmLabel ?? i18n.t('common.save')}
+                    </button>
+                </div>
+            `,
+        });
+    }
+
+    /** One sub-screen: the desktop section markup under a back app bar. */
+    private renderMobileSubScreen(section: SettingsSection) {
+        const screens: Record<SettingsSection, { title: string; body: unknown }> = {
+            profile: { title: i18n.t('auth.settings.title'), body: this.renderProfileSection() },
+            accounts: { title: i18n.t('accounts.title'), body: this.renderAccountsSection() },
+            bankSync: { title: i18n.t('bank_sync.title'), body: this.renderBankSyncSection() },
+            costObjects: { title: i18n.t('cost_objects.title'), body: this.renderCostObjectsSection() },
+            backup: { title: i18n.t('settings.backup_restore'), body: this.renderBackupSection() },
+            danger: { title: i18n.t('mobile.danger_zone'), body: this.renderDangerSection() },
+        };
+        const screen = screens[section];
+
+        return html`
+            <div class="m-screen s-subscreen">
+                ${appBar({
+                    title: screen.title,
+                    onBack: () => { this.mobileSection = null; },
+                })}
+                ${screen.body}
+                ${this.renderModals()}
+                ${this.renderConfirmSheet()}
+                ${snackbar(this.snack)}
+            </div>
+        `;
+    }
+
+    private renderMobile() {
+        if (this.mobileSection) return this.renderMobileSubScreen(this.mobileSection);
+
+        const profileInitial = (this.currentProfile?.name || '?').charAt(0).toUpperCase();
+        const pinLength = this.currentProfile?.pinLength;
+
+        return html`
+            <div class="m-screen">
+                <div class="m-title-row">
+                    <h1 class="m-title">${i18n.t('settings.title')}</h1>
+                </div>
+
+                <div class="s-group">
+                    <div class="m-section-label s-group-label">${i18n.t('mobile.group_general')}</div>
+                    ${this.settingsRow({
+                        glyph: 'language',
+                        label: i18n.t('settings.language'),
+                        value: i18n.getLocale() === 'es' ? 'Español' : 'English',
+                        onSelect: () => { this.enumSheet = 'language'; },
+                    })}
+                    ${this.settingsRow({
+                        glyph: 'payments',
+                        label: i18n.t('common.currency'),
+                        value: this.currencyLabel(),
+                        onSelect: () => { this.enumSheet = 'currency'; },
+                    })}
+                    ${this.settingsRow({
+                        glyph: 'dark_mode',
+                        label: i18n.t('settings.theme'),
+                        value: this.themeLabel(),
+                        onSelect: () => { this.enumSheet = 'theme'; },
+                    })}
+                </div>
+
+                <div class="s-group">
+                    <div class="m-section-label s-group-label">${i18n.t('mobile.group_data')}</div>
+                    ${this.settingsRow({
+                        glyph: 'account_balance',
+                        label: i18n.t('accounts.title'),
+                        value: this.accounts.length,
+                        onSelect: () => { this.mobileSection = 'accounts'; },
+                    })}
+                    ${this.settingsRow({
+                        glyph: 'sync',
+                        label: i18n.t('bank_sync.sync_all'),
+                        caption: this.lastSyncLabel(),
+                        pill: this.bankStatus() ?? undefined,
+                        onSelect: () => { this.mobileSection = 'bankSync'; },
+                    })}
+                    ${this.settingsRow({
+                        glyph: 'work',
+                        label: i18n.t('cost_objects.title'),
+                        value: this.costObjects.length,
+                        onSelect: () => { this.mobileSection = 'costObjects'; },
+                    })}
+                    ${this.settingsRow({
+                        glyph: 'backup',
+                        label: i18n.t('settings.backup_restore'),
+                        onSelect: () => { this.mobileSection = 'backup'; },
+                    })}
+                </div>
+
+                <div class="s-group">
+                    <div class="m-section-label s-group-label">${i18n.t('mobile.group_profile')}</div>
+                    ${this.settingsRow({
+                        glyph: 'person',
+                        avatar: profileInitial,
+                        label: this.currentProfile?.name || i18n.t('auth.settings.currentProfile'),
+                        caption: pinLength ? i18n.t('mobile.pin_digits', { count: pinLength }) : undefined,
+                        onSelect: () => { this.mobileSection = 'profile'; },
+                    })}
+                    <button class="s-row" @click="${this.handleLogout}">
+                        ${icon('logout', 22)}
+                        <span class="s-row-label">${i18n.t('mobile.log_out')}</span>
+                    </button>
+                    ${this.settingsRow({
+                        glyph: 'warning',
+                        label: i18n.t('mobile.danger_zone'),
+                        danger: true,
+                        onSelect: () => { this.mobileSection = 'danger'; },
+                    })}
+                </div>
+
+                ${this.renderEnumSheet()}
+                ${this.renderConfirmSheet()}
+                ${snackbar(this.snack)}
+            </div>
+        `;
+    }
+
+    /** Dialogs shared by both layouts. */
+    renderModals() {
         const countryOptions = [
             { code: 'ES', name: '🇪🇸 Spain' },
             { code: 'PT', name: '🇵🇹 Portugal' },
@@ -1191,10 +1616,390 @@ export class ViewSettings extends LitElement {
         ];
 
         return html`
-            <div class="header">
-                <h1>${i18n.t('settings.title')}</h1>
-            </div>
+            <!-- Modals -->
+            ${this.showChangePinModal
+                ? html`
+                      <div class="modal-overlay" @click="${() => (this.showChangePinModal = false)}">
+                          <div class="modal" @click="${(e: Event) => e.stopPropagation()}">
+                              <h3>${i18n.t('auth.settings.changePin')}</h3>
+                              <div class="form-group">
+                                  <label>${i18n.t('auth.settings.currentPin')}</label>
+                                  <input
+                                      type="password"
+                                      inputmode="numeric"
+                                      maxlength="6"
+                                      .value="${this.changePinForm.oldPin}"
+                                      @input="${(e: any) =>
+                                          (this.changePinForm = { ...this.changePinForm, oldPin: e.target.value })}"
+                                      placeholder="${i18n.t('auth.settings.currentPinPlaceholder')}"
+                                  />
+                              </div>
+                              <div class="form-group">
+                                  <label>${i18n.t('auth.settings.newPinLabel')}</label>
+                                  <input
+                                      type="password"
+                                      inputmode="numeric"
+                                      maxlength="6"
+                                      .value="${this.changePinForm.newPin}"
+                                      @input="${(e: any) =>
+                                          (this.changePinForm = { ...this.changePinForm, newPin: e.target.value })}"
+                                      placeholder="${i18n.t('auth.settings.newPinPlaceholder')}"
+                                  />
+                              </div>
+                              <div class="form-group">
+                                  <label>${i18n.t('auth.settings.confirmNewPin')}</label>
+                                  <input
+                                      type="password"
+                                      inputmode="numeric"
+                                      maxlength="6"
+                                      .value="${this.changePinForm.confirmPin}"
+                                      @input="${(e: any) =>
+                                          (this.changePinForm = {
+                                              ...this.changePinForm,
+                                              confirmPin: e.target.value,
+                                          })}"
+                                      placeholder="${i18n.t('auth.settings.confirmNewPinPlaceholder')}"
+                                  />
+                              </div>
+                              <div class="modal-actions">
+                                  <button
+                                      class="btn-secondary"
+                                      @click="${() => {
+                                          this.showChangePinModal = false;
+                                          this.changePinForm = { oldPin: '', newPin: '', confirmPin: '' };
+                                      }}"
+                                  >
+                                      ${i18n.t('common.cancel')}
+                                  </button>
+                                  <button class="btn-primary" @click="${this.handleChangePin}">
+                                      ${i18n.t('common.save')}
+                                  </button>
+                              </div>
+                          </div>
+                      </div>
+                  `
+                : ''}
+            ${this.showCreateProfileModal
+                ? html`
+                      <div class="modal-overlay" @click="${() => (this.showCreateProfileModal = false)}">
+                          <div class="modal" @click="${(e: Event) => e.stopPropagation()}">
+                              <h3>${i18n.t('auth.settings.createProfile')}</h3>
+                              <div class="form-group">
+                                  <label>${i18n.t('auth.settings.profileName')}</label>
+                                  <input
+                                      type="text"
+                                      .value="${this.createProfileForm.name}"
+                                      @input="${(e: any) =>
+                                          (this.createProfileForm = { ...this.createProfileForm, name: e.target.value })}"
+                                      placeholder="${i18n.t('auth.settings.profileNamePlaceholder')}"
+                                  />
+                              </div>
+                              <div class="form-group">
+                                  <label>${i18n.t('auth.settings.pinLabel')}</label>
+                                  <input
+                                      type="password"
+                                      inputmode="numeric"
+                                      maxlength="6"
+                                      .value="${this.createProfileForm.pin}"
+                                      @input="${(e: any) =>
+                                          (this.createProfileForm = { ...this.createProfileForm, pin: e.target.value })}"
+                                      placeholder="${i18n.t('auth.settings.pinPlaceholder')}"
+                                  />
+                              </div>
+                              <div class="form-group">
+                                  <label>${i18n.t('auth.settings.confirmPin')}</label>
+                                  <input
+                                      type="password"
+                                      inputmode="numeric"
+                                      maxlength="6"
+                                      .value="${this.createProfileForm.confirmPin}"
+                                      @input="${(e: any) =>
+                                          (this.createProfileForm = {
+                                              ...this.createProfileForm,
+                                              confirmPin: e.target.value,
+                                          })}"
+                                      placeholder="${i18n.t('auth.settings.confirmPinPlaceholder')}"
+                                  />
+                              </div>
+                              <div class="modal-actions">
+                                  <button
+                                      class="btn-secondary"
+                                      @click="${() => {
+                                          this.showCreateProfileModal = false;
+                                          this.createProfileForm = { name: '', pin: '', confirmPin: '' };
+                                      }}"
+                                  >
+                                      ${i18n.t('common.cancel')}
+                                  </button>
+                                  <button class="btn-primary" @click="${this.handleCreateProfile}">
+                                      ${i18n.t('common.save')}
+                                  </button>
+                              </div>
+                          </div>
+                      </div>
+                  `
+                : ''}
+            ${this.showDeleteProfileModal
+                ? html`
+                      <div class="modal-overlay" @click="${() => (this.showDeleteProfileModal = false)}">
+                          <div class="modal" @click="${(e: Event) => e.stopPropagation()}">
+                              <h3 style="color: var(--md-sys-color-error);">
+                                  ⚠️ ${i18n.t('settings.delete_profile_confirm')}
+                              </h3>
+                              <p style="margin-bottom: 16px; color: var(--md-sys-color-on-surface);">
+                                  ${i18n.t('settings.delete_profile_modal_warning')} "<strong
+                                      >${this.currentProfile?.name}</strong
+                                  >" ${i18n.t('settings.delete_profile_modal_suffix')}
+                              </p>
+                              <div class="form-group">
+                                  <label>${i18n.t('settings.enter_pin_to_confirm')}</label>
+                                  <input
+                                      type="password"
+                                      inputmode="numeric"
+                                      maxlength="6"
+                                      .value="${this.deleteProfilePin}"
+                                      @input="${(e: any) => (this.deleteProfilePin = e.target.value)}"
+                                      placeholder="${i18n.t('settings.enter_pin')}"
+                                  />
+                              </div>
+                              <div class="modal-actions">
+                                  <button
+                                      class="btn-secondary"
+                                      @click="${() => {
+                                          this.showDeleteProfileModal = false;
+                                          this.deleteProfilePin = '';
+                                      }}"
+                                  >
+                                      ${i18n.t('common.cancel')}
+                                  </button>
+                                  <button class="btn-danger" @click="${this.handleDeleteProfile}">
+                                      ${i18n.t('settings.delete_profile_confirm')}
+                                  </button>
+                              </div>
+                          </div>
+                      </div>
+                  `
+                : ''}
+            ${this.showDeleteAllDataModal
+                ? html`
+                      <div class="modal-overlay" @click="${() => (this.showDeleteAllDataModal = false)}">
+                          <div class="modal" @click="${(e: Event) => e.stopPropagation()}">
+                              <h3 style="color: var(--md-sys-color-error);">
+                                  🚨 ${i18n.t('settings.delete_all_modal_title')}
+                              </h3>
+                              <p style="margin-bottom: 16px; color: var(--md-sys-color-error); font-weight: bold;">
+                                  ⚠️ ${i18n.t('settings.extreme_danger_zone')} ⚠️
+                              </p>
+                              <p style="margin-bottom: 16px; color: var(--md-sys-color-on-surface);">
+                                  ${i18n.t('settings.delete_all_modal_intro')}<br />
+                                  • ${i18n.t('settings.delete_all_modal_item_profiles')}<br />
+                                  • ${i18n.t('settings.delete_all_modal_item_data')}<br />
+                                  • ${i18n.t('settings.delete_all_modal_item_settings')}<br />
+                                  <br />
+                                  ${i18n.t('settings.delete_all_modal_outro')}
+                              </p>
+                              <div class="form-group">
+                                  <label>${i18n.t('settings.type_delete_all_confirm')}</label>
+                                  <input
+                                      type="text"
+                                      .value="${this.deleteAllDataConfirmText}"
+                                      @input="${(e: any) => (this.deleteAllDataConfirmText = e.target.value)}"
+                                      placeholder="${i18n.t('settings.type_delete_all_placeholder')}"
+                                  />
+                              </div>
+                              <div class="modal-actions">
+                                  <button
+                                      class="btn-secondary"
+                                      @click="${() => {
+                                          this.showDeleteAllDataModal = false;
+                                          this.deleteAllDataConfirmText = '';
+                                      }}"
+                                  >
+                                      ${i18n.t('common.cancel')}
+                                  </button>
+                                  <button class="btn-danger" @click="${this.handleDeleteAllData}">
+                                      ${i18n.t('settings.delete_everything')}
+                                  </button>
+                              </div>
+                          </div>
+                      </div>
+                  `
+                : ''}
+            ${this.accountToDelete
+                ? html`
+                      <div class="modal-overlay" @click="${() => (this.accountToDelete = null)}">
+                          <div class="modal" @click="${(e: Event) => e.stopPropagation()}">
+                              <h3>${i18n.t('accounts.delete_account')}</h3>
+                              <p>${i18n.t('accounts.delete_account_warning')}</p>
+                              <div class="modal-actions">
+                                  <button class="btn-secondary" @click="${() => (this.accountToDelete = null)}">
+                                      ${i18n.t('common.cancel')}
+                                  </button>
+                                  <button class="btn-danger" @click="${this.confirmDeleteAccount}">
+                                      ${i18n.t('common.delete')}
+                                  </button>
+                              </div>
+                          </div>
+                      </div>
+                  `
+                : ''}
+            ${this.costObjectToDelete
+                ? html`
+                      <div class="modal-overlay" @click="${() => (this.costObjectToDelete = null)}">
+                          <div class="modal" @click="${(e: Event) => e.stopPropagation()}">
+                              <h3>Delete Cost Object?</h3>
+                              <p>This will remove the cost object. Transactions using it will become unassigned.</p>
+                              <div class="modal-actions">
+                                  <button class="btn-secondary" @click="${() => (this.costObjectToDelete = null)}">
+                                      ${i18n.t('common.cancel')}
+                                  </button>
+                                  <button class="btn-danger" @click="${this.confirmDeleteCostObject}">
+                                      ${i18n.t('common.delete')}
+                                  </button>
+                              </div>
+                          </div>
+                      </div>
+                  `
+                : ''}
+            ${this.categoryToDelete
+                ? html`
+                      <div class="modal-overlay" @click="${() => (this.categoryToDelete = null)}">
+                          <div class="modal" @click="${(e: Event) => e.stopPropagation()}">
+                              <h3>${i18n.t('settings.delete_category')}</h3>
+                              <p>${i18n.t('settings.delete_category_warning')}</p>
+                              <div class="modal-actions">
+                                  <button class="btn-secondary" @click="${() => (this.categoryToDelete = null)}">
+                                      ${i18n.t('common.cancel')}
+                                  </button>
+                                  <button class="btn-danger" @click="${this.confirmDelete}">
+                                      ${i18n.t('common.delete')}
+                                  </button>
+                              </div>
+                          </div>
+                      </div>
+                  `
+                : ''}
 
+            <!-- Connect Bank Modal -->
+            ${this.showConnectBankModal
+                ? html`
+                      <div class="modal-overlay" @click="${() => (this.showConnectBankModal = false)}">
+                          <div class="modal" @click="${(e: Event) => e.stopPropagation()}">
+                              <h3>🏛️ ${i18n.t('bank_sync.connect_bank_btn')}</h3>
+                              <p>${i18n.t('bank_sync.description')}</p>
+
+                              <div class="form-group">
+                                  <label>${i18n.t('bank_sync.select_country')}</label>
+                                  <select
+                                      .value="${this.bankCountry}"
+                                      @change="${(e: any) => this.loadBanksForCountry(e.target.value)}"
+                                  >
+                                      ${countryOptions.map(
+                                          (c) => html`<option value="${c.code}">${c.name}</option>`,
+                                      )}
+                                  </select>
+                              </div>
+
+                              <div class="form-group">
+                                  <label>${i18n.t('bank_sync.select_bank')}</label>
+                                  ${this.loadingBanks
+                                      ? html`<p style="font-size: 0.85rem; color: var(--md-sys-color-primary);">
+                                            ⏳ ${i18n.t('bank_sync.loading_banks')}
+                                        </p>`
+                                      : html`
+                                            <input
+                                                type="text"
+                                                style="margin-bottom: 8px;"
+                                                placeholder="${i18n.t('bank_sync.search_bank_placeholder')}"
+                                                .value="${this.bankSearchQuery}"
+                                                @input="${(e: any) => (this.bankSearchQuery = e.target.value)}"
+                                            />
+                                            <select
+                                                .value="${this.selectedBankName}"
+                                                @change="${(e: any) => (this.selectedBankName = e.target.value)}"
+                                            >
+                                                ${this.availableBanks
+                                                    .filter(
+                                                        (b: any) =>
+                                                            !this.bankSearchQuery ||
+                                                            b.name
+                                                                .toLowerCase()
+                                                                .includes(this.bankSearchQuery.toLowerCase()),
+                                                    )
+                                                    .map(
+                                                        (b: any) => html`<option value="${b.name}">
+                                                            ${b.name} ${b.country ? `(${b.country})` : ''}
+                                                        </option>`,
+                                                    )}
+                                            </select>
+                                        `}
+                              </div>
+
+                              ${this.bankConnecting
+                                  ? html`<p style="font-size: 0.85rem; color: var(--md-sys-color-primary); text-align: center; margin: 12px 0;">
+                                        🔄 ${i18n.t('bank_sync.connecting_redirect')}
+                                    </p>`
+                                  : ''}
+
+                              ${this.bankAuthUrl
+                                  ? html`
+                                        <div
+                                            style="margin: 16px 0; padding: 16px; background: var(--md-sys-color-surface-container-high); border: 1px solid var(--md-sys-color-primary); border-radius: 8px; text-align: center;"
+                                        >
+                                            <p
+                                                style="margin: 0 0 12px 0; font-size: 0.85rem; color: var(--md-sys-color-on-surface-variant);"
+                                            >
+                                                ℹ️ ${i18n.t('bank_sync.open_new_window_hint')}
+                                            </p>
+                                            <div style="display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;">
+                                                <a
+                                                    href="${this.bankAuthUrl}"
+                                                    target="_top"
+                                                    class="btn-primary"
+                                                    style="display: inline-block; text-decoration: none; padding: 8px 16px; font-weight: 500;"
+                                                >
+                                                    ↗️ ${i18n.t('bank_sync.open_in_new_window')}
+                                                </a>
+                                                <a
+                                                    href="${this.bankAuthUrl}"
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    class="btn-secondary"
+                                                    style="display: inline-block; text-decoration: none; padding: 8px 16px; font-weight: 500;"
+                                                >
+                                                    ↗️ Abrir en Nueva Pestaña
+                                                </a>
+                                            </div>
+                                        </div>
+                                    `
+                                  : ''}
+
+                              <div class="modal-actions">
+                                  <button
+                                      class="btn-secondary"
+                                      @click="${() => (this.showConnectBankModal = false)}"
+                                  >
+                                      ${i18n.t('common.cancel')}
+                                  </button>
+                                  <button
+                                      class="btn-primary"
+                                      @click="${this.connectBank}"
+                                      ?disabled="${this.bankConnecting || this.loadingBanks || !this.selectedBankName}"
+                                  >
+                                      ${this.bankConnecting
+                                          ? '⏳ Conectando...'
+                                          : i18n.t('bank_sync.start_auth_btn')}
+                                  </button>
+                              </div>
+                          </div>
+                      </div>
+                  `
+                : ''}
+        `;
+    }
+
+    renderGeneralSection() {
+        return html`
             <!-- General Settings -->
             <div class="section-title">${i18n.t('settings.general')}</div>
             <div class="settings-group">
@@ -1238,7 +2043,11 @@ export class ViewSettings extends LitElement {
                     </select>
                 </div>
             </div>
+        `;
+    }
 
+    renderProfileSection() {
+        return html`
             <!-- Profile Settings -->
             <div class="section-title">👤 ${i18n.t('auth.settings.title')}</div>
             <div class="settings-group">
@@ -1312,7 +2121,11 @@ export class ViewSettings extends LitElement {
                       `
                     : ''}
             </div>
+        `;
+    }
 
+    renderAccountsSection() {
+        return html`
             <!-- Accounts Management -->
             <div class="section-title">🏦 ${i18n.t('accounts.title')}</div>
             <div class="settings-group">
@@ -1467,7 +2280,11 @@ export class ViewSettings extends LitElement {
                           </div>
                       `}
             </div>
+        `;
+    }
 
+    renderBankSyncSection() {
+        return html`
             <!-- Bank Synchronization (Enable Banking) -->
             <div class="section-title">🔄 ${i18n.t('bank_sync.title')}</div>
             <div class="settings-group">
@@ -1854,7 +2671,11 @@ export class ViewSettings extends LitElement {
                           </div>
                       `}
             </div>
+        `;
+    }
 
+    renderCostObjectsSection() {
+        return html`
             <!-- Cost Objects Settings -->
             <div class="section-title">💼 ${i18n.t('settings.cost_objects')}</div>
             <div class="settings-group">
@@ -2003,7 +2824,11 @@ export class ViewSettings extends LitElement {
                           </div>
                       `}
             </div>
+        `;
+    }
 
+    renderCategoriesSection() {
+        return html`
             <!-- Categories Management -->
             <div class="section-title">📂 ${i18n.t('settings.categories')}</div>
             <div class="settings-group">
@@ -2159,7 +2984,11 @@ export class ViewSettings extends LitElement {
                     false,
                 )}
             </div>
+        `;
+    }
 
+    renderBackupSection() {
+        return html`
             <!-- Backup & Restore -->
             <div class="section-title">${i18n.t('settings.backup_restore')}</div>
             <div class="settings-group">
@@ -2217,7 +3046,11 @@ export class ViewSettings extends LitElement {
                         : ''}
                 </div>
             </div>
+        `;
+    }
 
+    renderDangerSection() {
+        return html`
             <!-- Danger Zone -->
             <div class="section-title">⚠️ ${i18n.t('settings.danger_zone')}</div>
             <div class="settings-group">
@@ -2255,387 +3088,6 @@ export class ViewSettings extends LitElement {
                         </p>
                     </div>
                 </div>
-            </div>
-
-            <!-- Modals -->
-            ${this.showChangePinModal
-                ? html`
-                      <div class="modal-overlay" @click="${() => (this.showChangePinModal = false)}">
-                          <div class="modal" @click="${(e: Event) => e.stopPropagation()}">
-                              <h3>${i18n.t('auth.settings.changePin')}</h3>
-                              <div class="form-group">
-                                  <label>${i18n.t('auth.settings.currentPin')}</label>
-                                  <input
-                                      type="password"
-                                      inputmode="numeric"
-                                      maxlength="6"
-                                      .value="${this.changePinForm.oldPin}"
-                                      @input="${(e: any) =>
-                                          (this.changePinForm = { ...this.changePinForm, oldPin: e.target.value })}"
-                                      placeholder="${i18n.t('auth.settings.currentPinPlaceholder')}"
-                                  />
-                              </div>
-                              <div class="form-group">
-                                  <label>${i18n.t('auth.settings.newPinLabel')}</label>
-                                  <input
-                                      type="password"
-                                      inputmode="numeric"
-                                      maxlength="6"
-                                      .value="${this.changePinForm.newPin}"
-                                      @input="${(e: any) =>
-                                          (this.changePinForm = { ...this.changePinForm, newPin: e.target.value })}"
-                                      placeholder="${i18n.t('auth.settings.newPinPlaceholder')}"
-                                  />
-                              </div>
-                              <div class="form-group">
-                                  <label>${i18n.t('auth.settings.confirmNewPin')}</label>
-                                  <input
-                                      type="password"
-                                      inputmode="numeric"
-                                      maxlength="6"
-                                      .value="${this.changePinForm.confirmPin}"
-                                      @input="${(e: any) =>
-                                          (this.changePinForm = {
-                                              ...this.changePinForm,
-                                              confirmPin: e.target.value,
-                                          })}"
-                                      placeholder="${i18n.t('auth.settings.confirmNewPinPlaceholder')}"
-                                  />
-                              </div>
-                              <div class="modal-actions">
-                                  <button
-                                      class="btn-secondary"
-                                      @click="${() => {
-                                          this.showChangePinModal = false;
-                                          this.changePinForm = { oldPin: '', newPin: '', confirmPin: '' };
-                                      }}"
-                                  >
-                                      ${i18n.t('common.cancel')}
-                                  </button>
-                                  <button class="btn-primary" @click="${this.handleChangePin}">
-                                      ${i18n.t('common.save')}
-                                  </button>
-                              </div>
-                          </div>
-                      </div>
-                  `
-                : ''}
-            ${this.showCreateProfileModal
-                ? html`
-                      <div class="modal-overlay" @click="${() => (this.showCreateProfileModal = false)}">
-                          <div class="modal" @click="${(e: Event) => e.stopPropagation()}">
-                              <h3>${i18n.t('auth.settings.createProfile')}</h3>
-                              <div class="form-group">
-                                  <label>${i18n.t('auth.settings.profileName')}</label>
-                                  <input
-                                      type="text"
-                                      .value="${this.createProfileForm.name}"
-                                      @input="${(e: any) =>
-                                          (this.createProfileForm = { ...this.createProfileForm, name: e.target.value })}"
-                                      placeholder="${i18n.t('auth.settings.profileNamePlaceholder')}"
-                                  />
-                              </div>
-                              <div class="form-group">
-                                  <label>${i18n.t('auth.settings.pinLabel')}</label>
-                                  <input
-                                      type="password"
-                                      inputmode="numeric"
-                                      maxlength="6"
-                                      .value="${this.createProfileForm.pin}"
-                                      @input="${(e: any) =>
-                                          (this.createProfileForm = { ...this.createProfileForm, pin: e.target.value })}"
-                                      placeholder="${i18n.t('auth.settings.pinPlaceholder')}"
-                                  />
-                              </div>
-                              <div class="form-group">
-                                  <label>${i18n.t('auth.settings.confirmPin')}</label>
-                                  <input
-                                      type="password"
-                                      inputmode="numeric"
-                                      maxlength="6"
-                                      .value="${this.createProfileForm.confirmPin}"
-                                      @input="${(e: any) =>
-                                          (this.createProfileForm = {
-                                              ...this.createProfileForm,
-                                              confirmPin: e.target.value,
-                                          })}"
-                                      placeholder="${i18n.t('auth.settings.confirmPinPlaceholder')}"
-                                  />
-                              </div>
-                              <div class="modal-actions">
-                                  <button
-                                      class="btn-secondary"
-                                      @click="${() => {
-                                          this.showCreateProfileModal = false;
-                                          this.createProfileForm = { name: '', pin: '', confirmPin: '' };
-                                      }}"
-                                  >
-                                      ${i18n.t('common.cancel')}
-                                  </button>
-                                  <button class="btn-primary" @click="${this.handleCreateProfile}">
-                                      ${i18n.t('common.save')}
-                                  </button>
-                              </div>
-                          </div>
-                      </div>
-                  `
-                : ''}
-            ${this.showDeleteProfileModal
-                ? html`
-                      <div class="modal-overlay" @click="${() => (this.showDeleteProfileModal = false)}">
-                          <div class="modal" @click="${(e: Event) => e.stopPropagation()}">
-                              <h3 style="color: var(--md-sys-color-error);">
-                                  ⚠️ ${i18n.t('settings.delete_profile_confirm')}
-                              </h3>
-                              <p style="margin-bottom: 16px; color: var(--md-sys-color-on-surface);">
-                                  ${i18n.t('settings.delete_profile_modal_warning')} "<strong
-                                      >${this.currentProfile?.name}</strong
-                                  >" ${i18n.t('settings.delete_profile_modal_suffix')}
-                              </p>
-                              <div class="form-group">
-                                  <label>${i18n.t('settings.enter_pin_to_confirm')}</label>
-                                  <input
-                                      type="password"
-                                      inputmode="numeric"
-                                      maxlength="6"
-                                      .value="${this.deleteProfilePin}"
-                                      @input="${(e: any) => (this.deleteProfilePin = e.target.value)}"
-                                      placeholder="${i18n.t('settings.enter_pin')}"
-                                  />
-                              </div>
-                              <div class="modal-actions">
-                                  <button
-                                      class="btn-secondary"
-                                      @click="${() => {
-                                          this.showDeleteProfileModal = false;
-                                          this.deleteProfilePin = '';
-                                      }}"
-                                  >
-                                      ${i18n.t('common.cancel')}
-                                  </button>
-                                  <button class="btn-danger" @click="${this.handleDeleteProfile}">
-                                      ${i18n.t('settings.delete_profile_confirm')}
-                                  </button>
-                              </div>
-                          </div>
-                      </div>
-                  `
-                : ''}
-            ${this.showDeleteAllDataModal
-                ? html`
-                      <div class="modal-overlay" @click="${() => (this.showDeleteAllDataModal = false)}">
-                          <div class="modal" @click="${(e: Event) => e.stopPropagation()}">
-                              <h3 style="color: var(--md-sys-color-error);">
-                                  🚨 ${i18n.t('settings.delete_all_modal_title')}
-                              </h3>
-                              <p style="margin-bottom: 16px; color: var(--md-sys-color-error); font-weight: bold;">
-                                  ⚠️ ${i18n.t('settings.extreme_danger_zone')} ⚠️
-                              </p>
-                              <p style="margin-bottom: 16px; color: var(--md-sys-color-on-surface);">
-                                  ${i18n.t('settings.delete_all_modal_intro')}<br />
-                                  • ${i18n.t('settings.delete_all_modal_item_profiles')}<br />
-                                  • ${i18n.t('settings.delete_all_modal_item_data')}<br />
-                                  • ${i18n.t('settings.delete_all_modal_item_settings')}<br />
-                                  <br />
-                                  ${i18n.t('settings.delete_all_modal_outro')}
-                              </p>
-                              <div class="form-group">
-                                  <label>${i18n.t('settings.type_delete_all_confirm')}</label>
-                                  <input
-                                      type="text"
-                                      .value="${this.deleteAllDataConfirmText}"
-                                      @input="${(e: any) => (this.deleteAllDataConfirmText = e.target.value)}"
-                                      placeholder="${i18n.t('settings.type_delete_all_placeholder')}"
-                                  />
-                              </div>
-                              <div class="modal-actions">
-                                  <button
-                                      class="btn-secondary"
-                                      @click="${() => {
-                                          this.showDeleteAllDataModal = false;
-                                          this.deleteAllDataConfirmText = '';
-                                      }}"
-                                  >
-                                      ${i18n.t('common.cancel')}
-                                  </button>
-                                  <button class="btn-danger" @click="${this.handleDeleteAllData}">
-                                      ${i18n.t('settings.delete_everything')}
-                                  </button>
-                              </div>
-                          </div>
-                      </div>
-                  `
-                : ''}
-            ${this.accountToDelete
-                ? html`
-                      <div class="modal-overlay" @click="${() => (this.accountToDelete = null)}">
-                          <div class="modal" @click="${(e: Event) => e.stopPropagation()}">
-                              <h3>${i18n.t('accounts.delete_account')}</h3>
-                              <p>${i18n.t('accounts.delete_account_warning')}</p>
-                              <div class="modal-actions">
-                                  <button class="btn-secondary" @click="${() => (this.accountToDelete = null)}">
-                                      ${i18n.t('common.cancel')}
-                                  </button>
-                                  <button class="btn-danger" @click="${this.confirmDeleteAccount}">
-                                      ${i18n.t('common.delete')}
-                                  </button>
-                              </div>
-                          </div>
-                      </div>
-                  `
-                : ''}
-            ${this.costObjectToDelete
-                ? html`
-                      <div class="modal-overlay" @click="${() => (this.costObjectToDelete = null)}">
-                          <div class="modal" @click="${(e: Event) => e.stopPropagation()}">
-                              <h3>Delete Cost Object?</h3>
-                              <p>This will remove the cost object. Transactions using it will become unassigned.</p>
-                              <div class="modal-actions">
-                                  <button class="btn-secondary" @click="${() => (this.costObjectToDelete = null)}">
-                                      ${i18n.t('common.cancel')}
-                                  </button>
-                                  <button class="btn-danger" @click="${this.confirmDeleteCostObject}">
-                                      ${i18n.t('common.delete')}
-                                  </button>
-                              </div>
-                          </div>
-                      </div>
-                  `
-                : ''}
-            ${this.categoryToDelete
-                ? html`
-                      <div class="modal-overlay" @click="${() => (this.categoryToDelete = null)}">
-                          <div class="modal" @click="${(e: Event) => e.stopPropagation()}">
-                              <h3>${i18n.t('settings.delete_category')}</h3>
-                              <p>${i18n.t('settings.delete_category_warning')}</p>
-                              <div class="modal-actions">
-                                  <button class="btn-secondary" @click="${() => (this.categoryToDelete = null)}">
-                                      ${i18n.t('common.cancel')}
-                                  </button>
-                                  <button class="btn-danger" @click="${this.confirmDelete}">
-                                      ${i18n.t('common.delete')}
-                                  </button>
-                              </div>
-                          </div>
-                      </div>
-                  `
-                : ''}
-
-            <!-- Connect Bank Modal -->
-            ${this.showConnectBankModal
-                ? html`
-                      <div class="modal-overlay" @click="${() => (this.showConnectBankModal = false)}">
-                          <div class="modal" @click="${(e: Event) => e.stopPropagation()}">
-                              <h3>🏛️ ${i18n.t('bank_sync.connect_bank_btn')}</h3>
-                              <p>${i18n.t('bank_sync.description')}</p>
-
-                              <div class="form-group">
-                                  <label>${i18n.t('bank_sync.select_country')}</label>
-                                  <select
-                                      .value="${this.bankCountry}"
-                                      @change="${(e: any) => this.loadBanksForCountry(e.target.value)}"
-                                  >
-                                      ${countryOptions.map(
-                                          (c) => html`<option value="${c.code}">${c.name}</option>`,
-                                      )}
-                                  </select>
-                              </div>
-
-                              <div class="form-group">
-                                  <label>${i18n.t('bank_sync.select_bank')}</label>
-                                  ${this.loadingBanks
-                                      ? html`<p style="font-size: 0.85rem; color: var(--md-sys-color-primary);">
-                                            ⏳ ${i18n.t('bank_sync.loading_banks')}
-                                        </p>`
-                                      : html`
-                                            <input
-                                                type="text"
-                                                style="margin-bottom: 8px;"
-                                                placeholder="${i18n.t('bank_sync.search_bank_placeholder')}"
-                                                .value="${this.bankSearchQuery}"
-                                                @input="${(e: any) => (this.bankSearchQuery = e.target.value)}"
-                                            />
-                                            <select
-                                                .value="${this.selectedBankName}"
-                                                @change="${(e: any) => (this.selectedBankName = e.target.value)}"
-                                            >
-                                                ${this.availableBanks
-                                                    .filter(
-                                                        (b: any) =>
-                                                            !this.bankSearchQuery ||
-                                                            b.name
-                                                                .toLowerCase()
-                                                                .includes(this.bankSearchQuery.toLowerCase()),
-                                                    )
-                                                    .map(
-                                                        (b: any) => html`<option value="${b.name}">
-                                                            ${b.name} ${b.country ? `(${b.country})` : ''}
-                                                        </option>`,
-                                                    )}
-                                            </select>
-                                        `}
-                              </div>
-
-                              ${this.bankConnecting
-                                  ? html`<p style="font-size: 0.85rem; color: var(--md-sys-color-primary); text-align: center; margin: 12px 0;">
-                                        🔄 ${i18n.t('bank_sync.connecting_redirect')}
-                                    </p>`
-                                  : ''}
-
-                              ${this.bankAuthUrl
-                                  ? html`
-                                        <div
-                                            style="margin: 16px 0; padding: 16px; background: var(--md-sys-color-surface-container-high); border: 1px solid var(--md-sys-color-primary); border-radius: 8px; text-align: center;"
-                                        >
-                                            <p
-                                                style="margin: 0 0 12px 0; font-size: 0.85rem; color: var(--md-sys-color-on-surface-variant);"
-                                            >
-                                                ℹ️ ${i18n.t('bank_sync.open_new_window_hint')}
-                                            </p>
-                                            <div style="display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;">
-                                                <a
-                                                    href="${this.bankAuthUrl}"
-                                                    target="_top"
-                                                    class="btn-primary"
-                                                    style="display: inline-block; text-decoration: none; padding: 8px 16px; font-weight: 500;"
-                                                >
-                                                    ↗️ ${i18n.t('bank_sync.open_in_new_window')}
-                                                </a>
-                                                <a
-                                                    href="${this.bankAuthUrl}"
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    class="btn-secondary"
-                                                    style="display: inline-block; text-decoration: none; padding: 8px 16px; font-weight: 500;"
-                                                >
-                                                    ↗️ Abrir en Nueva Pestaña
-                                                </a>
-                                            </div>
-                                        </div>
-                                    `
-                                  : ''}
-
-                              <div class="modal-actions">
-                                  <button
-                                      class="btn-secondary"
-                                      @click="${() => (this.showConnectBankModal = false)}"
-                                  >
-                                      ${i18n.t('common.cancel')}
-                                  </button>
-                                  <button
-                                      class="btn-primary"
-                                      @click="${this.connectBank}"
-                                      ?disabled="${this.bankConnecting || this.loadingBanks || !this.selectedBankName}"
-                                  >
-                                      ${this.bankConnecting
-                                          ? '⏳ Conectando...'
-                                          : i18n.t('bank_sync.start_auth_btn')}
-                                  </button>
-                              </div>
-                          </div>
-                      </div>
-                  `
-                : ''}
         `;
     }
 }
