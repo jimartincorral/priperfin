@@ -103,7 +103,7 @@ export class ViewSettings extends LitElement {
     private unwatchViewport?: () => void;
     private snackTimer?: number;
 
-    static styles = [mobileUI, css`
+    static styles = [css`
         :host {
             display: block;
         }
@@ -479,7 +479,7 @@ export class ViewSettings extends LitElement {
             border-radius: 0;
         }
         .s-subscreen .table-container { margin: 0; border-right: none; }
-    `];
+    `, mobileUI];
 
     async firstUpdated() {
         const storedCurrency = localStorage.getItem('priperfin_currency');

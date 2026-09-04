@@ -845,7 +845,7 @@ export class ViewExpenses extends LitElement {
     }
   }
 
-  static styles = [mobileUI, css`
+  static styles = [css`
     :host { display: block; color-scheme: dark; }
 
     .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
@@ -1250,7 +1250,7 @@ export class ViewExpenses extends LitElement {
       border-bottom: 1px solid var(--md-sys-color-surface-container-high);
     }
     .x-skeleton-main { flex: 1; display: flex; flex-direction: column; gap: 8px; }
-  `];
+  `, mobileUI];
 
   async firstUpdated() {
     const storedCurrency = localStorage.getItem('priperfin_currency');

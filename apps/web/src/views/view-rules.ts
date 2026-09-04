@@ -37,7 +37,7 @@ export class ViewRules extends LitElement {
   private unwatchViewport?: () => void;
   private snackTimer?: number;
 
-  static styles = [mobileUI, css`
+  static styles = [css`
     :host {
       display: block;
       padding: 0;
@@ -402,7 +402,7 @@ export class ViewRules extends LitElement {
       background: var(--md-sys-color-outline-variant);
       color: var(--md-sys-color-on-surface-variant);
     }
-  `];
+  `, mobileUI];
 
   async connectedCallback() {
     super.connectedCallback();

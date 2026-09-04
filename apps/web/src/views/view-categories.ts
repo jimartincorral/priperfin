@@ -47,7 +47,7 @@ export class ViewCategories extends LitElement {
   private unwatchViewport?: () => void;
   private snackTimer?: number;
 
-  static styles = [mobileUI, css`
+  static styles = [css`
     :host {
       display: block;
       padding: 0;
@@ -351,7 +351,7 @@ export class ViewCategories extends LitElement {
       margin-left: -8px;
     }
     .c-chevron.collapsed { transform: rotate(-90deg); }
-  `];
+  `, mobileUI];
 
   async connectedCallback() {
     super.connectedCallback();

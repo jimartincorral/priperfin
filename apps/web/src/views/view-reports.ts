@@ -98,7 +98,7 @@ export class ViewReports extends LitElement {
   private budgetChart: Chart | null = null;
   private costObjectChart: Chart | null = null;
 
-  static styles = [mobileUI, css`
+  static styles = [css`
     :host { display: block; }
 
     .header {
@@ -471,7 +471,7 @@ export class ViewReports extends LitElement {
       padding: 4px 0 12px;
     }
     .r-drill-figure { font: 400 32px/40px 'Roboto', sans-serif; }
-  `];
+  `, mobileUI];
 
   async firstUpdated() {
     this.loadFiltersFromURL();

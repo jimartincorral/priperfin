@@ -219,7 +219,7 @@ export class ViewGoals extends LitElement {
     return options;
   }
 
-  static styles = [mobileUI, css`
+  static styles = [css`
     :host { display: block; }
 
     .header-controls {
@@ -620,7 +620,7 @@ export class ViewGoals extends LitElement {
       font: 500 20px/28px 'Roboto', sans-serif;
     }
     .g-prefix-field input:focus { outline: none; }
-  `];
+  `, mobileUI];
 
 
   async firstUpdated() {

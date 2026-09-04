@@ -149,10 +149,38 @@ export function skeleton(width: string, height = '12px', secondary = false): Tem
 }
 
 /**
- * Shared mobile CSS. Compose into a view with
- * `static styles = [mobileUI, css`...`]`.
+ * Shared mobile CSS. Compose it LAST in a view's styles array —
+ * static styles = [css(...view rules...), mobileUI] — so its reset lands after
+ * the view's element-level button rule.
  */
 export const mobileUI = css`
+  /*
+   * Every view declares an element-level rule on "button" for its desktop
+   * layout (height 40px, padding 0 24px, radius 20px, a filled background).
+   * An element selector loses to a class selector only for the properties the
+   * class actually declares, so anything a mobile control leaves unset
+   * silently inherits the desktop value — which clamped card heights to 40px
+   * and collapsed the progress tracks to nothing. Neutralise the lot up front;
+   * each control below then re-declares only what it needs.
+   *
+   * :where() keeps this at element specificity so the .m-* classes still win,
+   * and mobileUI is composed LAST in each view's styles array so it beats the
+   * view's own "button" rule on source order.
+   */
+  :where(.m-screen, .m-scrim, .m-snackbar) button {
+    height: auto;
+    min-height: 0;
+    padding: 0;
+    border: none;
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
+    color: inherit;
+    font: inherit;
+    text-transform: none;
+    cursor: pointer;
+  }
+
   .m-icon {
     font-family: 'Material Symbols Outlined';
     font-weight: normal;
