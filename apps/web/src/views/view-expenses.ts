@@ -1071,8 +1071,9 @@ export class ViewExpenses extends LitElement {
     }
     .x-summary-diff { font: 500 14px/20px 'Roboto', sans-serif; color: var(--md-sys-color-error); }
 
-    /* Reserve room for the FAB so no row sits underneath it */
-    .x-list { padding-bottom: 88px; }
+    /* Reserve room for the FAB so no row sits underneath it.
+       flex: 1 0 auto grows into spare space without shrinking the rows. */
+    .x-list { padding-bottom: 88px; flex: 1 0 auto; }
 
     .x-date-header {
       position: sticky;

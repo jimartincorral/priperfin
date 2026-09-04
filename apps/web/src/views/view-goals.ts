@@ -490,7 +490,8 @@ export class ViewGoals extends LitElement {
       display: flex;
       flex-direction: column;
       gap: 12px;
-      flex: 1;
+      /* grow into the spare space but never shrink the cards */
+      flex: 1 0 auto;
     }
 
     .g-card {
@@ -499,6 +500,10 @@ export class ViewGoals extends LitElement {
       padding: 16px;
       display: flex;
       flex-direction: column;
+      /* buttons default to align-items: center, which would collapse the
+         progress track and stop the rows from spreading */
+      align-items: stretch;
+      flex-shrink: 0;
       gap: 10px;
       border: none;
       width: 100%;

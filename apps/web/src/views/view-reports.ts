@@ -349,6 +349,9 @@ export class ViewReports extends LitElement {
     .r-bar-row {
       display: flex;
       flex-direction: column;
+      /* buttons default to align-items: center, which would collapse the
+         bar track and stop the head row from spreading */
+      align-items: stretch;
       gap: 8px;
       padding: 12px 0;
       border: none;

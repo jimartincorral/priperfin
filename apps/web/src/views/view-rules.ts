@@ -284,7 +284,8 @@ export class ViewRules extends LitElement {
       min-height: calc(100dvh - 64px - env(safe-area-inset-bottom, 0px));
     }
 
-    .u-list { flex: 1; display: flex; flex-direction: column; gap: 8px; }
+    /* grow into the spare space but never shrink the cards */
+    .u-list { flex: 1 0 auto; display: flex; flex-direction: column; gap: 8px; }
 
     .u-suggestions {
       background: var(--md-sys-color-tertiary-container);
@@ -332,6 +333,10 @@ export class ViewRules extends LitElement {
       padding: 12px 14px;
       display: flex;
       flex-direction: column;
+      /* buttons default to align-items: center, which would stop the card's
+         rows from spreading to full width */
+      align-items: stretch;
+      flex-shrink: 0;
       gap: 8px;
       background: none;
       width: 100%;

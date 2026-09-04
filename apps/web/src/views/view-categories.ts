@@ -291,7 +291,8 @@ export class ViewCategories extends LitElement {
       min-height: calc(100dvh - 64px - env(safe-area-inset-bottom, 0px));
     }
 
-    .c-list { flex: 1; }
+    /* grow into the spare space but never shrink the rows */
+    .c-list { flex: 1 0 auto; }
 
     .c-row {
       display: flex;

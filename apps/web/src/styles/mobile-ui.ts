@@ -703,6 +703,14 @@ export const mobileUI = css`
     gap: 16px;
     min-height: 0;
   }
+  /* .m-row bleeds to the screen edges by default; inside a sheet the gutter is 20px */
+  .m-sheet-body .m-row {
+    margin: 0 -20px;
+    width: calc(100% + 40px);
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+
   .m-sheet-title { font: 500 18px/24px 'Roboto', sans-serif; color: var(--md-sys-color-on-surface); }
   .m-sheet-title-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 
