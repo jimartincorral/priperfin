@@ -1,8 +1,18 @@
-import { LitElement, html, css } from 'lit';
+import { LitElement, html, css, nothing } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import { api } from '../api/client';
 import '../components/filterable-select';
 import type { SelectOption } from '../components/filterable-select';
+import {
+  appBar,
+  bottomSheet,
+  icon,
+  mobileUI,
+  skeleton,
+  snackbar,
+  watchMobileViewport,
+  type SnackbarOptions,
+} from '../styles/mobile-ui';
 
 import { i18n } from '../i18n/i18n';
 
@@ -41,6 +51,22 @@ export class ViewGoals extends LitElement {
   
   @state() showAddRow = false;
   @state() newGoal: any = { name: '', categoryId: '', startDate: '', targetDate: '', targetAmount: 0, isEvergreen: false, targetMonths: null };
+
+  // --- Mobile layer (<= 600px). The desktop table above the breakpoint is untouched. ---
+  @state() isMobile = false;
+  /** Goal being viewed on the detail screen, or null for the list. */
+  @state() detailGoalId: string | null = null;
+  @state() showGoalForm = false;
+  @state() showDistributeSheet = false;
+  @state() showContributeSheet = false;
+  @state() contributeAmount = '';
+  @state() goalToDelete: string | null = null;
+  /** Inline validation messages for the mobile goal form, keyed by field. */
+  @state() formErrors: Record<string, string> = {};
+  @state() snack: SnackbarOptions | null = null;
+
+  private unwatchViewport?: () => void;
+  private snackTimer?: number;
 
   get sortedGoals() {
     let goalsArray = Array.isArray(this.goals) ? [...this.goals] : [];
@@ -193,10 +219,10 @@ export class ViewGoals extends LitElement {
     return options;
   }
 
-  static styles = css`
+  static styles = [css`
     :host { display: block; }
-    
-    .header-controls { 
+
+    .header-controls {
         display: flex; 
         align-items: center; 
         gap: 2rem; 
@@ -444,7 +470,157 @@ export class ViewGoals extends LitElement {
             margin-right: -1rem;
         }
     }
-  `;
+
+    /* ---------- mobile ---------- */
+
+    /* The screen owns the full column height so the New goal button can pin */
+    .g-screen {
+      display: flex;
+      flex-direction: column;
+      min-height: calc(100dvh - 64px - env(safe-area-inset-bottom, 0px));
+    }
+
+    .g-tiles {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .g-cards {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      /* grow into the spare space but never shrink the cards */
+      flex: 1 0 auto;
+    }
+
+    .g-card {
+      background: var(--md-sys-color-surface-container);
+      border-radius: 16px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      /* buttons default to align-items: center, which would collapse the
+         progress track and stop the rows from spreading */
+      align-items: stretch;
+      flex-shrink: 0;
+      gap: 10px;
+      border: none;
+      width: 100%;
+      box-sizing: border-box;
+      text-align: left;
+      color: inherit;
+      font: inherit;
+      cursor: pointer;
+    }
+    .g-card-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .g-card-name {
+      font: 500 16px/24px 'Roboto', sans-serif;
+      color: var(--md-sys-color-on-surface);
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .g-card-amounts {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .g-card-saved { font: 500 22px/28px 'Roboto', sans-serif; color: var(--md-sys-color-on-surface); }
+    .g-card-of {
+      font: 400 14px/20px 'Roboto', sans-serif;
+      color: var(--md-sys-color-on-surface-variant);
+    }
+    .g-card-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      font: 400 13px/20px 'Roboto', sans-serif;
+      color: var(--md-sys-color-on-surface-variant);
+    }
+
+    .g-hero { display: flex; flex-direction: column; gap: 10px; padding: 4px 0 16px; }
+    .g-hero-badges { display: flex; align-items: center; gap: 8px; }
+    .g-hero-amounts { display: flex; align-items: baseline; gap: 8px; }
+    .g-hero-figure { font: 400 40px/48px 'Roboto', sans-serif; }
+    .g-hero-of { font: 400 16px/24px 'Roboto', sans-serif; color: var(--md-sys-color-on-surface-variant); }
+    .g-hero-captions {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      font: 400 13px/20px 'Roboto', sans-serif;
+      color: var(--md-sys-color-on-surface-variant);
+    }
+
+    .g-def {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      min-height: 56px;
+      border-bottom: 1px solid var(--md-sys-color-surface-container-high);
+    }
+    .g-def-label { font: 400 15px/22px 'Roboto', sans-serif; color: var(--md-sys-color-on-surface-variant); }
+    .g-def-value { font: 500 15px/22px 'Roboto', sans-serif; color: var(--md-sys-color-on-surface); }
+
+    .g-hint {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: var(--md-sys-color-surface-container);
+      border-radius: 16px;
+      padding: 14px 16px;
+      margin-top: 16px;
+      font: 400 14px/20px 'Roboto', sans-serif;
+      color: var(--md-sys-color-on-surface-variant);
+    }
+    .g-hint .m-icon { color: var(--md-sys-color-primary); }
+
+    .g-form { display: flex; flex-direction: column; gap: 16px; padding: 8px 0 0; }
+    .g-form-row { display: flex; gap: 12px; }
+    .g-form-row > * { flex: 1; min-width: 0; }
+    .g-toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 4px 0;
+    }
+    .g-toggle-label { font: var(--md-sys-typescale-body-large); color: var(--md-sys-color-on-surface); }
+    .g-toggle-caption {
+      font: 400 13px/16px 'Roboto', sans-serif;
+      color: var(--md-sys-color-on-surface-variant);
+    }
+    .g-prefix-field {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      height: 56px;
+      padding: 0 14px;
+      border-radius: 12px;
+      border: 1px solid var(--md-sys-color-outline);
+      box-sizing: border-box;
+    }
+    .g-prefix-field:focus-within { border-color: var(--md-sys-color-primary); }
+    .g-prefix-field span { color: var(--md-sys-color-on-surface-variant); }
+    .g-prefix-field input {
+      flex: 1;
+      min-width: 0;
+      border: none;
+      background: transparent;
+      color: var(--md-sys-color-on-surface);
+      font: 500 20px/28px 'Roboto', sans-serif;
+    }
+    .g-prefix-field input:focus { outline: none; }
+  `, mobileUI];
 
 
   async firstUpdated() {
@@ -489,12 +665,28 @@ export class ViewGoals extends LitElement {
     super.connectedCallback();
     i18n.addEventListener('lang-change', () => this.requestUpdate());
     document.addEventListener('click', this.handleOutsideClick);
+    this.unwatchViewport = watchMobileViewport(this);
   }
 
   disconnectedCallback() {
     super.disconnectedCallback();
     i18n.removeEventListener('lang-change', () => this.requestUpdate());
     document.removeEventListener('click', this.handleOutsideClick);
+    this.unwatchViewport?.();
+    if (this.snackTimer) window.clearTimeout(this.snackTimer);
+  }
+
+  /** Inline snackbar above the nav; replaces alert() on the mobile path. */
+  private notify(message: string, action?: { label: string; run: () => void }) {
+    if (!this.isMobile) {
+      alert(message);
+      return;
+    }
+    if (this.snackTimer) window.clearTimeout(this.snackTimer);
+    this.snack = action
+      ? { message, actionLabel: action.label, onAction: () => { this.snack = null; action.run(); } }
+      : { message };
+    this.snackTimer = window.setTimeout(() => { this.snack = null; }, 4000);
   }
 
   handleOutsideClick = () => {
@@ -653,7 +845,7 @@ export class ViewGoals extends LitElement {
       await this.loadData();
     } catch (e: any) {
       console.error('Failed to update cell', e);
-      alert('Update failed: ' + (e.message || 'Unknown error'));
+      this.notify('Update failed: ' + (e.message || 'Unknown error'));
       this.cancelEditing();
     }
   }
@@ -668,32 +860,42 @@ export class ViewGoals extends LitElement {
 
   // --- New Goal Creation ---
 
+  /** Field-keyed validation errors for the new-goal form. */
+  private validateNewGoal(): Record<string, string> {
+    const goal = this.newGoal;
+    const errors: Record<string, string> = {};
+
+    if (!goal.name) errors.name = 'Name is required';
+    if (!goal.targetAmount) errors.targetAmount = 'Target Amount is required';
+
+    if (goal.isEvergreen) {
+      if (!goal.targetMonths || goal.targetMonths <= 0) {
+        errors.targetMonths = 'Target months is required for evergreen goals';
+      }
+    } else if (!goal.targetDate) {
+      errors.targetDate = 'Target Date is required';
+    } else if (new Date(goal.targetDate) < new Date(goal.startDate)) {
+      errors.targetDate = 'Target date cannot be before start date.';
+    }
+
+    return errors;
+  }
+
   async createGoal() {
     const payload: any = { ...this.newGoal };
 
-    // Validation
-    if (!payload.name) { alert('Name is required'); return; }
-    if (!payload.targetAmount) { alert('Target Amount is required'); return; }
-    
+    const errors = this.validateNewGoal();
+    if (Object.keys(errors).length > 0) {
+      // Mobile shows the messages under the fields; desktop keeps the alert
+      if (this.isMobile) this.formErrors = errors;
+      else alert(Object.values(errors)[0]);
+      return;
+    }
+    this.formErrors = {};
+
     if (payload.isEvergreen) {
-      // Evergreen goal validation
-      if (!payload.targetMonths || payload.targetMonths <= 0) {
-        alert('Target months is required for evergreen goals');
-        return;
-      }
-      // Clear targetDate for evergreen goals
-      payload.targetDate = null;
+      payload.targetDate = null; // Evergreen goals track months, not a date
     } else {
-      // Timed goal validation
-      if (!payload.targetDate) { alert('Target Date is required'); return; }
-      
-      const startDate = new Date(payload.startDate);
-      const targetDate = new Date(payload.targetDate);
-      if (targetDate < startDate) {
-        alert('Target date cannot be before start date.');
-        return;
-      }
-      // Clear targetMonths for timed goals
       payload.targetMonths = null;
     }
 
@@ -707,20 +909,32 @@ export class ViewGoals extends LitElement {
       // Reset form
       this.newGoal = { name: '', targetAmount: 0, startDate: new Date().toISOString().split('T')[0], targetDate: '', savedAmount: 0, categoryId: '', isEvergreen: false, targetMonths: 12 };
       this.showAddRow = false;
+      this.showGoalForm = false;
       await this.loadData();
     } catch (e: any) {
       console.error('Failed to create goal', e);
-      alert('Failed to create goal: ' + (e.message || 'Unknown error'));
+      this.notify('Failed to create goal: ' + (e.message || 'Unknown error'));
     }
   }
 
   async deleteGoal(id: string) {
+    // Mobile confirms in a sheet instead of a native dialog
+    if (this.isMobile) {
+      this.goalToDelete = id;
+      return;
+    }
     if (!confirm(i18n.t('common.confirm_delete'))) return;
+    await this.performDeleteGoal(id);
+  }
+
+  private async performDeleteGoal(id: string) {
     try {
       await api.delete(`/savings-goals/${id}`);
+      this.goalToDelete = null;
+      if (this.detailGoalId === id) this.detailGoalId = null;
       await this.loadData();
     } catch (e: any) {
-      alert('Failed to delete: ' + (e.message || 'Error'));
+      this.notify('Failed to delete: ' + (e.message || 'Error'));
     }
   }
 
@@ -951,7 +1165,7 @@ export class ViewGoals extends LitElement {
     const totalShortfall = shortfalls.reduce((sum, s) => sum + s.shortfall, 0);
     
     if (totalShortfall === 0) {
-      alert(i18n.t('goals.distribute.no_goals'));
+      this.notify(i18n.t('goals.distribute.no_goals'));
       this.showDistributeMenu = null;
       return;
     }
@@ -991,10 +1205,10 @@ export class ViewGoals extends LitElement {
       }
       await this.loadData();
       this.showDistributeMenu = null;
-      alert(i18n.t('goals.distribute.success'));
+      this.notify(i18n.t('goals.distribute.success'));
     } catch (e) {
       console.error('Distribution failed:', e);
-      alert('Distribution failed');
+      this.notify('Distribution failed');
     }
   }
 
@@ -1012,13 +1226,13 @@ export class ViewGoals extends LitElement {
     const availableFunds = isRedistributeAll ? this.totalSavings : this.unassigned;
     
     if (availableFunds <= 0 && !isRedistributeAll) {
-      alert(i18n.t('goals.distribute.no_unassigned'));
+      this.notify(i18n.t('goals.distribute.no_unassigned'));
       this.showDistributeMenu = null;
       return;
     }
     
     if (this.getDistributableGoals().length === 0) {
-      alert(i18n.t('goals.distribute.no_goals'));
+      this.notify(i18n.t('goals.distribute.no_goals'));
       this.showDistributeMenu = null;
       return;
     }
@@ -1036,7 +1250,681 @@ export class ViewGoals extends LitElement {
     }
   }
 
+  // ------------------------------------------------------------------
+  // Mobile layout
+  // ------------------------------------------------------------------
+
+  private get symbol() {
+    return this.currency === 'EUR' ? '€' : '$';
+  }
+
+  private money(value: number, decimals = 0): string {
+    return `${this.symbol}${Math.abs(value).toLocaleString(i18n.getLocale(), {
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals,
+    })}`;
+  }
+
+  /**
+   * On-track / behind / evergreen / completed, derived from savedAmount versus
+   * getEffectiveShouldHaveSaved() — the same rule the desktop table uses.
+   */
+  private goalStatus(goal: any): {
+    kind: 'ok' | 'behind' | 'evergreen' | 'completed';
+    label: string;
+    fill: string;
+    percent: number;
+    shouldHavePercent: number;
+  } {
+    const target = Number(goal.targetAmount || 0);
+    const saved = Number(goal.savedAmount || 0);
+    const percent = target > 0 ? Math.min(100, (saved / target) * 100) : 0;
+    const shouldHave = this.getEffectiveShouldHaveSaved(goal);
+    const shouldHavePercent = target > 0 ? Math.min(100, (shouldHave / target) * 100) : 0;
+    const diff = saved - shouldHave;
+
+    if (percent >= 100) {
+      return {
+        kind: 'completed',
+        label: i18n.t('mobile.completed'),
+        fill: 'var(--md-sys-color-primary)',
+        percent,
+        shouldHavePercent,
+      };
+    }
+    if (goal.isEvergreen) {
+      return {
+        kind: 'evergreen',
+        label: `∞ ${i18n.t('mobile.evergreen')}`,
+        fill: 'var(--md-sys-color-tertiary)',
+        percent,
+        shouldHavePercent,
+      };
+    }
+    if (diff < 0) {
+      return {
+        kind: 'behind',
+        label: i18n.t('mobile.behind_by', { amount: this.money(Math.abs(diff)) }),
+        fill: 'var(--md-sys-color-error)',
+        percent,
+        shouldHavePercent,
+      };
+    }
+    return {
+      kind: 'ok',
+      label: i18n.t('mobile.on_track'),
+      fill: 'var(--md-sys-color-primary)',
+      percent,
+      shouldHavePercent,
+    };
+  }
+
+  /** Whole months between now and the goal's effective target date. */
+  private monthsLeft(goal: any): number {
+    return this.getRemainingFullMonths(new Date(), this.getEffectiveTargetDate(goal));
+  }
+
+  private timeLeftLabel(goal: any): string {
+    const months = this.monthsLeft(goal);
+    return months === 1
+      ? i18n.t('mobile.month_left')
+      : i18n.t('mobile.months_left', { count: months });
+  }
+
+  /** Moves funds from the unassigned pool onto a single goal. */
+  private async assignToGoal(goal: any, amount: number) {
+    const rounded = Math.round(amount * 100) / 100;
+    if (rounded <= 0) {
+      this.notify(i18n.t('goals.distribute.no_unassigned'));
+      return;
+    }
+    const next = Math.round((Number(goal.savedAmount || 0) + rounded) * 100) / 100;
+    try {
+      await api.patch(`/savings-goals/${goal.id}`, { savedAmount: next });
+      this.showContributeSheet = false;
+      this.contributeAmount = '';
+      await this.loadData();
+    } catch (e: any) {
+      this.notify('Update failed: ' + (e.message || 'Unknown error'));
+    }
+  }
+
+  private renderMobileList() {
+    const goals = this.sortedGoals;
+
+    return html`
+      <div class="m-screen g-screen">
+        <div class="m-title-row">
+          <h1 class="m-title">${i18n.t('goals.title')}</h1>
+        </div>
+
+        <div class="g-tiles">
+          <div class="m-tile">
+            <div class="m-tile-label">${i18n.t('mobile.saved_so_far')}</div>
+            <div class="m-tile-value">${this.money(this.totalSavings)}</div>
+          </div>
+          <div class="m-tile">
+            <div class="m-tile-label">${i18n.t('mobile.unassigned')}</div>
+            <div style="display: flex; align-items: baseline; gap: 8px;">
+              <span
+                class="m-tile-value"
+                style="color: ${this.unassigned >= 0 ? 'var(--pf-positive)' : 'var(--md-sys-color-error)'}">
+                ${this.unassigned < 0 ? '−' : ''}${this.money(this.unassigned)}
+              </span>
+              ${this.unassigned > 0 ? html`
+                <button class="m-link" @click="${() => { this.showDistributeSheet = true; }}">
+                  ${i18n.t('mobile.assign')}
+                </button>
+              ` : nothing}
+            </div>
+          </div>
+        </div>
+
+        ${this.loading ? html`
+          <div class="g-cards">
+            ${[0, 1, 2].map(() => html`
+              <div class="g-card" style="cursor: default; gap: 12px;">
+                ${skeleton('55%', '16px')}
+                ${skeleton('40%', '22px')}
+                ${skeleton('100%', '8px', true)}
+                ${skeleton('70%', '13px', true)}
+              </div>
+            `)}
+          </div>
+        ` : goals.length === 0 ? html`
+          <div class="m-empty" style="flex: 1; justify-content: center;">
+            <div class="m-empty-circle">${icon('savings', 40)}</div>
+            <div class="m-empty-title">${i18n.t('mobile.nothing_here_yet')}</div>
+            <div class="m-empty-body">${i18n.t('goals.distribute.no_goals')}</div>
+          </div>
+        ` : html`
+          <div class="g-cards">
+            ${goals.map(goal => {
+              const status = this.goalStatus(goal);
+              const monthly = this.getMonthlySaving(goal);
+              return html`
+                <button class="g-card" @click="${() => { this.detailGoalId = goal.id; }}">
+                  <div class="g-card-head">
+                    <span class="g-card-name">${goal.name}</span>
+                    <span class="m-pill ${status.kind === 'completed' ? 'ok' : status.kind}">
+                      ${status.label}
+                    </span>
+                  </div>
+
+                  <div class="g-card-amounts">
+                    <span class="g-card-saved">${this.money(Number(goal.savedAmount || 0))}</span>
+                    <span class="g-card-of">
+                      ${i18n.t('mobile.of_amount', { amount: this.money(Number(goal.targetAmount || 0)) })}
+                      · ${Math.floor(status.percent)}%
+                    </span>
+                  </div>
+
+                  <div class="m-track-wrap">
+                    <div class="m-track card">
+                      <div
+                        class="m-track-fill"
+                        style="width: ${status.percent}%; background: ${status.fill}"></div>
+                    </div>
+                    ${status.kind === 'behind' ? html`
+                      <div class="m-track-tick" style="left: ${status.shouldHavePercent}%"></div>
+                    ` : nothing}
+                  </div>
+
+                  <div class="g-card-meta">
+                    <span>
+                      ${status.kind === 'completed'
+                        ? i18n.t('mobile.completed')
+                        : `${this.timeLeftLabel(goal)} · ${i18n.t('mobile.per_month_needed', {
+                            amount: this.money(monthly, 2),
+                          })}`}
+                    </span>
+                    ${icon('chevron_right', 20)}
+                  </div>
+                </button>
+              `;
+            })}
+          </div>
+        `}
+
+        <!-- Pinned rather than floating so it never covers the last card -->
+        <div class="m-pinned">
+          <button
+            class="m-btn form block"
+            @click="${() => {
+              this.formErrors = {};
+              this.newGoal = {
+                name: '',
+                targetAmount: 0,
+                startDate: new Date().toISOString().split('T')[0],
+                targetDate: '',
+                savedAmount: 0,
+                categoryId: '',
+                isEvergreen: false,
+                targetMonths: 12,
+              };
+              this.showGoalForm = true;
+            }}">
+            ${icon('add', 22)} ${i18n.t('mobile.new_goal')}
+          </button>
+        </div>
+
+        ${this.renderDistributeSheet()}
+        ${snackbar(this.snack)}
+      </div>
+    `;
+  }
+
+  private renderMobileDetail() {
+    const goal = this.goals.find(g => g.id === this.detailGoalId);
+    if (!goal) {
+      this.detailGoalId = null;
+      return nothing;
+    }
+
+    const status = this.goalStatus(goal);
+    const saved = Number(goal.savedAmount || 0);
+    const target = Number(goal.targetAmount || 0);
+    const shouldHave = this.getEffectiveShouldHaveSaved(goal);
+    const shortfall = Math.max(0, shouldHave - saved);
+    const helpAvailable = Math.min(Math.max(0, this.unassigned), shortfall);
+    const category = this.categories.find(c => c.id === goal.categoryId);
+
+    return html`
+      <div class="m-screen g-screen">
+        ${appBar({
+          title: goal.name,
+          onBack: () => { this.detailGoalId = null; },
+          action: html`
+            <button class="m-icon-btn danger" @click="${() => this.deleteGoal(goal.id)}"
+              title="${i18n.t('common.delete')}">
+              ${icon('delete', 24)}
+            </button>
+          `,
+        })}
+
+        <div class="g-hero">
+          <div class="g-hero-badges">
+            <span class="m-pill ${status.kind === 'completed' ? 'ok' : status.kind}">${status.label}</span>
+            ${category ? html`<span class="m-tag">${category.icon ?? ''} ${category.name}</span>` : nothing}
+          </div>
+
+          <div class="g-hero-amounts">
+            <span class="g-hero-figure">${this.money(saved)}</span>
+            <span class="g-hero-of">${i18n.t('mobile.of_amount', { amount: this.money(target) })}</span>
+          </div>
+
+          <div class="m-track-wrap">
+            <div class="m-track detail">
+              <div class="m-track-fill" style="width: ${status.percent}%; background: ${status.fill}"></div>
+            </div>
+            ${status.kind === 'behind' ? html`
+              <div class="m-track-tick" style="left: ${status.shouldHavePercent}%; top: -2px"></div>
+            ` : nothing}
+          </div>
+
+          <div class="g-hero-captions">
+            <span>${i18n.t('mobile.percent_saved', { percent: Math.floor(status.percent) })}</span>
+            ${status.kind !== 'completed' ? html`
+              <span>${i18n.t('mobile.should_have_by_now', { amount: this.money(shouldHave) })}</span>
+            ` : nothing}
+          </div>
+        </div>
+
+        <div>
+          <div class="g-def">
+            <span class="g-def-label">${i18n.t('goals.monthly_saving_needed')}</span>
+            <span class="g-def-value">${this.money(this.getMonthlySaving(goal), 2)}</span>
+          </div>
+          <div class="g-def">
+            <span class="g-def-label">
+              ${goal.isEvergreen ? i18n.t('goals.target_months') : i18n.t('goals.target_date')}
+            </span>
+            <span class="g-def-value">
+              ${goal.isEvergreen
+                ? `${goal.targetMonths || 12} ${i18n.t('mobile.months')}`
+                : (goal.targetDate ? this.formatDateForInput(goal.targetDate) : '—')}
+            </span>
+          </div>
+          <div class="g-def">
+            <span class="g-def-label">${i18n.t('goals.start_date')}</span>
+            <span class="g-def-value">
+              ${goal.startDate ? this.formatDateForInput(goal.startDate) : '—'}
+            </span>
+          </div>
+          <div class="g-def">
+            <span class="g-def-label">${i18n.t('mobile.time_left')}</span>
+            <span class="g-def-value">${this.timeLeftLabel(goal)}</span>
+          </div>
+          <div class="g-def" style="border-bottom: none">
+            <span class="g-def-label">${i18n.t('mobile.saved_so_far')}</span>
+            <span class="g-def-value">${this.money(saved, 2)}</span>
+          </div>
+        </div>
+
+        ${helpAvailable > 0 ? html`
+          <div class="g-hint">
+            ${icon('lightbulb', 20)}
+            <span style="flex: 1">
+              ${i18n.t('mobile.unassigned_would_fix', { amount: this.money(helpAvailable) })}
+            </span>
+            <button class="m-link" @click="${() => this.assignToGoal(goal, helpAvailable)}">
+              ${i18n.t('mobile.assign')}
+            </button>
+          </div>
+        ` : nothing}
+
+        <div class="m-pinned" style="margin-top: auto">
+          <button
+            class="m-btn form"
+            style="flex: 1"
+            @click="${() => { this.contributeAmount = ''; this.showContributeSheet = true; }}">
+            ${icon('savings', 22)} ${i18n.t('mobile.add_to_goal')}
+          </button>
+          <button
+            class="m-btn form outlined"
+            style="width: 56px; padding: 0"
+            title="${i18n.t('common.edit')}"
+            @click="${() => { this.detailGoalId = goal.id; this.showContributeSheet = false; this.startMobileEdit(goal); }}">
+            ${icon('edit', 22)}
+          </button>
+        </div>
+
+        ${this.renderContributeSheet(goal)}
+        ${this.renderDeleteSheet()}
+        ${snackbar(this.snack)}
+      </div>
+    `;
+  }
+
+  /** Loads an existing goal into the mobile form so it can be edited in place. */
+  private startMobileEdit(goal: any) {
+    this.newGoal = {
+      id: goal.id,
+      name: goal.name || '',
+      targetAmount: Number(goal.targetAmount || 0),
+      savedAmount: Number(goal.savedAmount || 0),
+      categoryId: goal.categoryId || '',
+      startDate: goal.startDate ? this.formatDateForInput(goal.startDate) : '',
+      targetDate: goal.targetDate ? this.formatDateForInput(goal.targetDate) : '',
+      isEvergreen: !!goal.isEvergreen,
+      targetMonths: goal.targetMonths ?? 12,
+    };
+    this.formErrors = {};
+    this.showGoalForm = true;
+  }
+
+  /** Saves the mobile form, creating or updating depending on newGoal.id. */
+  private async saveMobileGoal() {
+    if (!this.newGoal.id) {
+      await this.createGoal();
+      return;
+    }
+
+    const errors = this.validateNewGoal();
+    if (Object.keys(errors).length > 0) {
+      this.formErrors = errors;
+      return;
+    }
+    this.formErrors = {};
+
+    const payload: any = {
+      name: this.newGoal.name,
+      targetAmount: Number(this.newGoal.targetAmount) || 0,
+      savedAmount: Number(this.newGoal.savedAmount) || 0,
+      categoryId: this.newGoal.categoryId || null,
+      isEvergreen: !!this.newGoal.isEvergreen,
+      startDate: this.newGoal.startDate
+        ? new Date(`${this.newGoal.startDate}T00:00:00.000Z`).toISOString()
+        : null,
+    };
+    if (this.newGoal.isEvergreen) {
+      payload.targetMonths = Number(this.newGoal.targetMonths) || 12;
+      payload.targetDate = null;
+    } else {
+      payload.targetMonths = null;
+      payload.targetDate = new Date(`${this.newGoal.targetDate}T00:00:00.000Z`).toISOString();
+    }
+
+    try {
+      await api.patch(`/savings-goals/${this.newGoal.id}`, payload);
+      this.showGoalForm = false;
+      await this.loadData();
+    } catch (e: any) {
+      this.notify('Update failed: ' + (e.message || 'Unknown error'));
+    }
+  }
+
+  private renderMobileForm() {
+    const editing = !!this.newGoal.id;
+    const monthly = this.newGoal.targetAmount ? this.getMonthlySaving(this.newGoal) : 0;
+
+    return html`
+      <div class="m-screen g-screen">
+        ${appBar({
+          title: editing ? i18n.t('common.edit') : i18n.t('mobile.new_goal'),
+          closeIcon: true,
+          onBack: () => { this.showGoalForm = false; this.formErrors = {}; },
+        })}
+
+        <div class="g-form">
+          <div class="m-field-group">
+            <label class="m-section-label">${i18n.t('mobile.goal_name')}</label>
+            <input
+              class="m-field form"
+              type="text"
+              .value="${this.newGoal.name}"
+              @input="${(e: any) => { this.newGoal = { ...this.newGoal, name: e.target.value }; }}" />
+            ${this.formErrors.name ? html`<span class="m-field-error">${this.formErrors.name}</span>` : nothing}
+          </div>
+
+          <div class="m-field-group">
+            <label class="m-section-label">${i18n.t('mobile.target_amount')}</label>
+            <div class="g-prefix-field">
+              <span>${this.symbol}</span>
+              <input
+                type="number"
+                inputmode="decimal"
+                placeholder="0"
+                .value="${this.newGoal.targetAmount || ''}"
+                @input="${(e: any) => {
+                  this.newGoal = { ...this.newGoal, targetAmount: parseFloat(e.target.value) };
+                }}" />
+            </div>
+            ${this.formErrors.targetAmount
+              ? html`<span class="m-field-error">${this.formErrors.targetAmount}</span>`
+              : nothing}
+          </div>
+
+          <div class="m-field-group">
+            <label class="m-section-label">${i18n.t('common.category')}</label>
+            <filterable-select
+              .value="${this.newGoal.categoryId || ''}"
+              .options="${this.getCategoryOptions()}"
+              .placeholder="${i18n.t('common.category')}"
+              @change="${(e: CustomEvent) => {
+                this.newGoal = { ...this.newGoal, categoryId: e.detail.value };
+              }}">
+            </filterable-select>
+          </div>
+
+          <div class="g-toggle-row">
+            <div>
+              <div class="g-toggle-label">${i18n.t('goals.evergreen_goal')}</div>
+              <div class="g-toggle-caption">${i18n.t('mobile.evergreen_repeats')}</div>
+            </div>
+            <button
+              class="m-switch"
+              role="switch"
+              aria-checked="${this.newGoal.isEvergreen}"
+              @click="${() => {
+                this.newGoal = { ...this.newGoal, isEvergreen: !this.newGoal.isEvergreen };
+              }}"></button>
+          </div>
+
+          <div class="g-form-row">
+            <div class="m-field-group">
+              <label class="m-section-label">${i18n.t('goals.start_date')}</label>
+              <label class="m-field-with-icon">
+                <input
+                  class="m-field form"
+                  type="text"
+                  inputmode="numeric"
+                  placeholder="yyyy-mm-dd"
+                  .value="${this.newGoal.startDate || ''}"
+                  @input="${(e: any) => {
+                    this.newGoal = { ...this.newGoal, startDate: e.target.value };
+                  }}" />
+                ${icon('calendar_month', 20)}
+              </label>
+            </div>
+
+            <div class="m-field-group">
+              <label class="m-section-label">
+                ${this.newGoal.isEvergreen ? i18n.t('goals.target_months') : i18n.t('goals.target_date')}
+              </label>
+              ${this.newGoal.isEvergreen ? html`
+                <input
+                  class="m-field form"
+                  type="number"
+                  inputmode="numeric"
+                  placeholder="12"
+                  .value="${this.newGoal.targetMonths || ''}"
+                  @input="${(e: any) => {
+                    this.newGoal = { ...this.newGoal, targetMonths: parseInt(e.target.value, 10) };
+                  }}" />
+              ` : html`
+                <label class="m-field-with-icon">
+                  <input
+                    class="m-field form"
+                    type="text"
+                    inputmode="numeric"
+                    placeholder="yyyy-mm-dd"
+                    .value="${this.newGoal.targetDate || ''}"
+                    @input="${(e: any) => {
+                      this.newGoal = { ...this.newGoal, targetDate: e.target.value };
+                    }}" />
+                  ${icon('calendar_month', 20)}
+                </label>
+              `}
+            </div>
+          </div>
+          ${this.formErrors.targetDate
+            ? html`<span class="m-field-error">${this.formErrors.targetDate}</span>`
+            : nothing}
+          ${this.formErrors.targetMonths
+            ? html`<span class="m-field-error">${this.formErrors.targetMonths}</span>`
+            : nothing}
+
+          <div class="m-field-group">
+            <label class="m-section-label">${i18n.t('mobile.saved_so_far')}</label>
+            <div class="g-prefix-field">
+              <span>${this.symbol}</span>
+              <input
+                type="number"
+                inputmode="decimal"
+                placeholder="0.00"
+                .value="${this.newGoal.savedAmount || ''}"
+                @input="${(e: any) => {
+                  this.newGoal = { ...this.newGoal, savedAmount: parseFloat(e.target.value) };
+                }}" />
+            </div>
+          </div>
+
+          <div class="g-hint" style="margin-top: 0">
+            ${icon('calculate', 20)}
+            <span>
+              ${monthly > 0
+                ? `${i18n.t('goals.monthly_saving_needed')}: ${this.money(monthly, 2)}`
+                : i18n.t('mobile.pick_target_date_hint')}
+            </span>
+          </div>
+        </div>
+
+        <div class="m-pinned" style="margin-top: auto">
+          <button
+            class="m-btn form outlined"
+            style="flex: 1"
+            @click="${() => { this.showGoalForm = false; this.formErrors = {}; }}">
+            ${i18n.t('common.cancel')}
+          </button>
+          <button class="m-btn form" style="flex: 2" @click="${() => this.saveMobileGoal()}">
+            ${i18n.t('mobile.save_goal')}
+          </button>
+        </div>
+
+        ${snackbar(this.snack)}
+      </div>
+    `;
+  }
+
+  private renderDistributeSheet() {
+    const modes: { mode: 'byDate' | 'toOnTrack' | 'proportional'; title: string; desc: string }[] = [
+      {
+        mode: 'byDate',
+        title: i18n.t('goals.distribute.fill_by_date'),
+        desc: i18n.t('goals.distribute.fill_by_date_desc'),
+      },
+      {
+        mode: 'toOnTrack',
+        title: i18n.t('goals.distribute.fill_to_on_track'),
+        desc: i18n.t('goals.distribute.fill_to_on_track_desc'),
+      },
+      {
+        mode: 'proportional',
+        title: i18n.t('goals.distribute.proportional'),
+        desc: i18n.t('goals.distribute.proportional_desc'),
+      },
+    ];
+
+    return bottomSheet({
+      open: this.showDistributeSheet,
+      onDismiss: () => { this.showDistributeSheet = false; },
+      content: html`
+        <div class="m-sheet-title">${i18n.t('goals.distribute.distribute_unassigned')}</div>
+        <div class="m-subtitle">
+          ${i18n.t('mobile.unassigned')}: ${this.money(Math.max(0, this.unassigned), 2)}
+        </div>
+        <div>
+          ${modes.map(item => html`
+            <button
+              class="m-row"
+              style="align-items: flex-start; padding-top: 12px; padding-bottom: 12px;"
+              @click="${() => {
+                this.showDistributeSheet = false;
+                this.showDistributeMenu = 'unassigned';
+                this.handleDistribute(item.mode);
+              }}">
+              <span class="m-row-main">
+                <span class="m-row-primary">${item.title}</span>
+                <span class="m-row-secondary" style="white-space: normal">${item.desc}</span>
+              </span>
+            </button>
+          `)}
+        </div>
+      `,
+    });
+  }
+
+  private renderContributeSheet(goal: any) {
+    const parsed = parseFloat(this.contributeAmount);
+    const valid = Number.isFinite(parsed) && parsed > 0;
+
+    return bottomSheet({
+      open: this.showContributeSheet,
+      onDismiss: () => { this.showContributeSheet = false; },
+      content: html`
+        <div class="m-sheet-title">${i18n.t('mobile.add_to_goal')}</div>
+        <div class="m-subtitle">${goal.name}</div>
+        <div class="g-prefix-field" style="background: var(--md-sys-color-surface-container)">
+          <span>${this.symbol}</span>
+          <input
+            type="number"
+            inputmode="decimal"
+            placeholder="0.00"
+            .value="${this.contributeAmount}"
+            @input="${(e: any) => { this.contributeAmount = e.target.value; }}" />
+        </div>
+        <button
+          class="m-btn block"
+          ?disabled="${!valid}"
+          @click="${() => this.assignToGoal(goal, parsed)}">
+          ${i18n.t('common.save')}
+        </button>
+      `,
+    });
+  }
+
+  private renderDeleteSheet() {
+    return bottomSheet({
+      open: !!this.goalToDelete,
+      onDismiss: () => { this.goalToDelete = null; },
+      content: html`
+        <div class="m-sheet-title">${i18n.t('common.delete')}</div>
+        <div class="m-subtitle">${i18n.t('common.confirm_delete')}</div>
+        <div style="display: flex; gap: 12px;">
+          <button class="m-btn outlined" style="flex: 1" @click="${() => { this.goalToDelete = null; }}">
+            ${i18n.t('common.cancel')}
+          </button>
+          <button
+            class="m-btn destructive"
+            style="flex: 1"
+            @click="${() => this.performDeleteGoal(this.goalToDelete!)}">
+            ${i18n.t('common.delete')}
+          </button>
+        </div>
+      `,
+    });
+  }
+
+  private renderMobile() {
+    if (this.showGoalForm) return this.renderMobileForm();
+    if (this.detailGoalId) return this.renderMobileDetail();
+    return this.renderMobileList();
+  }
+
   render() {
+    if (this.isMobile) return this.renderMobile();
+
     if (this.loading) {
       return html`<p>${i18n.t('common.loading')}</p>`;
     }

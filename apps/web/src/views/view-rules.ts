@@ -1,8 +1,16 @@
-import { LitElement, html, css } from 'lit';
+import { LitElement, html, css, nothing } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import { api } from '../api/client';
 import { i18n } from '../i18n/i18n';
 import '../components/rule-editor';
+import {
+  bottomSheet,
+  icon,
+  mobileUI,
+  snackbar,
+  watchMobileViewport,
+  type SnackbarOptions,
+} from '../styles/mobile-ui';
 
 @customElement('view-rules')
 export class ViewRules extends LitElement {
@@ -17,8 +25,20 @@ export class ViewRules extends LitElement {
   @state() applying = false;
   @state() applyingAll = false;
 
-  static styles = css`
-    :host { 
+  // --- Mobile layer (<= 600px). The desktop list above the breakpoint is untouched. ---
+  @state() isMobile = false;
+  /** Rule card expanded to show its action row, or null. */
+  @state() expandedRuleId: string | null = null;
+  @state() ruleToDelete: any = null;
+  @state() snack: SnackbarOptions | null = null;
+
+  @state() private pendingConfirm: { message: string; confirmLabel: string } | null = null;
+  private confirmResolver: ((ok: boolean) => void) | null = null;
+  private unwatchViewport?: () => void;
+  private snackTimer?: number;
+
+  static styles = [css`
+    :host {
       display: block;
       padding: 0;
     }
@@ -245,23 +265,188 @@ export class ViewRules extends LitElement {
         flex-direction: column;
         align-items: stretch;
       }
-      
+
       .rule-item {
         flex-wrap: wrap;
       }
-      
+
       .actions {
         width: 100%;
         justify-content: flex-end;
       }
     }
-  `;
+
+    /* ---------- mobile ---------- */
+
+    .u-screen {
+      display: flex;
+      flex-direction: column;
+      min-height: calc(100dvh - 64px - env(safe-area-inset-bottom, 0px));
+    }
+
+    /* grow into the spare space but never shrink the cards */
+    .u-list { flex: 1 0 auto; display: flex; flex-direction: column; gap: 8px; }
+
+    .u-suggestions {
+      background: var(--md-sys-color-tertiary-container);
+      border-radius: 12px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .u-suggestions-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      color: var(--md-sys-color-on-tertiary-container);
+      font: 500 14px/20px 'Roboto', sans-serif;
+    }
+    .u-suggestions-header .m-icon-btn { color: inherit; width: 36px; height: 36px; min-width: 36px; }
+
+    .u-suggestion {
+      background: var(--md-sys-color-surface);
+      border-radius: 8px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .u-suggestion-name { font: 500 14px/20px 'Roboto', sans-serif; color: var(--md-sys-color-on-surface); }
+    .u-suggestion-meta {
+      font: 400 12px/16px 'Roboto', sans-serif;
+      color: var(--md-sys-color-on-surface-variant);
+    }
+    .u-meter {
+      height: 4px;
+      width: 120px;
+      border-radius: 2px;
+      background: var(--md-sys-color-outline-variant);
+      overflow: hidden;
+    }
+    .u-meter > div { height: 100%; background: var(--md-sys-color-primary); }
+
+    .u-card {
+      border: 1px solid var(--md-sys-color-outline-variant);
+      border-radius: 12px;
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      /* buttons default to align-items: center, which would stop the card's
+         rows from spreading to full width */
+      align-items: stretch;
+      flex-shrink: 0;
+      gap: 8px;
+      background: none;
+      width: 100%;
+      box-sizing: border-box;
+      text-align: left;
+      color: inherit;
+      font: inherit;
+      cursor: pointer;
+    }
+    .u-card-line1 { display: flex; align-items: center; gap: 8px; }
+    .u-card-index {
+      font: 500 12px/16px 'Roboto', sans-serif;
+      color: var(--md-sys-color-on-surface-variant);
+      flex-shrink: 0;
+    }
+    .u-card-name {
+      flex: 1;
+      min-width: 0;
+      font: 500 16px/24px 'Roboto', sans-serif;
+      color: var(--md-sys-color-on-surface);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .u-card-line2 {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      font: 400 12px/16px 'Roboto', sans-serif;
+      color: var(--md-sys-color-on-surface-variant);
+    }
+    .u-card-line3 { display: flex; align-items: center; gap: 8px; }
+    .u-reorder { display: flex; flex-direction: column; gap: 2px; }
+    .u-reorder button {
+      width: 40px;
+      height: 20px;
+      padding: 0;
+      border: 1px solid var(--md-sys-color-outline-variant);
+      border-radius: 4px;
+      background: transparent;
+      color: var(--md-sys-color-on-surface-variant);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+    .u-badge {
+      padding: 2px 8px;
+      border-radius: 6px;
+      font: 500 11px/16px 'Roboto', sans-serif;
+      white-space: nowrap;
+    }
+    .u-badge.auto {
+      background: var(--md-sys-color-tertiary-container);
+      color: var(--md-sys-color-on-tertiary-container);
+    }
+    .u-badge.suggest {
+      background: var(--md-sys-color-primary-container);
+      color: var(--md-sys-color-on-primary-container);
+    }
+    .u-badge.off {
+      background: var(--md-sys-color-outline-variant);
+      color: var(--md-sys-color-on-surface-variant);
+    }
+  `, mobileUI];
 
   async connectedCallback() {
     super.connectedCallback();
+    this.unwatchViewport = watchMobileViewport(this);
     await this.loadRules();
     await this.loadCategories();
     await this.loadSuggestions();
+  }
+
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    this.unwatchViewport?.();
+    if (this.snackTimer) window.clearTimeout(this.snackTimer);
+  }
+
+  /** Inline snackbar above the nav; replaces alert() on the mobile path. */
+  private notify(message: string) {
+    if (!this.isMobile) {
+      alert(message);
+      return;
+    }
+    if (this.snackTimer) window.clearTimeout(this.snackTimer);
+    this.snack = { message };
+    this.snackTimer = window.setTimeout(() => { this.snack = null; }, 4000);
+  }
+
+  /**
+   * Same contract as window.confirm(), but on mobile it resolves through a
+   * bottom sheet instead of a native dialog.
+   */
+  private askConfirm(message: string, confirmLabel?: string): Promise<boolean> {
+    if (!this.isMobile) return Promise.resolve(confirm(message));
+    return new Promise<boolean>(resolve => {
+      this.confirmResolver?.(false); // only one dialog at a time
+      this.confirmResolver = resolve;
+      this.pendingConfirm = { message, confirmLabel: confirmLabel || i18n.t('common.save') };
+    });
+  }
+
+  private settleConfirm(ok: boolean) {
+    this.pendingConfirm = null;
+    const resolve = this.confirmResolver;
+    this.confirmResolver = null;
+    resolve?.(ok);
   }
 
   async loadRules() {
@@ -270,7 +455,7 @@ export class ViewRules extends LitElement {
       this.rules = await api.get('/rules');
     } catch (e) {
       console.error(e);
-      alert(i18n.t('rules.errors.load_failed'));
+      this.notify(i18n.t('rules.errors.load_failed'));
     } finally {
       this.loading = false;
     }
@@ -303,13 +488,13 @@ export class ViewRules extends LitElement {
   }
 
   async deleteRule(id: string) {
-    if (!confirm(i18n.t('rules.delete_confirm'))) return;
+    if (!(await this.askConfirm(i18n.t('rules.delete_confirm'), i18n.t('common.delete')))) return;
     try {
       await api.delete(`/rules/${id}`);
       await this.loadRules();
     } catch (e) {
       console.error(e);
-      alert(i18n.t('rules.errors.delete_failed'));
+      this.notify(i18n.t('rules.errors.delete_failed'));
     }
   }
 
@@ -331,7 +516,7 @@ export class ViewRules extends LitElement {
       await this.loadRules();
     } catch (e: any) {
       console.error(e);
-      alert(i18n.t('rules.errors.save_failed') + ': ' + e.message);
+      this.notify(i18n.t('rules.errors.save_failed') + ': ' + e.message);
     }
   }
 
@@ -373,13 +558,13 @@ export class ViewRules extends LitElement {
       this.showSuggestions = true;
       
       if (this.suggestions.length > 0) {
-        alert(i18n.t('rules.suggestions_found').replace('{count}', this.suggestions.length.toString()));
+        this.notify(i18n.t('rules.suggestions_found').replace('{count}', this.suggestions.length.toString()));
       } else {
-        alert(i18n.t('rules.no_suggestions'));
+        this.notify(i18n.t('rules.no_suggestions'));
       }
     } catch (e: any) {
       console.error(e);
-      alert(i18n.t('rules.errors.detect_failed'));
+      this.notify(i18n.t('rules.errors.detect_failed'));
     } finally {
       this.detecting = false;
     }
@@ -411,24 +596,24 @@ export class ViewRules extends LitElement {
 
   // NEW: Apply rule to existing transactions
   async applyRule(rule: any) {
-    if (!confirm(i18n.t('rules.apply_confirm'))) return;
+    if (!(await this.askConfirm(i18n.t('rules.apply_confirm'), i18n.t('rules.apply_rule')))) return;
     
     this.applying = true;
     try {
       const result = await api.post(`/rules/${rule.id}/apply`, {});
       const count = result.matchCount || 0;
-      alert(i18n.t('rules.applied_success').replace('{count}', count.toString()));
+      this.notify(i18n.t('rules.applied_success').replace('{count}', count.toString()));
       await this.loadRules();
     } catch (e: any) {
       console.error(e);
-      alert(i18n.t('rules.errors.apply_failed'));
+      this.notify(i18n.t('rules.errors.apply_failed'));
     } finally {
       this.applying = false;
     }
   }
 
   async applyAllRules() {
-    if (!confirm(i18n.t('rules.apply_all_confirm'))) {
+    if (!(await this.askConfirm(i18n.t('rules.apply_all_confirm'), i18n.t('rules.apply_all_rules')))) {
       return;
     }
     
@@ -446,11 +631,11 @@ export class ViewRules extends LitElement {
         }
       }
       
-      alert(i18n.t('rules.apply_all_success').replace('{count}', totalMatched.toString()));
+      this.notify(i18n.t('rules.apply_all_success').replace('{count}', totalMatched.toString()));
       await this.loadRules();
     } catch (e) {
       console.error('Failed to apply all rules', e);
-      alert(i18n.t('rules.errors.apply_failed'));
+      this.notify(i18n.t('rules.errors.apply_failed'));
     } finally {
       this.applyingAll = false;
     }
@@ -471,7 +656,217 @@ export class ViewRules extends LitElement {
     return date.toLocaleDateString();
   }
 
+  // ------------------------------------------------------------------
+  // Mobile layout
+  // ------------------------------------------------------------------
+
+  private renderMobileSuggestions() {
+    if (this.suggestions.length === 0) return nothing;
+
+    return html`
+      <div class="u-suggestions">
+        <div class="u-suggestions-header">
+          <span>💡 ${i18n.t('mobile.suggested_rules', { count: this.suggestions.length })}</span>
+          <button
+            class="m-icon-btn"
+            @click="${() => { this.showSuggestions = !this.showSuggestions; }}"
+            title="${this.showSuggestions ? i18n.t('rules.hide_suggestions') : i18n.t('rules.show_suggestions')}">
+            ${icon(this.showSuggestions ? 'expand_less' : 'expand_more', 22)}
+          </button>
+        </div>
+
+        ${this.showSuggestions ? this.suggestions.map(s => html`
+          <div class="u-suggestion">
+            <div style="display: flex; align-items: flex-start; gap: 8px;">
+              <div style="flex: 1; min-width: 0">
+                <div class="u-suggestion-name">${s.name}</div>
+                <div class="u-suggestion-meta">
+                  ${i18n.t('rules.match_count').replace('{count}', s.matchCount)} ·
+                  ${i18n.t('rules.confidence')} ${Number(s.confidence).toFixed(0)}%
+                </div>
+                <div class="u-meter" style="margin-top: 4px">
+                  <div style="width: ${s.confidence}%"></div>
+                </div>
+              </div>
+              ${s.category
+                ? html`<span class="m-tag">${s.category.icon} ${s.category.name}</span>`
+                : nothing}
+            </div>
+
+            <div style="display: flex; gap: 8px;">
+              <button class="m-btn short" style="flex: 1" @click="${() => this.acceptSuggestion(s)}">
+                ${i18n.t('rules.configure_accept')}
+              </button>
+              <button
+                class="m-btn short outlined"
+                style="width: 40px; padding: 0; color: var(--md-sys-color-error); border-color: var(--md-sys-color-error)"
+                title="${i18n.t('rules.reject')}"
+                @click="${() => this.rejectSuggestion(s)}">
+                ${icon('close', 18)}
+              </button>
+            </div>
+          </div>
+        `) : nothing}
+      </div>
+    `;
+  }
+
+  private renderMobileRuleCard(rule: any, index: number) {
+    const expanded = this.expandedRuleId === rule.id;
+
+    return html`
+      <div class="u-card" style="opacity: ${rule.enabled ? 1 : 0.5}"
+        @click="${() => { this.expandedRuleId = expanded ? null : rule.id; }}">
+        <div class="u-card-line1">
+          <span class="u-card-index" title="${i18n.t('rules.priority')}: ${rule.priority}">
+            #${index + 1}
+          </span>
+          <span class="u-card-name">${rule.name}</span>
+          ${!rule.enabled
+            ? html`<span class="u-badge off">${i18n.t('rules.disabled')}</span>`
+            : rule.mode === 'AUTO_APPLY'
+              ? html`<span class="u-badge auto">⚡ ${i18n.t('rules.mode_auto_apply')}</span>`
+              : html`<span class="u-badge suggest">💡 ${i18n.t('rules.mode_suggest')}</span>`}
+        </div>
+
+        <div class="u-card-line2">
+          ${rule.category
+            ? html`<span class="m-tag">${rule.category.icon} ${rule.category.name}</span>`
+            : nothing}
+          <span>
+            ${i18n.t('rules.match_count').replace('{count}', rule.matchCount || 0)} ·
+            ${this.formatLastMatched(rule)}
+          </span>
+        </div>
+
+        ${expanded ? html`
+          <div class="u-card-line3" @click="${(e: Event) => e.stopPropagation()}">
+            <button class="m-btn short outlined" style="flex: 1" ?disabled="${this.applying}"
+              @click="${() => this.applyRule(rule)}">
+              ${i18n.t('rules.apply_rule')}
+            </button>
+            <button
+              class="m-btn short outlined"
+              style="width: 40px; padding: 0"
+              title="${rule.enabled ? i18n.t('rules.disabled') : i18n.t('rules.enabled')}"
+              @click="${() => this.toggleEnabled(rule)}">
+              ${icon(rule.enabled ? 'pause' : 'play_arrow', 18)}
+            </button>
+            <button
+              class="m-btn short outlined"
+              style="width: 40px; padding: 0"
+              title="${i18n.t('common.edit')}"
+              @click="${() => this.startEdit(rule)}">
+              ${icon('edit', 18)}
+            </button>
+            <button
+              class="m-btn short outlined"
+              style="width: 40px; padding: 0; color: var(--md-sys-color-error); border-color: var(--md-sys-color-error)"
+              title="${i18n.t('common.delete')}"
+              @click="${() => this.deleteRule(rule.id)}">
+              ${icon('delete', 18)}
+            </button>
+            <div class="u-reorder">
+              <button ?disabled="${index === 0}" @click="${() => this.moveRule(index, 'up')}"
+                title="${i18n.t('rules.priority_help')}">
+                ${icon('keyboard_arrow_up', 16)}
+              </button>
+              <button
+                ?disabled="${index === this.rules.length - 1}"
+                @click="${() => this.moveRule(index, 'down')}"
+                title="${i18n.t('rules.priority_help')}">
+                ${icon('keyboard_arrow_down', 16)}
+              </button>
+            </div>
+          </div>
+        ` : nothing}
+      </div>
+    `;
+  }
+
+  private renderConfirmSheet() {
+    return bottomSheet({
+      open: this.pendingConfirm !== null,
+      onDismiss: () => this.settleConfirm(false),
+      content: html`
+        <div class="m-subtitle" style="white-space: pre-line">${this.pendingConfirm?.message ?? ''}</div>
+        <div style="display: flex; gap: 12px;">
+          <button class="m-btn outlined" style="flex: 1" @click="${() => this.settleConfirm(false)}">
+            ${i18n.t('common.cancel')}
+          </button>
+          <button class="m-btn" style="flex: 1" @click="${() => this.settleConfirm(true)}">
+            ${this.pendingConfirm?.confirmLabel ?? i18n.t('common.save')}
+          </button>
+        </div>
+      `,
+    });
+  }
+
+  private renderMobile() {
+    return html`
+      <div class="m-screen u-screen">
+        <div class="m-title-row">
+          <h1 class="m-title">${i18n.t('rules.title')}</h1>
+        </div>
+        <p class="m-subtitle">${i18n.t('rules.priority_explanation')}</p>
+
+        <div style="display: flex; gap: 8px;">
+          <button
+            class="m-btn short outlined"
+            style="flex: 1; height: 44px; border-radius: 22px"
+            ?disabled="${this.detecting}"
+            @click="${this.detectPatterns}">
+            ${this.detecting ? i18n.t('rules.detecting') : i18n.t('rules.detect_patterns')}
+          </button>
+          <button
+            class="m-btn short outlined"
+            style="flex: 1; height: 44px; border-radius: 22px"
+            ?disabled="${this.applyingAll}"
+            @click="${this.applyAllRules}">
+            ${this.applyingAll ? i18n.t('rules.applying_all') : i18n.t('rules.apply_all_rules')}
+          </button>
+        </div>
+
+        ${this.renderMobileSuggestions()}
+
+        <div class="u-list">
+          ${this.loading
+            ? html`<div class="m-progress-bar"></div>`
+            : this.rules.length === 0
+              ? html`
+                <div class="m-empty" style="padding-top: 40px">
+                  <div class="m-empty-circle">${icon('rule', 40)}</div>
+                  <div class="m-empty-title">${i18n.t('rules.no_rules')}</div>
+                </div>
+              `
+              : this.rules.map((rule, index) => this.renderMobileRuleCard(rule, index))}
+        </div>
+
+        <!-- Pinned so it never covers the last card -->
+        <div class="m-pinned">
+          <button class="m-btn form block" @click="${this.startCreate}">
+            ${icon('add', 22)} ${i18n.t('mobile.add_rule')}
+          </button>
+        </div>
+
+        ${this.renderConfirmSheet()}
+        ${snackbar(this.snack)}
+      </div>
+
+      ${this.showEditor ? html`
+        <rule-editor
+          .rule="${this.editingRule}"
+          .categories="${this.categories}"
+          @save="${(e: CustomEvent) => this.handleSave(e.detail)}"
+          @cancel="${() => this.showEditor = false}"
+        ></rule-editor>
+      ` : ''}
+    `;
+  }
+
   render() {
+    if (this.isMobile) return this.renderMobile();
+
     return html`
       <div class="page-header">
         <h1 class="page-title">${i18n.t('rules.title')}</h1>

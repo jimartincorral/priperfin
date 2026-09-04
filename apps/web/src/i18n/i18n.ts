@@ -52,7 +52,8 @@ export class I18nService extends EventTarget {
     }
 
     // Supports dot notation: t('nav.expenses')
-    t(key: string): string {
+    // Optionally interpolates {placeholders}: t('mobile.show_results', { count: 3 })
+    t(key: string, params?: Record<string, string | number>): string {
         const keys = key.split('.');
         let current: any = this.strings;
 
@@ -62,6 +63,12 @@ export class I18nService extends EventTarget {
                 return key;
             }
             current = current[k];
+        }
+
+        if (params && typeof current === 'string') {
+            return current.replace(/\{(\w+)\}/g, (match, name) =>
+                params[name] !== undefined ? String(params[name]) : match,
+            );
         }
 
         return current;

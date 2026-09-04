@@ -1,4 +1,4 @@
-import { LitElement, html, css } from 'lit';
+import { LitElement, html, css, nothing } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import { api, bankSyncApi } from '../api/client';
 import '../components/csv-wizard';
@@ -7,12 +7,25 @@ import '../components/rule-editor';
 import '../components/filterable-select';
 import 'emoji-picker-element';
 import type { SelectOption } from '../components/filterable-select';
+import {
+  bottomSheet,
+  icon,
+  mobileUI,
+  monthStepper,
+  skeleton,
+  snackbar,
+  watchMobileViewport,
+  type SnackbarOptions,
+} from '../styles/mobile-ui';
 
 import { i18n } from '../i18n/i18n';
 import { calculateMonthlyStats } from '../utils/expense-utils';
 
 
 type DateFilterMode = 'month' | 'year' | 'custom' | 'all_time';
+
+/** Rows appended each time the mobile list reaches its scroll sentinel. */
+const MOBILE_PAGE_SIZE = 30;
 
 @customElement('view-expenses')
 export class ViewExpenses extends LitElement {
@@ -168,6 +181,38 @@ export class ViewExpenses extends LitElement {
 
   @state() showColumnModal = false;
 
+  // --- Mobile layer (<= 600px). The desktop table above the breakpoint is untouched. ---
+  @state() isMobile = false;
+  /** Transaction whose category sheet is open, or null. */
+  @state() sheetTx: any = null;
+  @state() sheetCategoryQuery = '';
+  @state() showFilterSheet = false;
+  @state() showReconciliationSheet = false;
+  @state() showAccountSheet = false;
+  @state() showPeriodSheet = false;
+  @state() searchMode = false;
+  @state() bulkMode = false;
+  /** 'review' shows only rows needing a category; '' shows everything. */
+  @state() quickFilter: '' | 'review' | 'uncategorized' = '';
+  /** Which bulk picker sheet is open, if any. */
+  @state() bulkTarget: 'category' | 'account' | null = null;
+  /** How many rows the list currently shows; grows as the sentinel scrolls in. */
+  @state() mobileVisibleCount = MOBILE_PAGE_SIZE;
+  @state() snack: SnackbarOptions | null = null;
+
+  // Period sheet holds its edits until Apply
+  @state() private sheetMode: DateFilterMode = 'month';
+  @state() private sheetYear = new Date().getFullYear();
+  @state() private sheetMonth = new Date().getMonth() + 1;
+  @state() private sheetStartDate = '';
+  @state() private sheetEndDate = '';
+
+  private unwatchViewport?: () => void;
+  private snackTimer?: number;
+  private longPressTimer?: number;
+  private listObserver?: IntersectionObserver;
+  private observedSentinel?: Element;
+
   // Non-reactive property to preserve scroll position across renders
   private _preservedScrollY: number | null = null;
   private _autoPageSizeToTotalOnNextLoad = false;
@@ -314,11 +359,54 @@ export class ViewExpenses extends LitElement {
     super.connectedCallback();
     this.showWizard = false;
     i18n.addEventListener('lang-change', () => this.requestUpdate());
+    this.unwatchViewport = watchMobileViewport(this);
   }
 
   disconnectedCallback() {
     super.disconnectedCallback();
     i18n.removeEventListener('lang-change', () => this.requestUpdate());
+    this.unwatchViewport?.();
+    if (this.snackTimer) window.clearTimeout(this.snackTimer);
+    if (this.longPressTimer) window.clearTimeout(this.longPressTimer);
+    this.listObserver?.disconnect();
+    this.listObserver = undefined;
+    this.observedSentinel = undefined;
+  }
+
+  /** Inline snackbar above the nav; replaces alert() on the mobile path. */
+  private notify(message: string, action?: { label: string; run: () => void }) {
+    if (!this.isMobile) {
+      alert(message);
+      return;
+    }
+    if (this.snackTimer) window.clearTimeout(this.snackTimer);
+    this.snack = action
+      ? { message, actionLabel: action.label, onAction: () => { this.snack = null; action.run(); } }
+      : { message };
+    this.snackTimer = window.setTimeout(() => { this.snack = null; }, 4000);
+  }
+
+  @state() private pendingConfirm: { message: string; confirmLabel: string } | null = null;
+  private confirmResolver: ((ok: boolean) => void) | null = null;
+
+  /**
+   * Same contract as window.confirm(), but on mobile it resolves through a
+   * bottom sheet instead of a native dialog.
+   */
+  private askConfirm(message: string, confirmLabel?: string): Promise<boolean> {
+    if (!this.isMobile) return Promise.resolve(confirm(message));
+    return new Promise<boolean>(resolve => {
+      this.confirmResolver?.(false); // only one dialog at a time
+      this.confirmResolver = resolve;
+      this.pendingConfirm = { message, confirmLabel: confirmLabel || i18n.t('common.save') };
+    });
+  }
+
+  private settleConfirm(ok: boolean) {
+    this.pendingConfirm = null;
+    const resolve = this.confirmResolver;
+    this.confirmResolver = null;
+    resolve?.(ok);
   }
 
   toggleSelection(id: string) {
@@ -344,7 +432,11 @@ export class ViewExpenses extends LitElement {
   }
 
   async deleteSelected() {
-    if (!confirm(`Are you sure you want to delete ${this.selectedTransactions.size} transactions?`)) return;
+    const confirmed = await this.askConfirm(
+      `Are you sure you want to delete ${this.selectedTransactions.size} transactions?`,
+      i18n.t('common.delete'),
+    );
+    if (!confirmed) return;
 
     try {
       for (const id of this.selectedTransactions) {
@@ -353,7 +445,7 @@ export class ViewExpenses extends LitElement {
       this.selectedTransactions = new Set();
       await this.loadData(true);
     } catch (e: any) {
-      alert('Failed to delete selected: ' + e.message);
+      this.notify('Failed to delete selected: ' + e.message);
     }
   }
 
@@ -366,7 +458,7 @@ export class ViewExpenses extends LitElement {
       this.selectedTransactions = new Set();
       await this.loadData(true);
     } catch (e: any) {
-      alert('Failed to update category: ' + e.message);
+      this.notify('Failed to update category: ' + e.message);
     }
   }
 
@@ -380,7 +472,7 @@ export class ViewExpenses extends LitElement {
       this.selectedTransactions = new Set();
       await this.loadData(true);
     } catch (e: any) {
-      alert(i18n.t('bulk_actions.assign_account_failed') + ': ' + e.message);
+      this.notify(i18n.t('bulk_actions.assign_account_failed') + ': ' + e.message);
     }
   }
 
@@ -575,7 +667,7 @@ export class ViewExpenses extends LitElement {
 
     const anchorBalanceAfter = parseFloat(entered.replace(',', '.'));
     if (!Number.isFinite(anchorBalanceAfter)) {
-      alert(i18n.t('expenses.set_from_movement_invalid'));
+      this.notify(i18n.t('expenses.set_from_movement_invalid'));
       return;
     }
 
@@ -588,7 +680,7 @@ export class ViewExpenses extends LitElement {
       const sortedTxs = [...allTxs].sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
       const anchorIndex = sortedTxs.findIndex((item: any) => item.id === tx.id);
       if (anchorIndex === -1) {
-        alert(i18n.t('expenses.set_from_movement_failed'));
+        this.notify(i18n.t('expenses.set_from_movement_failed'));
         return;
       }
 
@@ -624,16 +716,16 @@ export class ViewExpenses extends LitElement {
       }
 
       await this.loadData(true);
-      alert(i18n.t('expenses.set_from_movement_done'));
+      this.notify(i18n.t('expenses.set_from_movement_done'));
     } catch (e: any) {
       console.error('Failed to set balances from movement', e);
-      alert(`${i18n.t('expenses.set_from_movement_failed')}: ${e.message || i18n.t('common.unknown_error')}`);
+      this.notify(`${i18n.t('expenses.set_from_movement_failed')}: ${e.message || i18n.t('common.unknown_error')}`);
     }
   }
 
   async saveNewCategory() {
     if (!this.categoryForm.name) {
-      alert('Please enter a category name');
+      this.notify('Please enter a category name');
       return;
     }
 
@@ -651,7 +743,7 @@ export class ViewExpenses extends LitElement {
       await this.loadData(true);
     } catch (e: any) {
       console.error('Failed to save category', e);
-      alert('Failed to save category: ' + (e.message || 'Unknown error'));
+      this.notify('Failed to save category: ' + (e.message || 'Unknown error'));
     }
   }
 
@@ -753,9 +845,9 @@ export class ViewExpenses extends LitElement {
     }
   }
 
-  static styles = css`
+  static styles = [css`
     :host { display: block; color-scheme: dark; }
-    
+
     .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
     h1 { font: var(--md-sys-typescale-headline-medium); color: var(--md-sys-color-on-surface); margin: 0; }
 
@@ -940,17 +1032,228 @@ export class ViewExpenses extends LitElement {
     .alert-error { margin-left: auto; padding: 1rem; background: var(--md-sys-color-error-container); border-radius: 8px; color: var(--md-sys-color-on-error-container); display: flex; align-items: center; gap: 1rem; }
     .alert-success { margin-left: auto; padding: 1rem; background: #dcfce7; border-radius: 8px; color: #14532d; display: flex; align-items: center; gap: 1rem; }
 
-    emoji-picker { 
+    emoji-picker {
         position: relative;
-        width: 350px; 
-        height: 300px; 
-        margin-top: 8px; 
-        --emoji-size: 1.5rem; 
+        width: 350px;
+        height: 300px;
+        margin-top: 8px;
+        --emoji-size: 1.5rem;
         background: var(--md-sys-color-surface-container-high);
         border: 1px solid var(--md-sys-color-outline-variant);
         border-radius: 8px;
     }
-  `;
+
+    /* ---------- mobile ---------- */
+
+    .x-screen {
+      display: flex;
+      flex-direction: column;
+      min-height: calc(100dvh - 64px - env(safe-area-inset-bottom, 0px));
+    }
+
+    .x-summary {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 4px 0;
+    }
+    .x-summary-label { font: 500 12px/16px 'Roboto', sans-serif; color: var(--md-sys-color-on-surface-variant); }
+    .x-summary-net { font: 500 20px/28px 'Roboto', sans-serif; }
+    .x-summary-right {
+      text-align: right;
+      border: none;
+      background: none;
+      padding: 0;
+      cursor: pointer;
+      color: inherit;
+      font: inherit;
+    }
+    .x-summary-diff { font: 500 14px/20px 'Roboto', sans-serif; color: var(--md-sys-color-error); }
+
+    /* Reserve room for the FAB so no row sits underneath it.
+       flex: 1 0 auto grows into spare space without shrinking the rows. */
+    .x-list { padding-bottom: 88px; flex: 1 0 auto; }
+
+    .x-date-header {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      margin: 0 -16px;
+      padding: 8px 16px 4px;
+      background: var(--md-sys-color-surface);
+      font: 500 12px/16px 'Roboto', sans-serif;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--md-sys-color-outline);
+    }
+
+    .x-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-height: 64px;
+      padding: 12px 16px;
+      margin: 0 -16px;
+      width: calc(100% + 32px);
+      box-sizing: border-box;
+      border: none;
+      border-bottom: 1px solid var(--md-sys-color-surface-container-high);
+      background: none;
+      text-align: left;
+      color: inherit;
+      font: inherit;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .x-row.highlight { background: var(--md-sys-color-surface-container); }
+    .x-row-main { flex: 1; min-width: 0; }
+    .x-row-desc {
+      font: var(--md-sys-typescale-body-large);
+      color: var(--md-sys-color-on-surface);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .x-row-cat {
+      font: 500 13px/16px 'Roboto', sans-serif;
+      color: var(--md-sys-color-on-surface-variant);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .x-suggestion {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 2px;
+    }
+    .x-suggestion-name {
+      font: italic 500 13px/16px 'Roboto', sans-serif;
+      color: var(--md-sys-color-primary);
+    }
+    .x-accept {
+      height: 32px;
+      padding: 0 12px;
+      border: none;
+      border-radius: 16px;
+      background: var(--md-sys-color-primary);
+      color: var(--md-sys-color-on-primary);
+      font: 500 13px/16px 'Roboto', sans-serif;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .x-avatar-suggest {
+      background: var(--md-sys-color-secondary-container);
+      color: var(--md-sys-color-on-secondary-container);
+      font: 500 18px/1 'Roboto', sans-serif;
+    }
+
+    /* bulk select */
+    .x-bulk-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: -12px -16px 0;
+      padding: 4px 8px;
+      min-height: 56px;
+      background: var(--md-sys-color-secondary-container);
+      color: var(--md-sys-color-on-secondary-container);
+    }
+    .x-bulk-bar .m-icon-btn { color: inherit; width: 48px; height: 48px; }
+    .x-bulk-title { flex: 1; font: 500 18px/24px 'Roboto', sans-serif; }
+    .x-bulk-action {
+      background: none;
+      border: none;
+      color: inherit;
+      font: 500 14px/20px 'Roboto', sans-serif;
+      cursor: pointer;
+      padding: 0 12px;
+    }
+    .x-check {
+      width: 40px;
+      height: 40px;
+      border-radius: 20px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      box-sizing: border-box;
+      border: 2px solid var(--md-sys-color-outline);
+    }
+    .x-check.on {
+      background: var(--md-sys-color-primary);
+      color: var(--md-sys-color-on-primary);
+      border-color: var(--md-sys-color-primary);
+    }
+    .x-bulk-actions {
+      position: sticky;
+      bottom: 0;
+      display: flex;
+      gap: 12px;
+      margin: 8px -16px 0;
+      padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+      /* The handoff names #001e30, which is the light palette's
+         on-primary-container; primary-container is the equivalent deep blue in
+         the dark palette and stays sane when the theme flips. */
+      background: var(--md-sys-color-primary-container);
+      border-top: 1px solid var(--md-sys-color-outline-variant);
+    }
+
+    /* transaction sheet */
+    .x-sheet-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .x-sheet-header .m-avatar { width: 44px; height: 44px; border-radius: 22px; font-size: 20px; }
+    .x-sheet-desc { font: 500 18px/24px 'Roboto', sans-serif; color: var(--md-sys-color-on-surface); }
+    .x-sheet-meta { font: 400 13px/20px 'Roboto', sans-serif; color: var(--md-sys-color-on-surface-variant); }
+    .x-cat-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-height: 56px;
+      padding: 0 12px;
+      border: none;
+      border-radius: 12px;
+      background: none;
+      width: 100%;
+      box-sizing: border-box;
+      text-align: left;
+      color: var(--md-sys-color-on-surface);
+      font: var(--md-sys-typescale-body-large);
+      cursor: pointer;
+    }
+    .x-cat-row.selected {
+      background: var(--md-sys-color-secondary-container);
+      color: var(--md-sys-color-on-secondary-container);
+    }
+    .x-cat-row.child { padding-left: 32px; }
+
+    .x-recon-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      min-height: 52px;
+      border-bottom: 1px solid var(--md-sys-color-surface-container-highest);
+    }
+
+    /* skeletons */
+    .x-skeleton-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-height: 64px;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--md-sys-color-surface-container-high);
+    }
+    .x-skeleton-main { flex: 1; display: flex; flex-direction: column; gap: 8px; }
+  `, mobileUI];
 
   async firstUpdated() {
     const storedCurrency = localStorage.getItem('priperfin_currency');
@@ -1023,6 +1326,8 @@ export class ViewExpenses extends LitElement {
 
   updated(changedProperties: Map<string, any>) {
     super.updated(changedProperties);
+
+    if (this.isMobile) this.setupInfiniteScroll();
 
     // Restore scroll position if preserved
     if (this._preservedScrollY !== null) {
@@ -1266,7 +1571,7 @@ export class ViewExpenses extends LitElement {
         }
       } else {
         console.error('Failed to load transactions', txsResult.reason);
-        alert('Failed to load transactions. Check console for details.');
+        this.notify('Failed to load transactions. Check console for details.');
       }
 
       if (catsResult.status === 'fulfilled') this.categories = catsResult.value;
@@ -1385,7 +1690,11 @@ export class ViewExpenses extends LitElement {
 
         if (others.length > 0) {
           console.log('[ViewExpenses] Found similar transactions:', others.length);
-          if (confirm(`Found ${others.length} other uncategorized transactions for "${tx.description}".Apply "${this.categories.find(c => c.id === categoryId)?.name}" to them too ? `)) {
+          const propagate = await this.askConfirm(
+            `Found ${others.length} other uncategorized transactions for "${tx.description}".Apply "${this.categories.find(c => c.id === categoryId)?.name}" to them too ? `,
+            i18n.t('mobile.apply'),
+          );
+          if (propagate) {
             await api.post('/transactions/propagate', { description: tx.description, categoryId });
           }
         }
@@ -1402,8 +1711,11 @@ export class ViewExpenses extends LitElement {
           if (suggestion && suggestion.conditionsJson && Object.keys(suggestion).length > 0) {
             // Pattern detected and no existing rule - ask if user wants to create a rule
             const categoryName = this.categories.find(c => c.id === categoryId)?.name;
-            const shouldCreateRule = confirm(i18n.t('rules.create_rule_prompt').replace('{category}', categoryName || ''));
-            
+            const shouldCreateRule = await this.askConfirm(
+              i18n.t('rules.create_rule_prompt').replace('{category}', categoryName || ''),
+              i18n.t('mobile.rule'),
+            );
+
             if (shouldCreateRule) {
               // Pre-fill the rule editor with suggestion data
               this.ruleTransaction = {
@@ -1429,7 +1741,11 @@ export class ViewExpenses extends LitElement {
               const categoryName = this.categories.find(c => c.id === categoryId)?.name;
               const ruleNames = existingRulesForCategory.map((r: any) => r.name).join(', ');
               
-              if (confirm(i18n.t('rules.rule_exists').replace('{category}', categoryName || '').replace('{rules}', ruleNames))) {
+              const viewRules = await this.askConfirm(
+                i18n.t('rules.rule_exists').replace('{category}', categoryName || '').replace('{rules}', ruleNames),
+                i18n.t('rules.title'),
+              );
+              if (viewRules) {
                 // Navigate to rules page
                 window.location.hash = '#/rules';
               }
@@ -1467,7 +1783,7 @@ export class ViewExpenses extends LitElement {
       this.transactionToDelete = null;
     } catch (e: any) {
       console.error('Failed to delete transaction', e);
-      alert('Failed to delete: ' + (e.message || 'Unknown error'));
+      this.notify('Failed to delete: ' + (e.message || 'Unknown error'));
     }
   }
 
@@ -1491,7 +1807,7 @@ export class ViewExpenses extends LitElement {
     console.log('[View Expenses] Import result:', result);
 
     const count = result.count ?? result.newCount ?? 0;
-    alert(`Successfully imported ${count} transactions.`);
+    this.notify(`Successfully imported ${count} transactions.`);
     await this.loadData(true);
   }
 
@@ -1505,19 +1821,19 @@ export class ViewExpenses extends LitElement {
       const errorAcc = result?.accountsSynced?.find((a: any) => a.status === 'ERROR');
 
       if (expiredAcc) {
-        alert(`⚠️ ${expiredAcc.accountName}: ${expiredAcc.message || 'La sesión del banco ha expirado. Por favor, ve a Configuración para re-autenticar.'}`);
+        this.notify(`⚠️ ${expiredAcc.accountName}: ${expiredAcc.message || 'La sesión del banco ha expirado. Por favor, ve a Configuración para re-autenticar.'}`);
       } else if (errorAcc && newCount === 0 && duplicateCount === 0) {
-        alert(`⚠️ ${errorAcc.accountName}: ${errorAcc.message || 'Error al sincronizar con el banco.'}`);
+        this.notify(`⚠️ ${errorAcc.accountName}: ${errorAcc.message || 'Error al sincronizar con el banco.'}`);
       } else {
         const msg = i18n.t('bank_sync.sync_success')
           .replace('{newCount}', String(newCount))
           .replace('{duplicateCount}', String(duplicateCount));
-        alert(msg);
+        this.notify(msg);
       }
       await this.loadData(true);
     } catch (e: any) {
       console.error('Bank sync failed', e);
-      alert(i18n.t('bank_sync.sync_failed') + ': ' + (e.message || 'Unknown error'));
+      this.notify(i18n.t('bank_sync.sync_failed') + ': ' + (e.message || 'Unknown error'));
     } finally {
       this.bankSyncing = false;
     }
@@ -1539,6 +1855,10 @@ export class ViewExpenses extends LitElement {
       await api.post('/transactions', {
         ...this.newTransaction,
         date: new Date(this.newTransaction.date).toISOString(),
+        // The DTO validates these as UUIDs unless they are explicitly null,
+        // so empty strings from the form have to be normalised away
+        categoryId: this.newTransaction.categoryId || null,
+        costObjectId: this.newTransaction.costObjectId || null,
         accountId: this.selectedAccountId || null
       });
       this.showAddForm = false;
@@ -1546,7 +1866,7 @@ export class ViewExpenses extends LitElement {
       await this.loadData(true);
     } catch (e) {
       console.error('Failed to create transaction', e);
-      alert('Failed to create transaction');
+      this.notify('Failed to create transaction');
     }
   }
 
@@ -1638,8 +1958,11 @@ export class ViewExpenses extends LitElement {
           // Check if suggestion has conditionsJson (backend returns null as {} when no suggestion)
           if (suggestion?.conditionsJson) {
             const categoryName = this.categories.find(c => c.id === localValue)?.name;
-            const shouldCreateRule = confirm(i18n.t('rules.create_rule_prompt').replace('{category}', categoryName || ''));
-            
+            const shouldCreateRule = await this.askConfirm(
+              i18n.t('rules.create_rule_prompt').replace('{category}', categoryName || ''),
+              i18n.t('mobile.rule'),
+            );
+
             if (shouldCreateRule) {
               const tx = this.transactions.find(t => t.id === id);
               this.ruleTransaction = {
@@ -1662,7 +1985,7 @@ export class ViewExpenses extends LitElement {
       }
     } catch (e: any) {
       console.error('Failed to save cell', e);
-      alert('Failed to save changes: ' + (e.message || JSON.stringify(e)));
+      this.notify('Failed to save changes: ' + (e.message || JSON.stringify(e)));
       this._preservedScrollY = null;
     }
   }
@@ -1686,10 +2009,10 @@ Cost Objects: ${result.counts?.costObjects}
 Splits: ${result.counts?.splits}
 
 Tables: ${result.tables?.join(', ')}`;
-      alert(msg);
+      this.notify(msg);
       console.log('Diagnostics:', result);
     } catch (e: any) {
-      alert('Failed to check database: ' + e.message);
+      this.notify('Failed to check database: ' + e.message);
     }
   }
 
@@ -1704,18 +2027,18 @@ Tables: ${result.tables?.join(', ')}`;
           const rule = await api.post('/rules', e.detail);
           
           // Ask if user wants to apply to historical transactions
-          if (confirm(i18n.t('rules.rule_created'))) {
+          if (await this.askConfirm(i18n.t('rules.rule_created'), i18n.t('rules.apply_rule'))) {
               try {
                   const result = await api.post(`/rules/${rule.id}/apply`, {});
                   const count = result.matchCount || result.matched || 0;
                   if (count > 0) {
-                      alert(i18n.t('rules.rule_applied_count').replace('{count}', count.toString()));
+                      this.notify(i18n.t('rules.rule_applied_count').replace('{count}', count.toString()));
                   } else {
-                      alert(i18n.t('rules.no_matches'));
+                      this.notify(i18n.t('rules.no_matches'));
                   }
               } catch (err) {
                   console.error('Failed to apply rule', err);
-                  alert(i18n.t('rules.errors.apply_failed'));
+                  this.notify(i18n.t('rules.errors.apply_failed'));
               }
           }
           
@@ -1723,12 +2046,1201 @@ Tables: ${result.tables?.join(', ')}`;
           await this.loadData(true);
       } catch (e: any) {
           console.error(e);
-          alert(i18n.t('rules.errors.save_failed') + ': ' + e.message);
+          this.notify(i18n.t('rules.errors.save_failed') + ': ' + e.message);
       }
   }
 
 
+  // ==================================================================
+  // Mobile layout
+  // ==================================================================
+
+  private get symbol() {
+    return this.currency === 'EUR' ? '€' : '$';
+  }
+
+  private money(value: number, decimals = 2): string {
+    return `${this.symbol}${Math.abs(value).toLocaleString(i18n.getLocale(), {
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals,
+    })}`;
+  }
+
+  // ---- period stepper ----
+
+  /** The stepper's centre label for the active period. */
+  periodLabel(): string {
+    switch (this.dateFilterMode) {
+      case 'month': {
+        const name = new Date(this.year, this.month - 1, 1)
+          .toLocaleString(i18n.getLocale(), { month: 'long' });
+        return `${name.charAt(0).toUpperCase()}${name.slice(1)} ${this.year}`;
+      }
+      case 'year':
+        return String(this.year);
+      case 'custom':
+        return this.customStartDate && this.customEndDate
+          ? `${this.customStartDate} – ${this.customEndDate}`
+          : i18n.t('filters.mode_custom');
+      default:
+        return i18n.t('mobile.all_time_label');
+    }
+  }
+
+  /** Moves the period one step. Custom ranges shift by their own span. */
+  stepPeriod(direction: -1 | 1) {
+    if (this.dateFilterMode === 'month') {
+      const next = this.month + direction;
+      if (next < 1) { this.month = 12; this.year -= 1; }
+      else if (next > 12) { this.month = 1; this.year += 1; }
+      else { this.month = next; }
+    } else if (this.dateFilterMode === 'year') {
+      this.year += direction;
+    } else if (this.dateFilterMode === 'custom') {
+      if (!this.customStartDate || !this.customEndDate) return;
+      const start = new Date(`${this.customStartDate}T00:00:00`);
+      const end = new Date(`${this.customEndDate}T00:00:00`);
+      const span = end.getTime() - start.getTime() + 86400000;
+      this.customStartDate = new Date(start.getTime() + direction * span).toISOString().split('T')[0];
+      this.customEndDate = new Date(end.getTime() + direction * span).toISOString().split('T')[0];
+    } else {
+      return; // all_time has no steps
+    }
+    this.mobileVisibleCount = MOBILE_PAGE_SIZE;
+    this.loadData(false);
+  }
+
+  private isAtLatestPeriod(): boolean {
+    const now = new Date();
+    if (this.dateFilterMode === 'month') {
+      return this.year > now.getFullYear()
+        || (this.year === now.getFullYear() && this.month >= now.getMonth() + 1);
+    }
+    if (this.dateFilterMode === 'year') return this.year >= now.getFullYear();
+    return this.dateFilterMode === 'all_time';
+  }
+
+  openPeriodSheet() {
+    this.sheetMode = this.dateFilterMode;
+    this.sheetYear = this.year;
+    this.sheetMonth = this.month;
+    this.sheetStartDate = this.customStartDate;
+    this.sheetEndDate = this.customEndDate;
+    this.showPeriodSheet = true;
+  }
+
+  applyPeriodSheet() {
+    const previousMode = this.dateFilterMode;
+    this.dateFilterMode = this.sheetMode;
+    this.year = this.sheetYear;
+    this.month = this.sheetMonth;
+    this.customStartDate = this.sheetStartDate;
+    this.customEndDate = this.sheetEndDate;
+    this.showPeriodSheet = false;
+    this.mobileVisibleCount = MOBILE_PAGE_SIZE;
+
+    if (previousMode === 'all_time' && this.dateFilterMode !== 'all_time') {
+      this._allTimePageSizeSuggested = false;
+    }
+    this._autoPageSizeToTotalOnNextLoad = this.dateFilterMode === 'all_time';
+    this.loadData(false);
+  }
+
+  // ---- list data ----
+
+  /** Rows needing attention: uncategorized, whether or not a rule suggested one. */
+  private get needsReviewTransactions() {
+    return this.transactions.filter(t => !t.categoryId || t.categoryId === 'uncategorized');
+  }
+
+  /**
+   * The rows the mobile list shows: the shared filter pipeline, narrowed by the
+   * active quick-filter chip and capped at the current scroll window.
+   */
+  private get mobileTransactions() {
+    let rows = this.filteredTransactions;
+    if (this.quickFilter === 'review') {
+      rows = rows.filter(t => !t.categoryId || t.categoryId === 'uncategorized');
+    } else if (this.quickFilter === 'uncategorized') {
+      rows = rows.filter(t => !t.categoryId || t.categoryId === 'uncategorized');
+    }
+    // Newest first regardless of the desktop sort, which the phone doesn't expose
+    return [...rows].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }
+
+  /** Groups the visible window into date sections for the sticky headers. */
+  private mobileSections(): { key: string; label: string; rows: any[] }[] {
+    const visible = this.mobileTransactions.slice(0, this.mobileVisibleCount);
+    const sections: { key: string; label: string; rows: any[] }[] = [];
+
+    visible.forEach(tx => {
+      const date = new Date(tx.date);
+      const key = date.toISOString().split('T')[0];
+      let section = sections.find(s => s.key === key);
+      if (!section) {
+        section = {
+          key,
+          label: date.toLocaleDateString(i18n.getLocale(), {
+            weekday: 'short',
+            day: 'numeric',
+            month: 'long',
+          }),
+          rows: [],
+        };
+        sections.push(section);
+      }
+      section.rows.push(tx);
+    });
+
+    return sections;
+  }
+
+  /** Appends the next window once the sentinel scrolls into view. */
+  private setupInfiniteScroll() {
+    const sentinel = this.shadowRoot?.querySelector('#m-sentinel');
+    if (!sentinel) {
+      this.listObserver?.disconnect();
+      this.listObserver = undefined;
+      this.observedSentinel = undefined;
+      return;
+    }
+    if (this.observedSentinel === sentinel) return;
+
+    this.listObserver?.disconnect();
+    this.listObserver = new IntersectionObserver(entries => {
+      if (!entries.some(entry => entry.isIntersecting)) return;
+      if (this.mobileVisibleCount >= this.mobileTransactions.length) return;
+      this.mobileVisibleCount += MOBILE_PAGE_SIZE;
+    }, { rootMargin: '200px' });
+    this.listObserver.observe(sentinel);
+    this.observedSentinel = sentinel;
+  }
+
+  private categoryLabel(tx: any): { icon: string; name: string } | null {
+    if (tx.splits && tx.splits.length > 0) {
+      return { icon: '🔀', name: `${i18n.t('mobile.split')} (${tx.splits.length})` };
+    }
+    const category = this.categories.find(c => c.id === tx.categoryId);
+    if (!category) return null;
+    return { icon: category.icon || '', name: category.name };
+  }
+
+  // ---- screens ----
+
+  private renderMobileHeader() {
+    return html`
+      <div class="m-title-row">
+        <h1 class="m-title">${i18n.t('nav.expenses')}</h1>
+        <div class="m-title-actions">
+          <button class="m-icon-btn" @click="${() => { this.searchMode = true; }}"
+            title="${i18n.t('filters.search')}">
+            ${icon('search', 24)}
+          </button>
+          <button class="m-icon-btn" @click="${() => { this.showFilterSheet = true; }}"
+            title="${i18n.t('mobile.filters')}">
+            ${icon('filter_list', 24)}
+          </button>
+        </div>
+      </div>
+
+      ${monthStepper({
+        label: this.periodLabel(),
+        open: this.showPeriodSheet,
+        onPrev: () => this.stepPeriod(-1),
+        onNext: () => this.stepPeriod(1),
+        nextDisabled: this.isAtLatestPeriod(),
+        onLabel: () => this.openPeriodSheet(),
+      })}
+    `;
+  }
+
+  private renderMobileSummary() {
+    const net = this.monthlyStats.income - this.monthlyStats.expense;
+    const totalBalance = Number.isFinite(this.totalBalance) ? this.totalBalance : null;
+    const verified = Number.isFinite(this.verifiedBalance) ? this.verifiedBalance : null;
+    const difference = totalBalance !== null && verified !== null ? verified - totalBalance : null;
+    const balanced = difference !== null && Math.abs(difference) < 0.01;
+
+    return html`
+      <div class="x-summary">
+        <div>
+          <div class="x-summary-label">${i18n.t('mobile.net_this_month')}</div>
+          <div
+            class="x-summary-net"
+            style="color: ${net >= 0 ? 'var(--pf-positive)' : 'var(--md-sys-color-error)'}">
+            ${net >= 0 ? '+' : '−'}${this.money(net)}
+          </div>
+        </div>
+
+        ${difference !== null && !balanced ? html`
+          <button class="x-summary-right" @click="${() => { this.showReconciliationSheet = true; }}">
+            <div class="x-summary-label">${i18n.t('mobile.bank_differs_by')}</div>
+            <div class="x-summary-diff">
+              ${this.money(difference)} · ${i18n.t('expenses.review')}
+            </div>
+          </button>
+        ` : nothing}
+      </div>
+    `;
+  }
+
+  private renderMobileChips() {
+    const reviewCount = this.needsReviewTransactions.length;
+    const activeCategory = this.categories.find(c => c.id === this.filterCategoryId);
+
+    return html`
+      <div class="m-chip-row">
+        ${reviewCount > 0 ? html`
+          <button
+            class="m-filter-chip ${this.quickFilter === 'review' ? 'selected' : ''}"
+            @click="${() => {
+              this.quickFilter = this.quickFilter === 'review' ? '' : 'review';
+              this.mobileVisibleCount = MOBILE_PAGE_SIZE;
+            }}">
+            ${i18n.t('mobile.needs_review')}
+            <span class="m-chip-count">${reviewCount}</span>
+          </button>
+        ` : nothing}
+
+        <button class="m-filter-chip" @click="${() => { this.showFilterSheet = true; }}">
+          ${activeCategory
+            ? html`${activeCategory.icon ?? ''} ${activeCategory.name}`
+            : i18n.t('filters.all_categories')}
+          ${icon('expand_more', 18)}
+        </button>
+
+        <button
+          class="m-filter-chip ${this.filterCategoryId === 'uncategorized' ? 'selected' : ''}"
+          @click="${() => {
+            this.filterCategoryId = this.filterCategoryId === 'uncategorized' ? '' : 'uncategorized';
+            this.mobileVisibleCount = MOBILE_PAGE_SIZE;
+          }}">
+          ${i18n.t('common.uncategorized')}
+        </button>
+
+        <button class="m-filter-chip" @click="${() => { this.bulkMode = true; }}">
+          ${icon('checklist', 18)} ${i18n.t('mobile.select_mode')}
+        </button>
+      </div>
+    `;
+  }
+
+  private renderMobileRow(tx: any) {
+    const category = this.categoryLabel(tx);
+    const suggestionCategory = tx._suggestion
+      ? this.categories.find(c => c.id === tx._suggestion)
+      : null;
+    const amount = Number(tx.amount) || 0;
+    const selected = this.selectedTransactions.has(tx.id);
+
+    return html`
+      <div
+        class="x-row ${(suggestionCategory && !this.bulkMode) || (this.bulkMode && selected) ? 'highlight' : ''}"
+        role="button"
+        tabindex="0"
+        @click="${() => {
+          if (this.bulkMode) this.toggleSelection(tx.id);
+          else this.openTransactionSheet(tx);
+        }}"
+        @touchstart="${() => this.startLongPress(tx)}"
+        @touchend="${() => this.cancelLongPress()}"
+        @touchmove="${() => this.cancelLongPress()}"
+        @contextmenu="${(e: Event) => { e.preventDefault(); this.enterBulkMode(tx); }}">
+
+        ${this.bulkMode
+          ? html`<span class="x-check ${selected ? 'on' : ''}">
+              ${selected ? icon('check', 22) : nothing}
+            </span>`
+          : html`<span class="m-avatar ${suggestionCategory ? 'x-avatar-suggest' : ''}">
+              ${suggestionCategory ? '?' : (category?.icon || '')}
+            </span>`}
+
+        <div class="x-row-main">
+          <div class="x-row-desc">${tx.description}</div>
+          ${suggestionCategory && !this.bulkMode ? html`
+            <div class="x-suggestion">
+              <span class="x-suggestion-name">${suggestionCategory.name}?</span>
+              <button
+                class="x-accept"
+                @click="${(e: Event) => {
+                  e.stopPropagation();
+                  this.updateCategory(tx.id, tx._suggestion);
+                }}">
+                ${icon('check', 16)} ${i18n.t('mobile.accept')}
+              </button>
+            </div>
+          ` : html`
+            <!-- name only; the avatar already carries the category emoji -->
+            <div class="x-row-cat">
+              ${category ? category.name : i18n.t('common.uncategorized')}
+            </div>
+          `}
+        </div>
+
+        <span class="m-amount ${amount >= 0 ? 'positive' : ''}">
+          ${amount < 0 ? '−' : '+'}${Math.abs(amount).toFixed(2)}
+        </span>
+      </div>
+    `;
+  }
+
+  /** Long-press is the primary way in; the chip row offers a discoverable one. */
+  private startLongPress(tx: any) {
+    if (this.bulkMode) return;
+    this.cancelLongPress();
+    this.longPressTimer = window.setTimeout(() => this.enterBulkMode(tx), 500);
+  }
+
+  private cancelLongPress() {
+    if (this.longPressTimer) {
+      window.clearTimeout(this.longPressTimer);
+      this.longPressTimer = undefined;
+    }
+  }
+
+  private enterBulkMode(tx: any) {
+    this.cancelLongPress();
+    this.bulkMode = true;
+    this.selectedTransactions = new Set([tx.id]);
+  }
+
+  private exitBulkMode() {
+    this.bulkMode = false;
+    this.selectedTransactions = new Set();
+  }
+
+  private renderMobileList() {
+    const sections = this.mobileSections();
+    const total = this.mobileTransactions.length;
+
+    if (this.loading) return this.renderMobileSkeletons();
+
+    if (total === 0) {
+      return html`
+        <div class="m-empty" style="flex: 1; justify-content: center;">
+          <div class="m-empty-circle">${icon('receipt_long', 40)}</div>
+          <div class="m-empty-title">${i18n.t('mobile.nothing_here_yet')}</div>
+          <div class="m-empty-body">
+            ${i18n.t('mobile.no_transactions_for', { period: this.periodLabel() })}
+          </div>
+          <div class="m-empty-actions">
+            <button class="m-btn tall" @click="${() => { this.showAddForm = true; }}">
+              ${icon('add', 22)} ${i18n.t('mobile.add_transaction')}
+            </button>
+            <button
+              class="m-btn tall tonal"
+              ?disabled="${this.bankSyncing}"
+              @click="${this.handleBankSync}">
+              ${icon('sync', 22)} ${i18n.t('bank_sync.sync_all')}
+            </button>
+            <button class="m-btn tall outlined" @click="${() => { this.showWizard = true; }}">
+              ${icon('upload_file', 22)} ${i18n.t('expenses.import_csv')}
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
+    return html`
+      <div class="x-list">
+        ${sections.map(section => html`
+          <div class="x-date-header">${section.label}</div>
+          ${section.rows.map(tx => this.renderMobileRow(tx))}
+        `)}
+        ${this.mobileVisibleCount < total ? html`<div id="m-sentinel" style="height: 1px"></div>` : nothing}
+      </div>
+    `;
+  }
+
+  private renderMobileSkeletons() {
+    return html`
+      <div class="x-list">
+        <div class="x-summary">
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            ${skeleton('96px', '12px')}
+            ${skeleton('128px', '20px')}
+          </div>
+          ${skeleton('88px', '14px')}
+        </div>
+        ${[0, 1, 2, 3, 4, 5].map(() => html`
+          <div class="x-skeleton-row">
+            <div class="m-skeleton-circle"></div>
+            <div class="x-skeleton-main">
+              ${skeleton('60%', '14px')}
+              ${skeleton('35%', '12px', true)}
+            </div>
+            ${skeleton('68px', '14px', true)}
+          </div>
+        `)}
+      </div>
+    `;
+  }
+
+  private renderBulkBar() {
+    const size = this.selectedTransactions.size;
+    const visible = this.mobileTransactions.slice(0, this.mobileVisibleCount);
+
+    return html`
+      <div class="x-bulk-bar">
+        <button class="m-icon-btn" @click="${() => this.exitBulkMode()}" aria-label="${i18n.t('common.cancel')}">
+          ${icon('close', 24)}
+        </button>
+        <span class="x-bulk-title">${i18n.t('mobile.selected_count', { count: size })}</span>
+        <button
+          class="x-bulk-action"
+          @click="${() => { this.selectedTransactions = new Set(visible.map(t => t.id)); }}">
+          ${i18n.t('mobile.select_all')}
+        </button>
+      </div>
+    `;
+  }
+
+  private renderBulkActions() {
+    const disabled = this.selectedTransactions.size === 0;
+    return html`
+      <div class="x-bulk-actions">
+        <button
+          class="m-btn"
+          style="flex: 1"
+          ?disabled="${disabled}"
+          @click="${() => { this.bulkTarget = 'category'; }}">
+          ${icon('sell', 20)} ${i18n.t('common.category')}
+        </button>
+        <button
+          class="m-btn tonal"
+          style="flex: 1"
+          ?disabled="${disabled}"
+          @click="${() => { this.bulkTarget = 'account'; }}">
+          ${icon('account_balance', 20)} ${i18n.t('mobile.account')}
+        </button>
+        <button
+          class="m-btn destructive"
+          style="width: 48px; padding: 0"
+          ?disabled="${disabled}"
+          title="${i18n.t('bulk_actions.delete_selected')}"
+          @click="${this.deleteSelected}">
+          ${icon('delete', 20)}
+        </button>
+      </div>
+    `;
+  }
+
+  /** Picker for the bulk Category / Account actions. */
+  private renderBulkPickerSheet() {
+    const isCategory = this.bulkTarget === 'category';
+    const options: SelectOption[] = isCategory
+      ? this.getCategoryOptions(false).filter(o => o.value !== 'uncategorized')
+      : [
+        { value: 'unassigned', label: i18n.t('bulk_actions.unassign') },
+        ...this.accounts.map(account => ({
+          value: account.id,
+          label: account.name,
+          icon: account.type === 'CREDIT' ? '💳' : '🏦',
+        })),
+      ];
+
+    return bottomSheet({
+      open: this.bulkTarget !== null,
+      onDismiss: () => { this.bulkTarget = null; },
+      content: html`
+        <div class="m-sheet-title">
+          ${isCategory ? i18n.t('bulk_actions.select_category') : i18n.t('bulk_actions.select_account')}
+        </div>
+        <div>
+          ${options.map(option => html`
+            <button
+              class="x-cat-row ${option.indent ? 'child' : ''}"
+              @click="${async () => {
+                this.bulkTarget = null;
+                if (isCategory) await this.bulkUpdateCategory(option.value);
+                else await this.bulkUpdateAccount(option.value);
+                this.exitBulkMode();
+              }}">
+              <span class="m-avatar small">${option.icon ?? ''}</span>
+              <span style="flex: 1; min-width: 0">${option.label}</span>
+            </button>
+          `)}
+        </div>
+      `,
+    });
+  }
+
+  // ---- transaction sheet ----
+
+  private openTransactionSheet(tx: any) {
+    this.sheetTx = tx;
+    this.sheetCategoryQuery = '';
+  }
+
+  private renderTransactionSheet() {
+    const tx = this.sheetTx;
+    if (!tx) return nothing;
+
+    const account = this.accounts.find(a => a.id === tx.accountId);
+    const amount = Number(tx.amount) || 0;
+    const query = this.sheetCategoryQuery.trim().toLowerCase();
+    const options = this.getCategoryOptions(false)
+      .filter(o => o.value !== 'uncategorized')
+      .filter(o => !query || o.label.toLowerCase().includes(query));
+
+    return bottomSheet({
+      open: true,
+      onDismiss: () => { this.sheetTx = null; },
+      content: html`
+        <div class="x-sheet-header">
+          <span class="m-avatar">${this.categoryLabel(tx)?.icon || ''}</span>
+          <div style="flex: 1; min-width: 0">
+            <div class="x-sheet-desc">${tx.description}</div>
+            <div class="x-sheet-meta">
+              ${new Date(tx.date).toLocaleDateString(i18n.getLocale(), {
+                weekday: 'short', day: 'numeric', month: 'long', year: 'numeric',
+              })}
+              ${account ? html` · ${account.type === 'CREDIT' ? '💳' : '🏦'} ${account.name}` : nothing}
+            </div>
+          </div>
+          <span class="m-amount ${amount >= 0 ? 'positive' : ''}" style="font-size: 18px">
+            ${amount < 0 ? '−' : '+'}${Math.abs(amount).toFixed(2)}
+          </span>
+        </div>
+
+        <label class="m-field-with-icon">
+          <input
+            class="m-field filled"
+            style="padding-left: 44px; padding-right: 14px"
+            type="text"
+            placeholder="${i18n.t('mobile.search_categories')}"
+            .value="${this.sheetCategoryQuery}"
+            @input="${(e: any) => { this.sheetCategoryQuery = e.target.value; }}" />
+          <span class="m-icon" style="left: 14px; right: auto; font-size: 20px">search</span>
+        </label>
+
+        <div style="overflow-y: auto; min-height: 0">
+          ${options.map(option => html`
+            <button
+              class="x-cat-row ${option.indent ? 'child' : ''} ${option.value === tx.categoryId ? 'selected' : ''}"
+              @click="${async () => {
+                this.sheetTx = null;
+                await this.updateCategory(tx.id, option.value);
+              }}">
+              <span class="m-avatar small">${option.icon ?? ''}</span>
+              <span style="flex: 1; min-width: 0">${option.label}</span>
+              ${option.value === tx.categoryId ? icon('check', 20) : nothing}
+            </button>
+          `)}
+        </div>
+
+        <div style="display: flex; gap: 12px;">
+          <button
+            class="m-btn outlined"
+            style="flex: 1"
+            @click="${() => { this.sheetTx = null; this.openCreateRuleModal(tx); }}">
+            ${icon('rule', 20)} ${i18n.t('mobile.rule')}
+          </button>
+          <button
+            class="m-btn outlined"
+            style="flex: 1"
+            @click="${() => { this.sheetTx = null; this.openSplitModal(tx); }}">
+            ${icon('call_split', 20)} ${i18n.t('mobile.split')}
+          </button>
+          <button class="m-btn" style="flex: 1" @click="${() => { this.sheetTx = null; }}">
+            ${i18n.t('common.save')}
+          </button>
+        </div>
+      `,
+    });
+  }
+
+  // ---- search screen ----
+
+  private renderSearchScreen() {
+    const results = this.mobileTransactions;
+    const total = results.reduce((sum, t) => sum + Math.abs(Number(t.amount) || 0), 0);
+
+    return html`
+      <div class="m-screen x-screen">
+        <div class="m-appbar">
+          <button
+            class="m-icon-btn"
+            @click="${() => { this.searchMode = false; this.filterText = ''; }}"
+            aria-label="Back">
+            ${icon('arrow_back', 24)}
+          </button>
+          <label class="m-field-with-icon" style="flex: 1">
+            <input
+              class="m-field filled"
+              style="border-radius: 24px; padding-right: 44px"
+              type="text"
+              autofocus
+              placeholder="${i18n.t('filters.search')}"
+              .value="${this.filterText}"
+              @input="${(e: any) => {
+                this.filterText = e.target.value;
+                this.mobileVisibleCount = MOBILE_PAGE_SIZE;
+              }}" />
+            ${this.filterText
+              ? html`<button
+                  class="m-icon-btn"
+                  style="position: absolute; right: 2px; top: 50%; transform: translateY(-50%); width: 40px; height: 40px"
+                  @click="${() => { this.filterText = ''; }}">
+                  ${icon('close', 20)}
+                </button>`
+              : icon('search', 20)}
+          </label>
+        </div>
+
+        ${this.filterText ? html`
+          <div class="m-section-label" style="padding: 4px 0 8px">
+            ${i18n.t('mobile.results_count', { count: results.length })} · ${this.money(total)}
+          </div>
+        ` : nothing}
+
+        <div class="x-list">
+          ${results.slice(0, this.mobileVisibleCount).map(tx => {
+            const category = this.categoryLabel(tx);
+            const amount = Number(tx.amount) || 0;
+            return html`
+              <div class="x-row" style="min-height: 60px" role="button" tabindex="0"
+                @click="${() => this.openTransactionSheet(tx)}">
+                <span class="m-avatar" style="width: 36px; height: 36px; border-radius: 18px">
+                  ${category?.icon || ''}
+                </span>
+                <div class="x-row-main">
+                  <div class="x-row-desc">${tx.description}</div>
+                  <div class="x-row-cat">
+                    ${new Date(tx.date).toLocaleDateString(i18n.getLocale(), {
+                      weekday: 'short', day: 'numeric', month: 'short',
+                    })}
+                    ${category ? ` · ${category.name}` : ''}
+                  </div>
+                </div>
+                <span class="m-amount ${amount >= 0 ? 'positive' : ''}">
+                  ${amount < 0 ? '−' : '+'}${Math.abs(amount).toFixed(2)}
+                </span>
+              </div>
+            `;
+          })}
+          ${this.mobileVisibleCount < results.length
+            ? html`<div id="m-sentinel" style="height: 1px"></div>`
+            : nothing}
+        </div>
+
+        ${this.renderTransactionSheet()}
+        ${snackbar(this.snack)}
+      </div>
+    `;
+  }
+
+  // ---- sheets ----
+
+  private renderMobilePeriodSheet() {
+    const now = new Date();
+    const modes: { value: DateFilterMode; label: string }[] = [
+      { value: 'month', label: i18n.t('filters.mode_month') },
+      { value: 'year', label: i18n.t('filters.mode_year') },
+      { value: 'custom', label: i18n.t('filters.mode_custom') },
+      { value: 'all_time', label: i18n.t('filters.mode_all_time') },
+    ];
+
+    return bottomSheet({
+      open: this.showPeriodSheet,
+      onDismiss: () => { this.showPeriodSheet = false; },
+      content: html`
+        <div class="m-sheet-title">${i18n.t('mobile.period')}</div>
+
+        <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+          ${modes.map(mode => html`
+            <button
+              class="m-filter-chip"
+              style="${this.sheetMode === mode.value
+                ? 'background: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary); border-color: transparent'
+                : ''}"
+              @click="${() => { this.sheetMode = mode.value; }}">
+              ${mode.label}
+            </button>
+          `)}
+        </div>
+
+        ${this.sheetMode === 'month' || this.sheetMode === 'year' ? html`
+          <div style="display: flex; align-items: center; justify-content: space-between;">
+            <button class="m-icon-btn" @click="${() => { this.sheetYear -= 1; }}">
+              ${icon('chevron_left', 22)}
+            </button>
+            <span style="font: 500 16px/24px 'Roboto', sans-serif">${this.sheetYear}</span>
+            <button
+              class="m-icon-btn"
+              ?disabled="${this.sheetYear >= now.getFullYear()}"
+              @click="${() => { this.sheetYear += 1; }}">
+              ${icon('chevron_right', 22)}
+            </button>
+          </div>
+        ` : nothing}
+
+        ${this.sheetMode === 'month' ? html`
+          <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;">
+            ${Array.from({ length: 12 }, (_, i) => i + 1).map(m => {
+              const name = new Date(this.sheetYear, m - 1, 1)
+                .toLocaleString(i18n.getLocale(), { month: 'short' })
+                .replace('.', '');
+              const selected = this.sheetMonth === m;
+              const future = this.sheetYear > now.getFullYear()
+                || (this.sheetYear === now.getFullYear() && m > now.getMonth() + 1);
+              return html`
+                <button
+                  style="height: 48px; border: none; border-radius: 12px; cursor: pointer;
+                    background: ${selected ? 'var(--md-sys-color-primary)' : 'var(--md-sys-color-surface-container)'};
+                    color: ${selected
+                      ? 'var(--md-sys-color-on-primary)'
+                      : future ? 'var(--md-sys-color-on-surface-variant)' : 'var(--md-sys-color-on-surface)'};
+                    font: var(--md-sys-typescale-body-large)"
+                  @click="${() => { this.sheetMonth = m; }}">
+                  ${name.charAt(0).toUpperCase()}${name.slice(1)}
+                </button>
+              `;
+            })}
+          </div>
+        ` : nothing}
+
+        ${this.sheetMode === 'custom' ? html`
+          <div style="display: flex; gap: 12px;">
+            <label class="m-field-with-icon" style="flex: 1">
+              <input
+                class="m-field"
+                type="text"
+                inputmode="numeric"
+                placeholder="yyyy-mm-dd"
+                .value="${this.sheetStartDate}"
+                @input="${(e: any) => { this.sheetStartDate = this.normalizeDateInput(e.target.value); }}" />
+              ${icon('calendar_month', 20)}
+            </label>
+            <label class="m-field-with-icon" style="flex: 1">
+              <input
+                class="m-field"
+                type="text"
+                inputmode="numeric"
+                placeholder="yyyy-mm-dd"
+                .value="${this.sheetEndDate}"
+                @input="${(e: any) => { this.sheetEndDate = this.normalizeDateInput(e.target.value); }}" />
+              ${icon('calendar_month', 20)}
+            </label>
+          </div>
+        ` : nothing}
+
+        <button class="m-btn block" @click="${() => this.applyPeriodSheet()}">
+          ${i18n.t('mobile.apply')}
+        </button>
+      `,
+    });
+  }
+
+  private renderMobileFilterSheet() {
+    // The count reflects the filters as edited, before the sheet is dismissed
+    const count = this.mobileTransactions.length;
+
+    return bottomSheet({
+      open: this.showFilterSheet,
+      onDismiss: () => { this.showFilterSheet = false; },
+      content: html`
+        <div class="m-sheet-title-row">
+          <span class="m-sheet-title">${i18n.t('mobile.filters')}</span>
+          <button
+            class="m-link"
+            @click="${() => {
+              this.filterCategoryId = '';
+              this.filterMinAmount = null;
+              this.filterMaxAmount = null;
+              this.filterDateFrom = '';
+              this.filterDateTo = '';
+              this.filterText = '';
+              this.quickFilter = '';
+            }}">
+            ${i18n.t('mobile.clear_all')}
+          </button>
+        </div>
+
+        <div class="m-field-group">
+          <span class="m-section-label">${i18n.t('common.category')}</span>
+          <filterable-select
+            .value="${this.filterCategoryId}"
+            .options="${[
+              { value: '', label: i18n.t('filters.all_categories') },
+              { value: 'uncategorized', label: i18n.t('common.uncategorized') },
+              ...this.getCategoryOptions(false).filter(o => o.value !== 'uncategorized'),
+            ]}"
+            .placeholder="${i18n.t('filters.all_categories')}"
+            @change="${(e: CustomEvent) => {
+              this.filterCategoryId = e.detail.value;
+              this.mobileVisibleCount = MOBILE_PAGE_SIZE;
+            }}">
+          </filterable-select>
+        </div>
+
+        <div class="m-field-group">
+          <span class="m-section-label">${i18n.t('mobile.amount_range')}</span>
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <input
+              class="m-field"
+              style="border-radius: 12px"
+              type="number"
+              inputmode="decimal"
+              placeholder="${i18n.t('mobile.min')}"
+              .value="${this.filterMinAmount ?? ''}"
+              @input="${(e: any) => {
+                this.filterMinAmount = e.target.value ? parseFloat(e.target.value) : null;
+              }}" />
+            <span style="color: var(--md-sys-color-on-surface-variant)">–</span>
+            <input
+              class="m-field"
+              style="border-radius: 12px"
+              type="number"
+              inputmode="decimal"
+              placeholder="${i18n.t('mobile.max')}"
+              .value="${this.filterMaxAmount ?? ''}"
+              @input="${(e: any) => {
+                this.filterMaxAmount = e.target.value ? parseFloat(e.target.value) : null;
+              }}" />
+          </div>
+        </div>
+
+        <div class="m-field-group">
+          <span class="m-section-label">${i18n.t('mobile.date_range')}</span>
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <label class="m-field-with-icon" style="flex: 1">
+              <input
+                class="m-field"
+                style="border-radius: 12px"
+                type="text"
+                inputmode="numeric"
+                placeholder="yyyy-mm-dd"
+                .value="${this.filterDateFrom}"
+                @input="${(e: any) => { this.filterDateFrom = this.normalizeDateInput(e.target.value); }}" />
+              ${icon('calendar_month', 20)}
+            </label>
+            <span style="color: var(--md-sys-color-on-surface-variant)">–</span>
+            <label class="m-field-with-icon" style="flex: 1">
+              <input
+                class="m-field"
+                style="border-radius: 12px"
+                type="text"
+                inputmode="numeric"
+                placeholder="yyyy-mm-dd"
+                .value="${this.filterDateTo}"
+                @input="${(e: any) => { this.filterDateTo = this.normalizeDateInput(e.target.value); }}" />
+              ${icon('calendar_month', 20)}
+            </label>
+          </div>
+        </div>
+
+        <div class="m-field-group">
+          <span class="m-section-label">${i18n.t('mobile.account')}</span>
+          <button
+            class="m-field"
+            style="border-radius: 12px; display: flex; align-items: center; justify-content: space-between; cursor: pointer"
+            @click="${() => { this.showFilterSheet = false; this.showAccountSheet = true; }}">
+            <span>${this.accountChipLabel()}</span>
+            ${icon('expand_more', 20)}
+          </button>
+        </div>
+
+        <button class="m-btn tall block" @click="${() => { this.showFilterSheet = false; }}">
+          ${i18n.t('mobile.show_results', { count })}
+        </button>
+      `,
+    });
+  }
+
+  private accountChipLabel(): string {
+    const account = this.accounts.find(a => a.id === this.selectedAccountId);
+    if (!account) return `🏦 ${i18n.t('reports.all_accounts')}`;
+    return `${account.type === 'CREDIT' ? '💳' : '🏦'} ${account.name}`;
+  }
+
+  private renderMobileAccountSheet() {
+    return bottomSheet({
+      open: this.showAccountSheet,
+      onDismiss: () => { this.showAccountSheet = false; },
+      content: html`
+        <div class="m-sheet-title">${i18n.t('reports.all_accounts')}</div>
+        <div>
+          ${this.getAccountOptions().map(option => html`
+            <button
+              class="x-cat-row ${option.value === this.selectedAccountId ? 'selected' : ''}"
+              @click="${() => {
+                this.showAccountSheet = false;
+                if (option.value === this.selectedAccountId) return;
+                this.selectedAccountId = option.value;
+                this.mobileVisibleCount = MOBILE_PAGE_SIZE;
+                this.loadData(false);
+              }}">
+              <span class="m-avatar small">${option.icon ?? ''}</span>
+              <span style="flex: 1; min-width: 0">${option.label}</span>
+              ${option.value === this.selectedAccountId ? icon('check', 20) : nothing}
+            </button>
+          `)}
+        </div>
+      `,
+    });
+  }
+
+  private renderReconciliationSheet() {
+    const totalBalance = Number.isFinite(this.totalBalance) ? this.totalBalance : null;
+    const verified = Number.isFinite(this.verifiedBalance) ? this.verifiedBalance : null;
+    const difference = totalBalance !== null && verified !== null ? verified - totalBalance : null;
+    const balanced = difference !== null && Math.abs(difference) < 0.01;
+
+    return bottomSheet({
+      open: this.showReconciliationSheet,
+      onDismiss: () => { this.showReconciliationSheet = false; },
+      content: html`
+        <div class="m-sheet-title-row">
+          <span class="m-sheet-title">${i18n.t('expenses.reconciliation_status')}</span>
+          <span class="m-pill ${balanced ? 'ok' : 'behind'}">
+            ${balanced ? i18n.t('expenses.balanced') : i18n.t('expenses.review')}
+          </span>
+        </div>
+
+        <div class="m-field-group">
+          <span class="m-section-label">${i18n.t('expenses.verified_balance')}</span>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="color: var(--md-sys-color-on-surface-variant)">${this.symbol}</span>
+            <input
+              class="m-field"
+              type="number"
+              step="0.01"
+              .value="${verified ?? ''}"
+              @change="${this.updateVerifiedBalance}" />
+          </div>
+        </div>
+
+        <div>
+          <div class="x-recon-row">
+            <span class="m-row-value">
+              ${this.isCredit ? i18n.t('expenses.amount_owed') : i18n.t('expenses.system_balance')}
+            </span>
+            <span
+              class="m-amount"
+              style="color: ${totalBalance === null
+                ? 'var(--md-sys-color-on-surface-variant)'
+                : totalBalance >= 0 ? 'var(--pf-positive)' : 'var(--md-sys-color-error)'}">
+              ${totalBalance === null
+                ? '—'
+                : `${totalBalance >= 0 ? '+' : '−'}${this.money(totalBalance)}`}
+            </span>
+          </div>
+          <div class="x-recon-row" style="border-bottom: none">
+            <span class="m-row-value">${i18n.t('expenses.discrepancy')}</span>
+            <span
+              class="m-amount"
+              style="color: ${difference === null
+                ? 'var(--md-sys-color-on-surface-variant)'
+                : balanced ? 'var(--pf-positive)' : 'var(--md-sys-color-error)'}">
+              ${difference === null
+                ? '—'
+                : `${balanced ? '' : difference > 0 ? '+' : '−'}${this.money(difference)}`}
+            </span>
+          </div>
+        </div>
+
+        <div class="m-subtitle">${i18n.t('expenses.reconciliation_hint')}</div>
+      `,
+    });
+  }
+
+  private renderConfirmSheet() {
+    return bottomSheet({
+      open: this.pendingConfirm !== null,
+      onDismiss: () => this.settleConfirm(false),
+      content: html`
+        <div class="m-subtitle" style="white-space: pre-line">${this.pendingConfirm?.message ?? ''}</div>
+        <div style="display: flex; gap: 12px;">
+          <button class="m-btn outlined" style="flex: 1" @click="${() => this.settleConfirm(false)}">
+            ${i18n.t('common.cancel')}
+          </button>
+          <button class="m-btn" style="flex: 1" @click="${() => this.settleConfirm(true)}">
+            ${this.pendingConfirm?.confirmLabel ?? i18n.t('common.save')}
+          </button>
+        </div>
+      `,
+    });
+  }
+
+  private renderMobile() {
+    if (this.searchMode) {
+      return html`
+        ${this.renderSearchScreen()}
+        ${this.renderConfirmSheet()}
+        ${this.renderSharedModals()}
+      `;
+    }
+
+    return html`
+      <div class="m-screen x-screen">
+        ${this.bulkMode ? this.renderBulkBar() : html`
+          ${this.renderMobileHeader()}
+          ${this.renderMobileSummary()}
+          ${this.renderMobileChips()}
+        `}
+
+        <!-- Background refreshes show the bar without collapsing the layout -->
+        ${!this.loading && this.balanceLoading ? html`<div class="m-progress-bar"></div>` : nothing}
+
+        ${this.renderMobileList()}
+
+        ${this.bulkMode ? this.renderBulkActions() : html`
+          <button
+            class="m-fab"
+            title="${i18n.t('mobile.add_transaction')}"
+            @click="${() => { this.showAddForm = true; }}">
+            ${icon('add', 26)}
+          </button>
+        `}
+
+        ${this.renderTransactionSheet()}
+        ${this.renderMobilePeriodSheet()}
+        ${this.renderMobileFilterSheet()}
+        ${this.renderMobileAccountSheet()}
+        ${this.renderReconciliationSheet()}
+        ${this.renderBulkPickerSheet()}
+        ${this.renderConfirmSheet()}
+        ${snackbar(this.snack)}
+      </div>
+
+      ${this.renderSharedModals()}
+    `;
+  }
+
+  /** Dialogs and wizards shared by both layouts. */
+  private renderSharedModals() {
+    return html`
+      ${this.renderAddCategoryModal()}
+
+      <csv-wizard
+        ?open="${this.showWizard}"
+        .accounts="${this.accounts}"
+        @close="${() => this.showWizard = false}"
+        @import="${this.handleWizardImport}">
+      </csv-wizard>
+
+      <split-transaction-modal
+        ?open="${this.showSplitModal}"
+        .transaction="${this.splitTransaction}"
+        .categories="${this.categories}"
+        .costObjects="${this.costObjects}"
+        @close="${this.closeSplitModal}"
+        @save="${this.handleSplitSave}">
+      </split-transaction-modal>
+
+      ${this.showRuleModal ? html`
+        <rule-editor
+          .rule="${this.ruleTransaction ? {
+            name: this.ruleTransaction._suggestionData?.name || `Rule for ${this.ruleTransaction.description}`,
+            mode: 'SUGGEST',
+            categoryId: this.ruleTransaction._suggestionData?.categoryId || this.ruleTransaction.categoryId,
+            conditionsJson: this.ruleTransaction._suggestionData?.conditionsJson || JSON.stringify({
+              operator: 'AND',
+              conditions: [
+                { field: 'description', operator: 'contains', value: this.ruleTransaction.description }
+              ]
+            })
+          } : null}"
+          .categories="${this.categories}"
+          @save="${this.handleRuleSave}"
+          @cancel="${() => this.showRuleModal = false}"
+        ></rule-editor>
+      ` : ''}
+
+      ${this.showAddForm && this.isMobile ? this.renderMobileAddSheet() : nothing}
+    `;
+  }
+
+  /** Manual "Add transaction" as a sheet, replacing the desktop inline form. */
+  private renderMobileAddSheet() {
+    return bottomSheet({
+      open: true,
+      onDismiss: () => { this.showAddForm = false; },
+      content: html`
+        <div class="m-sheet-title">${i18n.t('expenses.add_manual_title')}</div>
+
+        <div class="m-field-group">
+          <span class="m-section-label">${i18n.t('common.date')}</span>
+          <input
+            class="m-field"
+            type="date"
+            .value="${this.newTransaction.date}"
+            @input="${(e: any) => {
+              this.newTransaction = { ...this.newTransaction, date: e.target.value };
+            }}" />
+        </div>
+
+        <div class="m-field-group">
+          <span class="m-section-label">${i18n.t('common.description')}</span>
+          <input
+            class="m-field"
+            type="text"
+            .value="${this.newTransaction.description}"
+            @input="${(e: any) => {
+              this.newTransaction = { ...this.newTransaction, description: e.target.value };
+            }}"
+            @blur="${this.handleDescriptionBlur}" />
+        </div>
+
+        <div class="m-field-group">
+          <span class="m-section-label">${i18n.t('common.amount')}</span>
+          <input
+            class="m-field"
+            type="number"
+            inputmode="decimal"
+            placeholder="-10.00"
+            .value="${this.newTransaction.amount || ''}"
+            @input="${(e: any) => {
+              this.newTransaction = { ...this.newTransaction, amount: parseFloat(e.target.value) };
+            }}" />
+        </div>
+
+        <div class="m-field-group">
+          <span class="m-section-label">${i18n.t('common.category')}</span>
+          <filterable-select
+            .value="${this.newTransaction.categoryId || 'uncategorized'}"
+            .options="${this.getCategoryOptions(true)}"
+            .placeholder="${i18n.t('common.category')}"
+            @change="${(e: CustomEvent) => {
+              if (e.detail.value === 'new_category_inline') {
+                this.showAddCategoryModal = true;
+                return;
+              }
+              this.newTransaction = {
+                ...this.newTransaction,
+                categoryId: e.detail.value === 'uncategorized' ? '' : e.detail.value,
+              };
+            }}">
+          </filterable-select>
+        </div>
+
+        <div class="m-field-group">
+          <span class="m-section-label">${i18n.t('common.notes')}</span>
+          <input
+            class="m-field"
+            type="text"
+            .value="${this.newTransaction.notes || ''}"
+            @input="${(e: any) => {
+              this.newTransaction = { ...this.newTransaction, notes: e.target.value };
+            }}" />
+        </div>
+
+        <div style="display: flex; gap: 12px;">
+          <button class="m-btn outlined" style="flex: 1" @click="${() => { this.showAddForm = false; }}">
+            ${i18n.t('common.cancel')}
+          </button>
+          <button class="m-btn" style="flex: 1" @click="${this.createTransaction}">
+            ${i18n.t('common.save')}
+          </button>
+        </div>
+      `,
+    });
+  }
+
   render() {
+    if (this.isMobile) return this.renderMobile();
+
     const symbol = this.currency === 'EUR' ? '€' : '$';
     const totalBalance = Number.isFinite(this.totalBalance) ? this.totalBalance : null;
     const verifiedBalance = Number.isFinite(this.verifiedBalance) ? this.verifiedBalance : null;
