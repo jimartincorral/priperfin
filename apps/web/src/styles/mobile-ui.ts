@@ -207,7 +207,9 @@ export const mobileUI = css`
        reach the edges and a sticky footer can pin flush against the nav */
     margin: -1rem -1rem -40px;
     padding: 12px 16px 24px;
-    min-height: 0;
+    /* No min-height here: mobileUI is composed last, so it would override the
+       per-screen min-height that lets margin-top: auto drop a footer to the
+       bottom of a short screen. */
   }
 
   .m-title-row {
