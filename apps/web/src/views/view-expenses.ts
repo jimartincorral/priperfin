@@ -75,6 +75,54 @@ export class ViewExpenses extends LitElement {
     return this.selectedAccount?.type === 'CREDIT';
   }
 
+  /**
+   * Bank-linked accounts covered by the current selection. Open Banking sync
+   * overwrites `balance_verified_account_<id>` with the bank's closing balance
+   * on every run, so for these accounts the figure is read-only ground truth
+   * rather than something the user asserts.
+   */
+  get syncedAccounts() {
+    const scope = this.selectedAccountId
+      ? (this.selectedAccount ? [this.selectedAccount] : [])
+      : this.accounts;
+    return scope.filter((a: any) => !!a.bankAccountUid);
+  }
+
+  get isBankSynced() {
+    return this.syncedAccounts.length > 0;
+  }
+
+  /**
+   * Freshness of the displayed bank balance. For an aggregate this is the
+   * *oldest* sync across the linked accounts - the sum is only as current as
+   * its stalest member.
+   */
+  get bankBalanceAsOf(): Date | null {
+    const times = this.syncedAccounts
+      .map((a: any) => (a.lastSyncedAt ? new Date(a.lastSyncedAt).getTime() : NaN))
+      .filter((t: number) => Number.isFinite(t));
+    return times.length ? new Date(Math.min(...times)) : null;
+  }
+
+  formatSyncTimestamp(date: Date | null): string {
+    if (!date) return i18n.t('expenses.never_synced');
+    return new Intl.DateTimeFormat(i18n.getLocale(), {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    }).format(date);
+  }
+
+  /** Footer/subtitle explaining where a synced bank balance came from. */
+  bankBalanceCaption(): string {
+    const date = this.formatSyncTimestamp(this.bankBalanceAsOf);
+    return this.selectedAccountId
+      ? i18n.t('expenses.bank_balance_as_of', { date })
+      : i18n.t('expenses.bank_balance_aggregate_as_of', {
+          count: this.syncedAccounts.length,
+          date,
+        });
+  }
+
   getYearOptions(): number[] {
     const currentYear = new Date().getFullYear();
     const years: number[] = [];
@@ -453,15 +501,13 @@ export class ViewExpenses extends LitElement {
     const { year: balanceYear, month: balanceMonth } = this.getBalanceReferenceMonthYear();
     const monthKey = `${balanceYear}-${String(balanceMonth).padStart(2, '0')}`;
     const startBalanceKey = `starting_balance_all_${monthKey}`;
-    const accountKey = this.selectedAccountId || 'all';
-    const verifiedBalanceKey = this.getVerifiedBalanceSettingKey();
-    const legacyVerifiedBalanceKey = `balance_verified_${accountKey}_${balanceYear}_${balanceMonth}`;
 
     try {
-      const [balData, settingData, legacySettingData, monthlyRecord, allAccountsStartSetting] = await Promise.all([
+      // One /settings read instead of per-key lookups: the aggregate bank
+      // balance needs every linked account's `balance_verified_account_<id>`.
+      const [balData, allSettings, monthlyRecord, allAccountsStartSetting] = await Promise.all([
         api.get('/transactions/balance', this.selectedAccountId ? { accountId: this.selectedAccountId } : {}),
-        api.get(`/settings/${verifiedBalanceKey}`).catch(() => null),
-        api.get(`/settings/${legacyVerifiedBalanceKey}`).catch(() => null),
+        api.get('/settings').catch(() => []),
         this.selectedAccountId
           ? api.get(
           `/monthly-balances/${monthKey}`,
@@ -474,8 +520,14 @@ export class ViewExpenses extends LitElement {
       ]);
 
       this.totalBalance = balData.total ?? balData.balance ?? 0;
-      const verifiedRaw = settingData ?? legacySettingData;
-      this.verifiedBalance = verifiedRaw ? parseFloat(verifiedRaw) : 0;
+      this.verifiedBalance = this.computeBankBalance(
+        new Map<string, string>(
+          (Array.isArray(allSettings) ? allSettings : []).map((setting: any) => [
+            setting.key,
+            setting.value,
+          ]),
+        ),
+      );
 
       if (monthlyRecord) {
         this.startingBalance = Number(monthlyRecord.balance);
@@ -508,6 +560,31 @@ export class ViewExpenses extends LitElement {
   getVerifiedBalanceSettingKey() {
     const accountKey = this.selectedAccountId || 'all';
     return `balance_verified_account_${accountKey}`;
+  }
+
+  readVerifiedSetting(settings: Map<string, string>, accountKey: string): number | null {
+    const { year, month } = this.getBalanceReferenceMonthYear();
+    const raw =
+      settings.get(`balance_verified_account_${accountKey}`) ??
+      settings.get(`balance_verified_${accountKey}_${year}_${month}`);
+    if (raw === undefined || raw === null || raw === '') return null;
+    const parsed = parseFloat(raw);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  /**
+   * For a bank-linked selection, sum only what sync wrote per account. Manual
+   * accounts are deliberately excluded so the figure means exactly "what the
+   * bank says" - which is also why no discrepancy is offered in that mode.
+   */
+  computeBankBalance(settings: Map<string, string>): number {
+    if (this.isBankSynced) {
+      return this.syncedAccounts.reduce(
+        (sum: number, account: any) => sum + (this.readVerifiedSetting(settings, account.id) ?? 0),
+        0,
+      );
+    }
+    return this.readVerifiedSetting(settings, this.selectedAccountId || 'all') ?? 0;
   }
 
   async suggestStartingBalance(targetMonth = this.month, targetYear = this.year) {
@@ -713,6 +790,9 @@ export class ViewExpenses extends LitElement {
   }
 
   async updateVerifiedBalance(e: any) {
+    // Bank-linked accounts get their balance from sync; a manual write would be
+    // clobbered on the next run, so the input is not rendered for them.
+    if (this.isBankSynced) return;
     const newVal = parseFloat(e.target.value);
     if (isNaN(newVal)) return;
 
@@ -2204,7 +2284,11 @@ Tables: ${result.tables?.join(', ')}`;
     const net = this.monthlyStats.income - this.monthlyStats.expense;
     const totalBalance = Number.isFinite(this.totalBalance) ? this.totalBalance : null;
     const verified = Number.isFinite(this.verifiedBalance) ? this.verifiedBalance : null;
-    const difference = totalBalance !== null && verified !== null ? verified - totalBalance : null;
+    // A discrepancy only means something when the bank figure is one the user
+    // asserted. For synced accounts it is the bank's own closing balance as of
+    // the last sync, so it is shown as a fact rather than as an alert.
+    const bankSynced = this.isBankSynced;
+    const difference = !bankSynced && totalBalance !== null && verified !== null ? verified - totalBalance : null;
     const balanced = difference !== null && Math.abs(difference) < 0.01;
 
     return html`
@@ -2217,6 +2301,15 @@ Tables: ${result.tables?.join(', ')}`;
             ${net >= 0 ? '+' : '−'}${this.money(net)}
           </div>
         </div>
+
+        ${bankSynced && verified !== null ? html`
+          <button class="x-summary-right" @click="${() => { this.showReconciliationSheet = true; }}">
+            <div class="x-summary-label">${i18n.t('expenses.verified_balance')}</div>
+            <div class="x-summary-diff" style="color: var(--md-sys-color-on-surface)">
+              ${verified < 0 ? '−' : ''}${this.money(verified)}
+            </div>
+          </button>
+        ` : nothing}
 
         ${difference !== null && !balanced ? html`
           <button class="x-summary-right" @click="${() => { this.showReconciliationSheet = true; }}">
@@ -2930,7 +3023,8 @@ Tables: ${result.tables?.join(', ')}`;
   private renderReconciliationSheet() {
     const totalBalance = Number.isFinite(this.totalBalance) ? this.totalBalance : null;
     const verified = Number.isFinite(this.verifiedBalance) ? this.verifiedBalance : null;
-    const difference = totalBalance !== null && verified !== null ? verified - totalBalance : null;
+    const bankSynced = this.isBankSynced;
+    const difference = !bankSynced && totalBalance !== null && verified !== null ? verified - totalBalance : null;
     const balanced = difference !== null && Math.abs(difference) < 0.01;
 
     return bottomSheet({
@@ -2938,23 +3032,33 @@ Tables: ${result.tables?.join(', ')}`;
       onDismiss: () => { this.showReconciliationSheet = false; },
       content: html`
         <div class="m-sheet-title-row">
-          <span class="m-sheet-title">${i18n.t('expenses.reconciliation_status')}</span>
-          <span class="m-pill ${balanced ? 'ok' : 'behind'}">
-            ${balanced ? i18n.t('expenses.balanced') : i18n.t('expenses.review')}
+          <span class="m-sheet-title">
+            ${bankSynced ? i18n.t('expenses.balance_overview') : i18n.t('expenses.reconciliation_status')}
           </span>
+          ${bankSynced ? nothing : html`
+            <span class="m-pill ${balanced ? 'ok' : 'behind'}">
+              ${balanced ? i18n.t('expenses.balanced') : i18n.t('expenses.review')}
+            </span>
+          `}
         </div>
 
         <div class="m-field-group">
           <span class="m-section-label">${i18n.t('expenses.verified_balance')}</span>
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <span style="color: var(--md-sys-color-on-surface-variant)">${this.symbol}</span>
-            <input
-              class="m-field"
-              type="number"
-              step="0.01"
-              .value="${verified ?? ''}"
-              @change="${this.updateVerifiedBalance}" />
-          </div>
+          ${bankSynced ? html`
+            <span class="m-amount" style="color: var(--md-sys-color-on-surface)">
+              ${verified === null ? '—' : `${verified < 0 ? '−' : ''}${this.money(verified)}`}
+            </span>
+          ` : html`
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="color: var(--md-sys-color-on-surface-variant)">${this.symbol}</span>
+              <input
+                class="m-field"
+                type="number"
+                step="0.01"
+                .value="${verified ?? ''}"
+                @change="${this.updateVerifiedBalance}" />
+            </div>
+          `}
         </div>
 
         <div>
@@ -2972,21 +3076,25 @@ Tables: ${result.tables?.join(', ')}`;
                 : `${totalBalance >= 0 ? '+' : '−'}${this.money(totalBalance)}`}
             </span>
           </div>
-          <div class="x-recon-row" style="border-bottom: none">
-            <span class="m-row-value">${i18n.t('expenses.discrepancy')}</span>
-            <span
-              class="m-amount"
-              style="color: ${difference === null
-                ? 'var(--md-sys-color-on-surface-variant)'
-                : balanced ? 'var(--pf-positive)' : 'var(--md-sys-color-error)'}">
-              ${difference === null
-                ? '—'
-                : `${balanced ? '' : difference > 0 ? '+' : '−'}${this.money(difference)}`}
-            </span>
-          </div>
+          ${bankSynced ? nothing : html`
+            <div class="x-recon-row" style="border-bottom: none">
+              <span class="m-row-value">${i18n.t('expenses.discrepancy')}</span>
+              <span
+                class="m-amount"
+                style="color: ${difference === null
+                  ? 'var(--md-sys-color-on-surface-variant)'
+                  : balanced ? 'var(--pf-positive)' : 'var(--md-sys-color-error)'}">
+                ${difference === null
+                  ? '—'
+                  : `${balanced ? '' : difference > 0 ? '+' : '−'}${this.money(difference)}`}
+              </span>
+            </div>
+          `}
         </div>
 
-        <div class="m-subtitle">${i18n.t('expenses.reconciliation_hint')}</div>
+        <div class="m-subtitle">
+          ${bankSynced ? this.bankBalanceCaption() : i18n.t('expenses.reconciliation_hint')}
+        </div>
       `,
     });
   }
@@ -3608,50 +3716,68 @@ Tables: ${result.tables?.join(', ')}`;
   private renderDesktopStrip() {
     const totalBalance = Number.isFinite(this.totalBalance) ? this.totalBalance : null;
     const verified = Number.isFinite(this.verifiedBalance) ? this.verifiedBalance : null;
-    const difference = totalBalance !== null && verified !== null ? verified - totalBalance : null;
+    // Synced accounts have no meaningful discrepancy: the bank figure is the
+    // current closing balance while the system figure is scoped to the selected
+    // period, so the cell reports sync freshness instead.
+    const bankSynced = this.isBankSynced;
+    const difference = !bankSynced && totalBalance !== null && verified !== null ? verified - totalBalance : null;
     const balanced = difference !== null && Math.abs(difference) < 0.01;
     const net = this.monthlyStats.income - this.monthlyStats.expense;
     const reviewCount = this.needsReviewTransactions.length;
 
     return html`
       <div class="d-strip">
-        <div class="d-strip-cell">
+        <div class="d-strip-cell" title="${bankSynced ? this.bankBalanceCaption() : ''}">
           <span
             class="m-icon"
-            style="font-size: 20px; color: ${difference === null
-              ? 'var(--md-sys-color-outline)'
-              : balanced
-                ? 'var(--pf-positive)'
-                : 'var(--md-sys-color-error)'}">
-            ${difference === null ? 'help' : balanced ? 'check_circle' : 'warning'}
+            style="font-size: 20px; color: ${bankSynced
+              ? 'var(--pf-positive)'
+              : difference === null
+                ? 'var(--md-sys-color-outline)'
+                : balanced
+                  ? 'var(--pf-positive)'
+                  : 'var(--md-sys-color-error)'}">
+            ${bankSynced ? 'sync' : difference === null ? 'help' : balanced ? 'check_circle' : 'warning'}
           </span>
           <div>
-            <div class="d-strip-label">${i18n.t('desktop.reconciled')}</div>
+            <div class="d-strip-label">
+              ${bankSynced ? i18n.t('desktop.synced_with_bank') : i18n.t('desktop.reconciled')}
+            </div>
             <div class="d-strip-value text">
-              ${difference === null
-                ? '—'
-                : balanced
-                  ? i18n.t('desktop.no_discrepancy')
-                  : i18n.t('desktop.off_by', { amount: this.money(difference) })}
+              ${bankSynced
+                ? this.formatSyncTimestamp(this.bankBalanceAsOf)
+                : difference === null
+                  ? '—'
+                  : balanced
+                    ? i18n.t('desktop.no_discrepancy')
+                    : i18n.t('desktop.off_by', { amount: this.money(difference) })}
             </div>
           </div>
         </div>
 
         <div class="d-strip-divider"></div>
 
-        <div class="d-strip-cell">
+        <div class="d-strip-cell" title="${bankSynced ? this.bankBalanceCaption() : ''}">
           <div>
-            <div class="d-strip-label">${i18n.t('desktop.verified_balance')}</div>
-            <div class="d-strip-edit">
-              <span class="d-strip-prefix">${this.symbol}</span>
-              <input
-                class="d-strip-input"
-                style="width: 96px"
-                type="number"
-                step="0.01"
-                .value="${verified ?? ''}"
-                @change="${this.updateVerifiedBalance}" />
+            <div class="d-strip-label">
+              ${bankSynced ? i18n.t('expenses.verified_balance') : i18n.t('desktop.verified_balance')}
             </div>
+            ${bankSynced ? html`
+              <div class="d-strip-value ${verified === null ? 'muted' : ''}">
+                ${verified === null ? '—' : `${verified < 0 ? '−' : ''}${this.money(verified)}`}
+              </div>
+            ` : html`
+              <div class="d-strip-edit">
+                <span class="d-strip-prefix">${this.symbol}</span>
+                <input
+                  class="d-strip-input"
+                  style="width: 96px"
+                  type="number"
+                  step="0.01"
+                  .value="${verified ?? ''}"
+                  @change="${this.updateVerifiedBalance}" />
+              </div>
+            `}
           </div>
         </div>
 
