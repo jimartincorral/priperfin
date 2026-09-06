@@ -51,6 +51,42 @@ export class ViewExpenses extends LitElement {
     return this.selectedAccount?.type === 'CREDIT';
   }
 
+  /**
+   * Bank-linked accounts covered by the current selection. Bank sync overwrites
+   * `balance_verified_account_<id>` with the bank's closing balance on every run,
+   * so for these accounts the balance is read-only ground truth, not user input.
+   */
+  get syncedAccounts() {
+    const scope = this.selectedAccountId
+      ? (this.selectedAccount ? [this.selectedAccount] : [])
+      : this.accounts;
+    return scope.filter((a: any) => !!a.bankAccountUid);
+  }
+
+  get isBankSynced() {
+    return this.syncedAccounts.length > 0;
+  }
+
+  /**
+   * Freshness of the displayed bank balance. For an aggregate this is the
+   * *oldest* sync across the linked accounts - the sum is only as current as
+   * its stalest member.
+   */
+  get bankBalanceAsOf(): Date | null {
+    const times = this.syncedAccounts
+      .map((a: any) => (a.lastSyncedAt ? new Date(a.lastSyncedAt).getTime() : NaN))
+      .filter((t: number) => Number.isFinite(t));
+    return times.length ? new Date(Math.min(...times)) : null;
+  }
+
+  formatSyncTimestamp(date: Date | null): string {
+    if (!date) return i18n.t('expenses.never_synced');
+    return new Intl.DateTimeFormat(i18n.getLocale(), {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    }).format(date);
+  }
+
   getYearOptions(): number[] {
     const currentYear = new Date().getFullYear();
     const years: number[] = [];
@@ -428,15 +464,13 @@ export class ViewExpenses extends LitElement {
     const { year: balanceYear, month: balanceMonth } = this.getBalanceReferenceMonthYear();
     const monthKey = `${balanceYear}-${String(balanceMonth).padStart(2, '0')}`;
     const startBalanceKey = `starting_balance_all_${monthKey}`;
-    const accountKey = this.selectedAccountId || 'all';
-    const verifiedBalanceKey = this.getVerifiedBalanceSettingKey();
-    const legacyVerifiedBalanceKey = `balance_verified_${accountKey}_${balanceYear}_${balanceMonth}`;
 
     try {
-      const [balData, settingData, legacySettingData, monthlyRecord, allAccountsStartSetting] = await Promise.all([
+      // One /settings read instead of per-key lookups: the aggregate bank balance
+      // needs every linked account's `balance_verified_account_<id>` at once.
+      const [balData, allSettings, monthlyRecord, allAccountsStartSetting] = await Promise.all([
         api.get('/transactions/balance', this.selectedAccountId ? { accountId: this.selectedAccountId } : {}),
-        api.get(`/settings/${verifiedBalanceKey}`).catch(() => null),
-        api.get(`/settings/${legacyVerifiedBalanceKey}`).catch(() => null),
+        api.get('/settings').catch(() => []),
         this.selectedAccountId
           ? api.get(
           `/monthly-balances/${monthKey}`,
@@ -449,8 +483,14 @@ export class ViewExpenses extends LitElement {
       ]);
 
       this.totalBalance = balData.total ?? balData.balance ?? 0;
-      const verifiedRaw = settingData ?? legacySettingData;
-      this.verifiedBalance = verifiedRaw ? parseFloat(verifiedRaw) : 0;
+      this.verifiedBalance = this.computeBankBalance(
+        new Map<string, string>(
+          (Array.isArray(allSettings) ? allSettings : []).map((setting: any) => [
+            setting.key,
+            setting.value,
+          ]),
+        ),
+      );
 
       if (monthlyRecord) {
         this.startingBalance = Number(monthlyRecord.balance);
@@ -483,6 +523,31 @@ export class ViewExpenses extends LitElement {
   getVerifiedBalanceSettingKey() {
     const accountKey = this.selectedAccountId || 'all';
     return `balance_verified_account_${accountKey}`;
+  }
+
+  readVerifiedSetting(settings: Map<string, string>, accountKey: string): number | null {
+    const { year, month } = this.getBalanceReferenceMonthYear();
+    const raw =
+      settings.get(`balance_verified_account_${accountKey}`) ??
+      settings.get(`balance_verified_${accountKey}_${year}_${month}`);
+    if (raw === undefined || raw === null || raw === '') return null;
+    const parsed = parseFloat(raw);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  /**
+   * For a bank-linked selection, sum only what bank sync wrote per account.
+   * Manual accounts are deliberately left out so the figure means exactly "what
+   * the bank says" - which is also why no discrepancy is shown in that mode.
+   */
+  computeBankBalance(settings: Map<string, string>): number {
+    if (this.isBankSynced) {
+      return this.syncedAccounts.reduce(
+        (sum: number, account: any) => sum + (this.readVerifiedSetting(settings, account.id) ?? 0),
+        0,
+      );
+    }
+    return this.readVerifiedSetting(settings, this.selectedAccountId || 'all') ?? 0;
   }
 
   async suggestStartingBalance(targetMonth = this.month, targetYear = this.year) {
@@ -688,6 +753,9 @@ export class ViewExpenses extends LitElement {
   }
 
   async updateVerifiedBalance(e: any) {
+    // Bank-linked accounts get their balance from sync; a manual write would be
+    // clobbered on the next run, so the input is not rendered for them.
+    if (this.isBankSynced) return;
     const newVal = parseFloat(e.target.value);
     if (isNaN(newVal)) return;
 
@@ -1732,8 +1800,14 @@ Tables: ${result.tables?.join(', ')}`;
     const symbol = this.currency === 'EUR' ? '€' : '$';
     const totalBalance = Number.isFinite(this.totalBalance) ? this.totalBalance : null;
     const verifiedBalance = Number.isFinite(this.verifiedBalance) ? this.verifiedBalance : null;
-    const difference = totalBalance !== null && verifiedBalance !== null ? verifiedBalance - totalBalance : null;
+    // A discrepancy only means something when the "bank balance" is a figure the
+    // user asserted. For synced accounts it is the bank's own closing balance as
+    // of the last sync, so comparing it to a period-scoped calculated balance
+    // would flag "Review" forever.
+    const bankSynced = this.isBankSynced;
+    const difference = !bankSynced && totalBalance !== null && verifiedBalance !== null ? verifiedBalance - totalBalance : null;
     const isBalanced = difference !== null && Math.abs(difference) < 0.01;
+    const syncedAsOf = this.formatSyncTimestamp(this.bankBalanceAsOf);
     const movementNet = this.monthlyStats.income - this.monthlyStats.expense;
 
     return html`
@@ -1792,18 +1866,26 @@ Tables: ${result.tables?.join(', ')}`;
 
         <div class="card" style="display: flex; flex-direction: column; gap: 12px; align-items: stretch;">
             <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
-                <div style="font-size: 0.9rem; color: var(--md-sys-color-on-surface-variant); font-weight: 500;">${i18n.t('expenses.reconciliation_status')}</div>
+                <div style="font-size: 0.9rem; color: var(--md-sys-color-on-surface-variant); font-weight: 500;">${bankSynced ? i18n.t('expenses.balance_overview') : i18n.t('expenses.reconciliation_status')}</div>
+                ${bankSynced ? '' : html`
                 <span style="font-size: 0.75rem; font-weight: 600; padding: 4px 10px; border-radius: 999px; background: ${isBalanced ? 'rgba(22, 163, 74, 0.16)' : 'var(--md-sys-color-error-container)'}; color: ${isBalanced ? '#16a34a' : 'var(--md-sys-color-on-error-container)'};">
                     ${isBalanced ? i18n.t('expenses.balanced') : i18n.t('expenses.review')}
                 </span>
+                `}
             </div>
-            <div style="display: grid; grid-template-columns: repeat(3, minmax(180px, 1fr)); gap: 16px; align-items: center;">
+            <div style="display: grid; grid-template-columns: repeat(${bankSynced ? 2 : 3}, minmax(180px, 1fr)); gap: 16px; align-items: center;">
             <div>
                 <div style="font-size: 0.875rem; color: var(--md-sys-color-secondary); margin-bottom: 0.25rem;">${i18n.t('expenses.verified_balance')}</div>
+                ${bankSynced ? html`
+                <div class="balance" style="color: var(--md-sys-color-on-surface);">
+                    ${verifiedBalance === null ? '—' : `${verifiedBalance < 0 ? '-' : ''}${symbol}${Math.abs(verifiedBalance).toFixed(2)}`}
+                </div>
+                ` : html`
                 <div style="display: flex; align-items: center; gap: 0.5rem;">
                     <span style="font-size: 1.5rem; font-weight: 600; color: var(--md-sys-color-on-surface);">${symbol}</span>
                     <input type="number" step="0.01" class="amount-input" .value="${verifiedBalance ?? ''}" @change="${this.updateVerifiedBalance}" />
                 </div>
+                `}
             </div>
 
             <div>
@@ -1813,15 +1895,25 @@ Tables: ${result.tables?.join(', ')}`;
                 </div>
             </div>
 
+            ${bankSynced ? '' : html`
             <div>
                 <div style="font-size: 0.875rem; color: var(--md-sys-color-secondary); margin-bottom: 0.25rem;">${i18n.t('expenses.discrepancy')}</div>
                 <div class="balance" style="color: ${difference === null ? 'var(--md-sys-color-on-surface-variant)' : Math.abs(difference) < 0.01 ? '#16a34a' : 'var(--md-sys-color-error)'}">
                     ${difference === null ? '—' : `${Math.abs(difference) < 0.01 ? '' : (difference > 0 ? '+' : '-')}${symbol}${Math.abs(difference).toFixed(2)}`}
                 </div>
             </div>
+            `}
             </div>
             </div>
-            <div style="font-size: 0.8rem; color: var(--md-sys-color-on-surface-variant);">${i18n.t('expenses.reconciliation_hint')}</div>
+            <div style="font-size: 0.8rem; color: var(--md-sys-color-on-surface-variant);">
+                ${!bankSynced
+                    ? i18n.t('expenses.reconciliation_hint')
+                    : this.selectedAccountId
+                        ? i18n.t('expenses.bank_balance_as_of').replace('{date}', syncedAsOf)
+                        : i18n.t('expenses.bank_balance_aggregate_as_of')
+                            .replace('{count}', String(this.syncedAccounts.length))
+                            .replace('{date}', syncedAsOf)}
+            </div>
         </div>
 
         <div class="card" style="display: flex; flex-direction: column; gap: 1rem; align-items: stretch;">

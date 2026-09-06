@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.18.0 - 2026-09-06
+
+- Reworked the Expenses balance card so it adapts to whether the selected account is linked to a bank.
+- Bank-linked accounts now show the bank balance as a read-only figure with the timestamp of the last sync, instead of an editable field that Open Banking sync silently overwrote on every run.
+- Removed the discrepancy tile and the Balanced/Review badge for bank-linked accounts: the bank balance is the current closing balance while the calculated balance is scoped to the selected period, so the two were never comparable and the badge read *Review* permanently on any past month.
+- Fixed the "All accounts" view, which compared a stale hand-typed figure against a live aggregate because Open Banking sync only ever writes per-account balances. It now sums the linked accounts' bank balances and states how many accounts are covered.
+- Manual accounts keep the editable bank balance, the discrepancy tile and the reconciliation badge unchanged.
+
 ## v1.17.17 - 2026-09-01
 
 - Configured `home-assistant/builder` to use architecture-matched builder images (`image: ${{ matrix.arch }}`) on native runners.
