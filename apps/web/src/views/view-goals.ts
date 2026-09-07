@@ -98,8 +98,8 @@ export class ViewGoals extends LitElement {
     }
 
     return goalsArray.sort((a, b) => {
-      let valA = a[this.sortField];
-      let valB = b[this.sortField];
+      let valA: any;
+      let valB: any;
 
       if (this.sortField === 'categoryId') {
         const catA = this.categories.find(c => c.id === a.categoryId);
@@ -110,6 +110,24 @@ export class ViewGoals extends LitElement {
         const getDiff = (g: any) => Number(g.savedAmount || 0) - this.getEffectiveShouldHaveSaved(g);
         valA = getDiff(a);
         valB = getDiff(b);
+      } else if (this.sortField === 'targetAmount' || this.sortField === 'savedAmount') {
+        // Prisma Decimal arrives over the wire as a string, so comparing the
+        // raw field put 10000 before 200. Every other reader of these fields
+        // coerces; the sort has to as well.
+        valA = Number(a[this.sortField] || 0);
+        valB = Number(b[this.sortField] || 0);
+      } else if (this.sortField === 'targetDate' || this.sortField === 'startDate') {
+        // Effective date, so an evergreen goal (no targetDate) sorts by the
+        // date it is actually working towards instead of comparing null
+        valA = this.sortField === 'targetDate'
+          ? this.getEffectiveTargetDate(a).getTime()
+          : new Date(a.startDate || 0).getTime();
+        valB = this.sortField === 'targetDate'
+          ? this.getEffectiveTargetDate(b).getTime()
+          : new Date(b.startDate || 0).getTime();
+      } else {
+        valA = a[this.sortField];
+        valB = b[this.sortField];
       }
 
       if (valA < valB) return this.sortDirection === 'asc' ? -1 : 1;

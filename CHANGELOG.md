@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.20.2 - 2026-09-07
+
+Fixes sorting on the Goals screen, which ordered amounts as text.
+
+- Sorting by target amount or by saved amount put 10000 before 200 and 2500 before 300. Both columns are decimals, which arrive from the API as strings, and the comparator compared them as strings instead of numbers.
+- Sorting by target date now places evergreen goals by the date they are working towards (start plus target months) rather than leaving them wherever the previous sort had them — they have no target date, so the old comparison against an empty value never ordered them.
+
 ## v1.20.1 - 2026-09-07
 
 Restores the Redistribute All button on the Goals screen, lost in the v1.19.0 desktop rebuild.
