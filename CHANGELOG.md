@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.20.0 - 2026-09-06
+
+The Expenses balance card now adapts to whether the selected account is linked to a bank, because Open Banking sync had quietly invalidated what it was claiming.
+
+- Bank-linked accounts show the bank balance as a read-only figure with the timestamp of the last sync, instead of an editable field that sync silently overwrote on every run.
+- The discrepancy and the Balanced / Review badge are gone for bank-linked accounts. The bank figure is the current closing balance while the calculated figure is scoped to the selected period, so the two were never comparable and the badge read *Review* permanently on any past month.
+- On desktop, the *Reconciled* cell becomes *Synced with bank* with the sync time; on mobile, the *Bank differs by* alert becomes a plain bank balance.
+- Fixed the "All accounts" view, which compared a stale hand-typed figure against a live aggregate because sync only ever writes per-account balances. It now sums the linked accounts and states how many are covered.
+- Manual and cash accounts keep the editable balance, the discrepancy and the badge unchanged — there the typed figure is still the only way to catch a missed entry.
+
 ## v1.19.0 - 2026-09-04
 
 Desktop redesign. Expenses, Reports, Goals, Categories and Settings now have desktop layouts built in the same language as the phone ones; the mobile layout below 600px is unchanged.
