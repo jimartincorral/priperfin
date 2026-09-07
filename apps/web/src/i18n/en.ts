@@ -421,6 +421,9 @@ export const en = {
         distribute: {
             distribute_unassigned: 'Distribute Unassigned',
             redistribute_all: 'Redistribute All',
+            redistribute_all_desc: 'Resets every goal and splits the whole {amount} pot again.',
+            scope_unassigned: 'Unassigned',
+            scope_all: 'Whole pot',
             fill_by_date: 'Fill by Date',
             fill_by_date_desc: 'Fill goals completely, earliest deadline first',
             fill_to_on_track: 'Fill to On Track',

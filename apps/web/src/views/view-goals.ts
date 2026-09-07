@@ -65,6 +65,7 @@ export class ViewGoals extends LitElement {
   @state() detailGoalId: string | null = null;
   @state() showGoalForm = false;
   @state() showDistributeSheet = false;
+  @state() private distributeScope: 'unassigned' | 'all' = 'unassigned';
   @state() showContributeSheet = false;
   @state() contributeAmount = '';
   @state() goalToDelete: string | null = null;
@@ -1507,11 +1508,14 @@ export class ViewGoals extends LitElement {
                 style="color: ${this.unassigned >= 0 ? 'var(--pf-positive)' : 'var(--md-sys-color-error)'}">
                 ${this.unassigned < 0 ? '−' : ''}${this.money(this.unassigned)}
               </span>
-              ${this.unassigned > 0 ? html`
-                <button class="m-link" @click="${() => { this.showDistributeSheet = true; }}">
-                  ${i18n.t('mobile.assign')}
-                </button>
-              ` : nothing}
+              <button
+                class="m-link"
+                @click="${() => {
+                  this.distributeScope = this.unassigned > 0 ? 'unassigned' : 'all';
+                  this.showDistributeSheet = true;
+                }}">
+                ${i18n.t('mobile.assign')}
+              </button>
             </div>
           </div>
         </div>
@@ -1982,9 +1986,27 @@ export class ViewGoals extends LitElement {
       open: this.showDistributeSheet,
       onDismiss: () => { this.showDistributeSheet = false; },
       content: html`
-        <div class="m-sheet-title">${i18n.t('goals.distribute.distribute_unassigned')}</div>
+        <div class="m-sheet-title">
+          ${i18n.t(this.distributeScope === 'all'
+            ? 'goals.distribute.redistribute_all'
+            : 'goals.distribute.distribute_unassigned')}
+        </div>
         <div class="m-subtitle">
-          ${i18n.t('mobile.unassigned')}: ${this.money(Math.max(0, this.unassigned), 2)}
+          ${this.distributeScope === 'all'
+            ? html`${i18n.t('desktop.savings_pot')}: ${this.money(this.totalSavings, 2)}`
+            : html`${i18n.t('mobile.unassigned')}: ${this.money(Math.max(0, this.unassigned), 2)}`}
+        </div>
+        <div style="display: flex; gap: 8px; margin: 4px 0 8px">
+          ${([
+            { scope: 'unassigned' as const, label: i18n.t('goals.distribute.scope_unassigned') },
+            { scope: 'all' as const, label: i18n.t('goals.distribute.scope_all') },
+          ]).map(item => html`
+            <button
+              class="m-filter-chip ${this.distributeScope === item.scope ? 'selected' : ''}"
+              @click="${() => { this.distributeScope = item.scope; }}">
+              ${item.label}
+            </button>
+          `)}
         </div>
         <div>
           ${modes.map(item => html`
@@ -1993,7 +2015,7 @@ export class ViewGoals extends LitElement {
               style="align-items: flex-start; padding-top: 12px; padding-bottom: 12px;"
               @click="${() => {
                 this.showDistributeSheet = false;
-                this.showDistributeMenu = 'unassigned';
+                this.showDistributeMenu = this.distributeScope;
                 this.handleDistribute(item.mode);
               }}">
               <span class="m-row-main">
@@ -2382,7 +2404,7 @@ export class ViewGoals extends LitElement {
               ${icon('call_split', 16)}
               <span>${i18n.t('mobile.assign')}</span>
             </button>
-            ${this.showDistributeMenu ? html`
+            ${this.showDistributeMenu === 'unassigned' ? html`
               <div class="dg-pop wide">
                 ${this.distributeModes().map(mode => html`
                   <button
@@ -2773,17 +2795,33 @@ export class ViewGoals extends LitElement {
           </div>
 
           <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-top: 14px">
-            <button
-              class="d-btn small plain"
-              ?disabled="${this.unassigned <= 0}"
-              @click="${() => {
-                this.showDistributeMenu = 'unassigned';
-                this.handleDistribute(this.distributeMode);
-              }}">
-              ${i18n.t('desktop.preview_split')}
-            </button>
+            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
+              <button
+                class="d-btn small plain"
+                ?disabled="${this.unassigned <= 0}"
+                @click="${() => {
+                  this.showDistributeMenu = 'unassigned';
+                  this.handleDistribute(this.distributeMode);
+                }}">
+                ${i18n.t('desktop.preview_split')}
+              </button>
+              <!-- Stays enabled with nothing unassigned: it resets the goals
+                   and splits the whole pot, so it is the way out of a bad split -->
+              <button
+                class="d-btn-outlined"
+                @click="${() => {
+                  this.showDistributeMenu = 'all';
+                  this.handleDistribute(this.distributeMode);
+                }}">
+                ${icon('restart_alt', 16)}
+                <span>${i18n.t('goals.distribute.redistribute_all')}</span>
+              </button>
+            </div>
             <span class="d-panel-caption" style="text-wrap: pretty">
               ${hints[this.distributeMode]}
+            </span>
+            <span class="d-panel-caption" style="text-wrap: pretty">
+              ${i18n.t('goals.distribute.redistribute_all_desc', { amount: this.money(this.totalSavings, 2) })}
             </span>
           </div>
         </div>

@@ -421,6 +421,9 @@ export const es = {
         distribute: {
             distribute_unassigned: 'Distribuir No Asignado',
             redistribute_all: 'Redistribuir Todo',
+            redistribute_all_desc: 'Reinicia todas las metas y reparte de nuevo el bote completo de {amount}.',
+            scope_unassigned: 'Sin asignar',
+            scope_all: 'Bote completo',
             fill_by_date: 'Llenar por Fecha',
             fill_by_date_desc: 'Llenar objetivos completamente, del más cercano al más lejano',
             fill_to_on_track: 'Llenar hasta En Progreso',

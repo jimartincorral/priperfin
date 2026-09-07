@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.20.1 - 2026-09-07
+
+Restores the Redistribute All button on the Goals screen, lost in the v1.19.0 desktop rebuild.
+
+- The desktop rebuild kept the "Distribute Unassigned" path but dropped the second button beside it, so nothing in the app could reach the redistribute-all code — resetting every goal and splitting the whole savings pot again was unreachable from either layout.
+- Desktop: a *Redistribute All* button sits next to *Preview split* in the assign panel, using the selected fill mode. It stays enabled when nothing is unassigned, which is exactly when it is needed.
+- Mobile: the distribute sheet gains an Unassigned / Whole pot switch, and the *Assign* link no longer disappears once everything is allocated — it opens straight into the whole-pot scope.
+- The confirmation prompt before resetting saved amounts is unchanged.
+
 ## v1.20.0 - 2026-09-06
 
 The Expenses balance card now adapts to whether the selected account is linked to a bank, because Open Banking sync had quietly invalidated what it was claiming.
