@@ -37,21 +37,22 @@ model Category {
 }
 
 model Account {
-  id               String           @id @default(uuid())
-  name             String
-  initialBalance   Decimal          @default(0)
-  type             AccountType      @default(DEBIT)
-  profileId        String
-  profile          Profile          @relation(fields: [profileId], references: [id], onDelete: Cascade)
-  bankConnectionId String?
-  bankConnection   BankConnection?  @relation(fields: [bankConnectionId], references: [id], onDelete: SetNull)
-  bankAccountUid   String?
-  lastSyncedAt     DateTime?
-  transactions     Transaction[]
-  monthlyBalances  MonthlyBalance[]
-  accountBalances  AccountBalance[]
-  createdAt        DateTime         @default(now())
-  updatedAt        DateTime         @updatedAt
+  id                   String           @id @default(uuid())
+  name                 String
+  initialBalance       Decimal          @default(0)
+  type                 AccountType      @default(DEBIT)
+  profileId            String
+  profile              Profile          @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  bankConnectionId     String?
+  bankConnection       BankConnection?  @relation(fields: [bankConnectionId], references: [id], onDelete: SetNull)
+  bankAccountUid       String?
+  lastSyncedAt         DateTime?
+  transactions         Transaction[]
+  transferTransactions Transaction[]    @relation("AccountTransferTarget")
+  monthlyBalances      MonthlyBalance[]
+  accountBalances      AccountBalance[]
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
 
   @@index([profileId])
 }
@@ -97,6 +98,12 @@ model Transaction {
   suggestedByRuleId String?
   suggestedRule     CategorizationRule? @relation(fields: [suggestedByRuleId], references: [id], onDelete: SetNull)
 
+  // Transfer tracking
+  isTransfer        Boolean  @default(false)
+  transferId        String? // Shared UUID linking the two paired transactions
+  transferAccountId String?
+  transferAccount   Account? @relation("AccountTransferTarget", fields: [transferAccountId], references: [id], onDelete: SetNull)
+
   externalId String?            @unique
   splits     TransactionSplit[] @relation("TransactionSplits")
   createdAt  DateTime           @default(now())
@@ -105,6 +112,8 @@ model Transaction {
   @@index([profileId])
   @@index([merchant])
   @@index([categoryId, date]) // For pattern detection
+  @@index([isTransfer])
+  @@index([transferId])
 }
 
 model CategorizationRule {

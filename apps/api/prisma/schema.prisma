@@ -49,6 +49,7 @@ model Account {
   bankAccountUid   String?
   lastSyncedAt     DateTime?
   transactions     Transaction[]
+  transferTransactions Transaction[] @relation("AccountTransferTarget")
   monthlyBalances  MonthlyBalance[]
   accountBalances  AccountBalance[]
   createdAt        DateTime         @default(now())
@@ -98,6 +99,12 @@ model Transaction {
   suggestedByRuleId String?
   suggestedRule     CategorizationRule? @relation(fields: [suggestedByRuleId], references: [id], onDelete: SetNull)
 
+  // Transfer tracking
+  isTransfer           Boolean            @default(false)
+  transferId           String?            // Shared UUID linking the two paired transactions
+  transferAccountId    String?
+  transferAccount      Account?           @relation("AccountTransferTarget", fields: [transferAccountId], references: [id], onDelete: SetNull)
+
   externalId   String?            @unique
   splits       TransactionSplit[] @relation("TransactionSplits")
   createdAt    DateTime           @default(now())
@@ -106,6 +113,8 @@ model Transaction {
   @@index([profileId])
   @@index([merchant])
   @@index([categoryId, date]) // For pattern detection
+  @@index([isTransfer])
+  @@index([transferId])
 }
 
 model CategorizationRule {

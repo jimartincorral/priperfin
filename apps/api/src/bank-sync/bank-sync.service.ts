@@ -995,6 +995,32 @@ export class BankSyncService {
       }
     }
 
+    if (totalNew > 0) {
+      try {
+        const transferMatches =
+          await this.transactionsService.findTransferMatches(profileId);
+        for (const match of transferMatches) {
+          if (match.confidence >= 85) {
+            await this.transactionsService.linkAsTransfer(
+              {
+                transactionAId: match.source.id,
+                transactionBId: match.target.id,
+              },
+              profileId,
+            );
+            this.logger.log(
+              `[BankSync] Auto-linked transfer between ${match.source.account?.name} and ${match.target.account?.name} (${match.source.amount})`,
+            );
+          }
+        }
+      } catch (matchErr) {
+        this.logger.warn(
+          '[BankSync] Transfer auto-matching warning:',
+          matchErr,
+        );
+      }
+    }
+
     return {
       syncedCount: linkedAccounts.length,
       newCount: totalNew,

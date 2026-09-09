@@ -17,6 +17,12 @@ export interface Transaction {
   categoryId: string | null;
   notes?: string;
   splits?: TransactionSplit[];
+  accountId?: string | null;
+  account?: { id: string; name: string; type?: string } | null;
+  isTransfer?: boolean;
+  transferId?: string | null;
+  transferAccountId?: string | null;
+  transferAccount?: { id: string; name: string; type?: string } | null;
 }
 
 export interface Category {
@@ -34,6 +40,7 @@ export interface FilterOptions {
   filterDateFrom?: string;
   filterDateTo?: string;
   filterCategoryId?: string;
+  filterType?: 'all' | 'expense' | 'income' | 'transfer' | string;
 }
 
 /**
@@ -99,6 +106,17 @@ export function filterTransactions(
       } else {
         filtered = filtered.filter((t) => t.categoryId === options.filterCategoryId);
       }
+    }
+  }
+
+  // Filter by transaction type
+  if (options.filterType && options.filterType !== 'all') {
+    if (options.filterType === 'transfer') {
+      filtered = filtered.filter((t) => !!t.isTransfer);
+    } else if (options.filterType === 'expense') {
+      filtered = filtered.filter((t) => !t.isTransfer && t.amount < 0);
+    } else if (options.filterType === 'income') {
+      filtered = filtered.filter((t) => !t.isTransfer && t.amount > 0);
     }
   }
 
@@ -226,6 +244,9 @@ export function calculateMonthlyStats(
   };
 
   transactions.forEach((t) => {
+    // Transfers are movements between accounts, not household income or expense
+    if (t.isTransfer) return;
+
     if (t.splits && t.splits.length > 0) {
       t.splits.forEach((split) => {
         processLine(split.amount, split.categoryId);

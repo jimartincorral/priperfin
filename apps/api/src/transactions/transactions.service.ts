@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTransactionDto } from './create-transaction.dto';
+import { CreateTransferDto, LinkTransferDto } from './create-transfer.dto';
 import { GetTransactionsDto, DateFilterMode } from './get-transactions.dto';
 import { CreateSplitsDto } from './create-split.dto';
 import { RulesService } from '../rules/rules.service';
@@ -32,6 +33,10 @@ export class TransactionsService {
         merchant: null, // Deprecated
       },
     });
+
+    if (dto.isTransfer) {
+      return transaction;
+    }
 
     // Evaluate rules
     const match = await this.rulesService.evaluateTransaction(
@@ -203,12 +208,24 @@ export class TransactionsService {
       where.accountId = accountId;
     }
 
+    if (query.type === 'transfer') {
+      where.isTransfer = true;
+    } else if (query.type === 'expense') {
+      where.isTransfer = false;
+      where.amount = { lt: 0 };
+    } else if (query.type === 'income') {
+      where.isTransfer = false;
+      where.amount = { gt: 0 };
+    }
+
     return this.prisma.transaction.findMany({
       where,
       orderBy: { date: 'desc' },
       include: {
         category: true,
         costObject: true,
+        account: true,
+        transferAccount: true,
         suggestedRule: { include: { category: true } }, // Include suggested rule and its category
         splits: {
           include: {
@@ -239,7 +256,47 @@ export class TransactionsService {
       const updated = await this.prisma.transaction.update({
         where: { id },
         data: dto,
+        include: {
+          category: true,
+          account: true,
+          transferAccount: true,
+        },
       });
+
+      // If it's a transfer, synchronize paired leg for amount and date
+      if (transaction.isTransfer && transaction.transferId) {
+        const paired = await this.prisma.transaction.findFirst({
+          where: {
+            transferId: transaction.transferId,
+            id: { not: id },
+            profileId,
+          },
+        });
+
+        if (paired) {
+          const pairedData: Prisma.TransactionUpdateInput = {};
+          if (dto.date !== undefined) {
+            pairedData.date = dto.date;
+          }
+          if (dto.amount !== undefined) {
+            const rawAmount =
+              typeof dto.amount === 'number'
+                ? dto.amount
+                : typeof (dto.amount as any)?.toNumber === 'function'
+                  ? (dto.amount as any).toNumber()
+                  : Number(dto.amount);
+            if (!isNaN(rawAmount)) {
+              pairedData.amount = new Prisma.Decimal(-rawAmount);
+            }
+          }
+          if (Object.keys(pairedData).length > 0) {
+            await this.prisma.transaction.update({
+              where: { id: paired.id },
+              data: pairedData,
+            });
+          }
+        }
+      }
 
       return updated;
     } catch (e) {
@@ -676,13 +733,24 @@ export class TransactionsService {
   }
 
   async remove(id: string, profileId: string) {
-    const result = await this.prisma.transaction.deleteMany({
+    const tx = await this.prisma.transaction.findFirst({
       where: { id, profileId },
     });
 
-    if (result.count === 0) {
+    if (!tx) {
       throw new NotFoundException('Transaction not found or access denied');
     }
+
+    if (tx.isTransfer && tx.transferId) {
+      await this.prisma.transaction.deleteMany({
+        where: { transferId: tx.transferId, profileId },
+      });
+      return { success: true, deletedTransfers: true };
+    }
+
+    await this.prisma.transaction.delete({
+      where: { id },
+    });
 
     return { success: true };
   }
@@ -694,6 +762,7 @@ export class TransactionsService {
         category: true,
         costObject: true,
         account: true,
+        transferAccount: true,
         splits: {
           include: {
             category: true,
@@ -708,6 +777,210 @@ export class TransactionsService {
     }
 
     return transaction;
+  }
+
+  async createTransfer(dto: CreateTransferDto, profileId: string) {
+    if (dto.fromAccountId === dto.toAccountId) {
+      throw new BadRequestException('From and To accounts must be different');
+    }
+
+    const [fromAccount, toAccount] = await Promise.all([
+      this.prisma.account.findFirst({
+        where: { id: dto.fromAccountId, profileId },
+      }),
+      this.prisma.account.findFirst({
+        where: { id: dto.toAccountId, profileId },
+      }),
+    ]);
+
+    if (!fromAccount) {
+      throw new NotFoundException('Source account not found or access denied');
+    }
+    if (!toAccount) {
+      throw new NotFoundException(
+        'Destination account not found or access denied',
+      );
+    }
+
+    const transferId = crypto.randomUUID();
+    const absAmount = Math.abs(dto.amount);
+    const date = new Date(dto.date);
+
+    const descFrom =
+      dto.description || `Transfer to ${toAccount.name}`;
+    const descTo =
+      dto.description || `Transfer from ${fromAccount.name}`;
+
+    const [fromTransaction, toTransaction] = await this.prisma.$transaction([
+      this.prisma.transaction.create({
+        data: {
+          date,
+          amount: new Prisma.Decimal(-absAmount),
+          description: descFrom,
+          notes: dto.notes,
+          accountId: fromAccount.id,
+          isTransfer: true,
+          transferId,
+          transferAccountId: toAccount.id,
+          profileId,
+          merchant: null,
+        },
+        include: {
+          account: true,
+          transferAccount: true,
+        },
+      }),
+      this.prisma.transaction.create({
+        data: {
+          date,
+          amount: new Prisma.Decimal(absAmount),
+          description: descTo,
+          notes: dto.notes,
+          accountId: toAccount.id,
+          isTransfer: true,
+          transferId,
+          transferAccountId: fromAccount.id,
+          profileId,
+          merchant: null,
+        },
+        include: {
+          account: true,
+          transferAccount: true,
+        },
+      }),
+    ]);
+
+    return { fromTransaction, toTransaction };
+  }
+
+  async linkAsTransfer(dto: LinkTransferDto, profileId: string) {
+    if (dto.transactionAId === dto.transactionBId) {
+      throw new BadRequestException('Cannot link a transaction to itself');
+    }
+
+    const [txA, txB] = await Promise.all([
+      this.prisma.transaction.findFirst({
+        where: { id: dto.transactionAId, profileId },
+      }),
+      this.prisma.transaction.findFirst({
+        where: { id: dto.transactionBId, profileId },
+      }),
+    ]);
+
+    if (!txA || !txB) {
+      throw new NotFoundException('One or both transactions not found');
+    }
+
+    if (!txA.accountId || !txB.accountId || txA.accountId === txB.accountId) {
+      throw new BadRequestException(
+        'Transfer transactions must belong to two different accounts',
+      );
+    }
+
+    const transferId = crypto.randomUUID();
+
+    const [updatedA, updatedB] = await this.prisma.$transaction([
+      this.prisma.transaction.update({
+        where: { id: txA.id },
+        data: {
+          isTransfer: true,
+          transferId,
+          transferAccountId: txB.accountId,
+          categoryId: null,
+        },
+        include: { account: true, transferAccount: true },
+      }),
+      this.prisma.transaction.update({
+        where: { id: txB.id },
+        data: {
+          isTransfer: true,
+          transferId,
+          transferAccountId: txA.accountId,
+          categoryId: null,
+        },
+        include: { account: true, transferAccount: true },
+      }),
+    ]);
+
+    return { success: true, transferId, transactions: [updatedA, updatedB] };
+  }
+
+  async unlinkTransfer(id: string, profileId: string) {
+    const tx = await this.prisma.transaction.findFirst({
+      where: { id, profileId },
+    });
+    if (!tx || !tx.transferId) {
+      throw new NotFoundException('Transfer transaction not found');
+    }
+
+    await this.prisma.transaction.updateMany({
+      where: { transferId: tx.transferId, profileId },
+      data: {
+        isTransfer: false,
+        transferId: null,
+        transferAccountId: null,
+      },
+    });
+
+    return { success: true };
+  }
+
+  async findTransferMatches(profileId: string) {
+    const candidateTransactions = await this.prisma.transaction.findMany({
+      where: {
+        profileId,
+        isTransfer: false,
+        accountId: { not: null },
+      },
+      orderBy: { date: 'desc' },
+      take: 200,
+      include: { account: true },
+    });
+
+    const matches: Array<{
+      source: any;
+      target: any;
+      confidence: number;
+    }> = [];
+
+    const matchedIds = new Set<string>();
+
+    for (let i = 0; i < candidateTransactions.length; i++) {
+      const a = candidateTransactions[i];
+      if (matchedIds.has(a.id)) continue;
+
+      for (let j = i + 1; j < candidateTransactions.length; j++) {
+        const b = candidateTransactions[j];
+        if (matchedIds.has(b.id)) continue;
+        if (a.accountId === b.accountId) continue;
+
+        const amtA = a.amount.toNumber();
+        const amtB = b.amount.toNumber();
+        if (Math.abs(Math.abs(amtA) - Math.abs(amtB)) > 0.001) continue;
+        if (amtA * amtB >= 0) continue; // Must be opposite signs
+
+        const diffDays = Math.abs(
+          (a.date.getTime() - b.date.getTime()) / (1000 * 60 * 60 * 24),
+        );
+        if (diffDays <= 3) {
+          const source = amtA < 0 ? a : b;
+          const target = amtA < 0 ? b : a;
+          matches.push({
+            source,
+            target,
+            confidence:
+              diffDays === 0
+                ? 95
+                : Math.max(70, Math.round(95 - diffDays * 10)),
+          });
+          matchedIds.add(a.id);
+          matchedIds.add(b.id);
+          break;
+        }
+      }
+    }
+
+    return matches;
   }
 
   async createSplits(

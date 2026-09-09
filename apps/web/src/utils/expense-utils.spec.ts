@@ -373,5 +373,49 @@ describe('expense-utils', () => {
       expect(stats.expense).toBe(0);
       expect(stats.income - stats.expense).toBe(0);
     });
+
+    it('should exclude transfer transactions from monthly income and expense', () => {
+      const txs: Transaction[] = [
+        { id: '1', date: '2026-08-01', description: 'Salary', amount: 3000, categoryId: 'cat-salary' },
+        { id: '2', date: '2026-08-02', description: 'Groceries', amount: -150, categoryId: 'cat-groceries' },
+        // Two-legged transfer: Checking -> Savings
+        { id: '3', date: '2026-08-03', description: 'Transfer to Savings', amount: -500, categoryId: null, isTransfer: true },
+        { id: '4', date: '2026-08-03', description: 'Transfer from Checking', amount: 500, categoryId: null, isTransfer: true },
+      ];
+
+      const stats = calculateMonthlyStats(txs, categories);
+      // Income should ONLY be 3000 (salary), NOT 3500
+      expect(stats.income).toBe(3000);
+      // Expense should ONLY be 150 (groceries), NOT 650
+      expect(stats.expense).toBe(150);
+      expect(stats.income - stats.expense).toBe(2850);
+    });
+  });
+
+  describe('filterTransactions with filterType', () => {
+    const txsWithTransfers: Transaction[] = [
+      { id: '1', date: '2026-08-01', description: 'Salary', amount: 3000, categoryId: 'cat-salary' },
+      { id: '2', date: '2026-08-02', description: 'Groceries', amount: -150, categoryId: 'cat-groceries' },
+      { id: '3', date: '2026-08-03', description: 'Transfer to Savings', amount: -500, categoryId: null, isTransfer: true },
+      { id: '4', date: '2026-08-03', description: 'Transfer from Checking', amount: 500, categoryId: null, isTransfer: true },
+    ];
+
+    it('should filter transfers only', () => {
+      const result = filterTransactions(txsWithTransfers, [], { filterType: 'transfer' });
+      expect(result).toHaveLength(2);
+      expect(result.every((t) => t.isTransfer)).toBe(true);
+    });
+
+    it('should filter expenses only (excluding transfers)', () => {
+      const result = filterTransactions(txsWithTransfers, [], { filterType: 'expense' });
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe('2');
+    });
+
+    it('should filter income only (excluding transfers)', () => {
+      const result = filterTransactions(txsWithTransfers, [], { filterType: 'income' });
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe('1');
+    });
   });
 });

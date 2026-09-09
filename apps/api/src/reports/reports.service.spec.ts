@@ -228,6 +228,7 @@ describe('ReportsService', () => {
             profileId: 'profile-1',
             date: { gte: new Date(2025, 0, 1), lt: new Date(2025, 1, 1) },
             accountId: 'acc-1',
+            isTransfer: false,
           },
         }),
       );

@@ -24,6 +24,7 @@ import {
   footnote,
   periodStepper,
   rankedBar,
+  segmented,
   statusPill,
   watchViewportWidth,
 } from '../styles/desktop-ui';
@@ -207,6 +208,15 @@ export class ViewExpenses extends LitElement {
 
   @state() showAddForm = false;
   @state() newTransaction = { date: new Date().toISOString().split('T')[0], description: '', amount: 0, categoryId: '', costObjectId: '', notes: '' };
+  @state() transactionMode: 'expense' | 'income' | 'transfer' = 'expense';
+  @state() transferForm = {
+    date: new Date().toISOString().split('T')[0],
+    fromAccountId: '',
+    toAccountId: '',
+    amount: 0,
+    description: '',
+    notes: '',
+  };
   @state() showWizard = false;
   @state() transactionToDelete: string | null = null;
   @state() showAddCategoryModal = false;
@@ -226,6 +236,7 @@ export class ViewExpenses extends LitElement {
   @state() filterMinAmount: number | null = null;
   @state() filterMaxAmount: number | null = null;
   @state() filterCategoryId = '';
+  @state() filterType: 'all' | 'expense' | 'income' | 'transfer' = 'all';
   @state() filterDateFrom = '';
   @state() filterDateTo = '';
 
@@ -329,6 +340,16 @@ export class ViewExpenses extends LitElement {
         } else {
           filtered = filtered.filter(t => t.categoryId === this.filterCategoryId);
         }
+      }
+    }
+
+    if (this.filterType && this.filterType !== 'all') {
+      if (this.filterType === 'transfer') {
+        filtered = filtered.filter(t => !!t.isTransfer);
+      } else if (this.filterType === 'expense') {
+        filtered = filtered.filter(t => !t.isTransfer && t.amount < 0);
+      } else if (this.filterType === 'income') {
+        filtered = filtered.filter(t => !t.isTransfer && t.amount > 0);
       }
     }
 
@@ -1852,6 +1873,25 @@ export class ViewExpenses extends LitElement {
     }
   }
 
+  async unlinkTransfer(id: string) {
+    const confirmed = await this.askConfirm(
+      i18n.t('transfers.unlink_confirm'),
+      i18n.t('transfers.unlink'),
+    );
+    if (!confirmed) return;
+
+    try {
+      await api.post(`/transactions/${id}/unlink-transfer`, {});
+      this.sheetTx = null;
+      this.openRowId = null;
+      this.notify(i18n.t('common.saved'));
+      await this.loadData(true);
+    } catch (e: any) {
+      console.error('Failed to unlink transfer', e);
+      this.notify('Failed to unlink transfer: ' + (e.message || 'Unknown error'));
+    }
+  }
+
   openSplitModal(transaction: any) {
     this.splitTransaction = transaction;
     this.showSplitModal = true;
@@ -1917,8 +1957,50 @@ export class ViewExpenses extends LitElement {
 
   async createTransaction() {
     try {
+      if (this.transactionMode === 'transfer') {
+        if (!this.transferForm.fromAccountId || !this.transferForm.toAccountId) {
+          this.notify(i18n.t('transfers.same_account_error') || 'Select valid accounts');
+          return;
+        }
+        if (this.transferForm.fromAccountId === this.transferForm.toAccountId) {
+          this.notify(i18n.t('transfers.same_account_error'));
+          return;
+        }
+        if (!this.transferForm.amount || this.transferForm.amount <= 0) {
+          this.notify(i18n.t('expenses.validation_amount') || 'Enter a valid amount');
+          return;
+        }
+        await api.post('/transactions/transfer', {
+          date: new Date(this.transferForm.date).toISOString(),
+          fromAccountId: this.transferForm.fromAccountId,
+          toAccountId: this.transferForm.toAccountId,
+          amount: Math.abs(this.transferForm.amount),
+          description: this.transferForm.description || undefined,
+          notes: this.transferForm.notes || undefined,
+        });
+        this.showAddForm = false;
+        this.transferForm = {
+          date: new Date().toISOString().split('T')[0],
+          fromAccountId: this.selectedAccountId || '',
+          toAccountId: '',
+          amount: 0,
+          description: '',
+          notes: '',
+        };
+        await this.loadData(true);
+        return;
+      }
+
+      let amount = this.newTransaction.amount;
+      if (this.transactionMode === 'expense' && amount > 0) {
+        amount = -amount;
+      } else if (this.transactionMode === 'income' && amount < 0) {
+        amount = Math.abs(amount);
+      }
+
       await api.post('/transactions', {
         ...this.newTransaction,
+        amount,
         date: new Date(this.newTransaction.date).toISOString(),
         // The DTO validates these as UUIDs unless they are explicitly null,
         // so empty strings from the form have to be normalised away
@@ -1929,9 +2011,9 @@ export class ViewExpenses extends LitElement {
       this.showAddForm = false;
       this.newTransaction = { date: new Date().toISOString().split('T')[0], description: '', amount: 0, categoryId: '', costObjectId: '', notes: '' };
       await this.loadData(true);
-    } catch (e) {
+    } catch (e: any) {
       console.error('Failed to create transaction', e);
-      this.notify('Failed to create transaction');
+      this.notify('Failed to create transaction: ' + (e.message || ''));
     }
   }
 
@@ -1971,6 +2053,11 @@ export class ViewExpenses extends LitElement {
         this.transactions = this.transactions.map((t, i) =>
           i === txIndex ? { ...t, [field]: localValue } : t
         );
+      }
+
+      const isTransfer = this.transactions.find(t => t.id === id)?.isTransfer;
+      if (isTransfer && (field === 'date' || field === 'amount')) {
+        await this.loadData(true);
       }
 
       this._preservedScrollY = null;
@@ -2176,7 +2263,7 @@ Tables: ${result.tables?.join(', ')}`;
 
   /** Rows needing attention: uncategorized, whether or not a rule suggested one. */
   private get needsReviewTransactions() {
-    return this.transactions.filter(t => !t.categoryId || t.categoryId === 'uncategorized');
+    return this.transactions.filter(t => (!t.categoryId || t.categoryId === 'uncategorized') && !t.isTransfer);
   }
 
   /**
@@ -2185,10 +2272,8 @@ Tables: ${result.tables?.join(', ')}`;
    */
   private get mobileTransactions() {
     let rows = this.filteredTransactions;
-    if (this.quickFilter === 'review') {
-      rows = rows.filter(t => !t.categoryId || t.categoryId === 'uncategorized');
-    } else if (this.quickFilter === 'uncategorized') {
-      rows = rows.filter(t => !t.categoryId || t.categoryId === 'uncategorized');
+    if (this.quickFilter === 'review' || this.quickFilter === 'uncategorized') {
+      rows = rows.filter(t => (!t.categoryId || t.categoryId === 'uncategorized') && !t.isTransfer);
     }
     // Newest first regardless of the desktop sort, which the phone doesn't expose
     return [...rows].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -2243,6 +2328,13 @@ Tables: ${result.tables?.join(', ')}`;
   }
 
   private categoryLabel(tx: any): { icon: string; name: string } | null {
+    if (tx.isTransfer) {
+      const otherAccount = tx.transferAccount?.name || i18n.t('transfers.transfer');
+      const name = tx.amount < 0
+        ? i18n.t('transfers.transfer_to', { account: otherAccount })
+        : i18n.t('transfers.transfer_from', { account: otherAccount });
+      return { icon: '🔄', name };
+    }
     if (tx.splits && tx.splits.length > 0) {
       return { icon: '🔀', name: `${i18n.t('mobile.split')} (${tx.splits.length})` };
     }
@@ -2617,6 +2709,71 @@ Tables: ${result.tables?.join(', ')}`;
 
     const account = this.accounts.find(a => a.id === tx.accountId);
     const amount = Number(tx.amount) || 0;
+
+    if (tx.isTransfer) {
+      const otherAccount = tx.transferAccount?.name || i18n.t('transfers.transfer');
+      const label = amount < 0
+        ? i18n.t('transfers.transfer_to', { account: otherAccount })
+        : i18n.t('transfers.transfer_from', { account: otherAccount });
+
+      return bottomSheet({
+        open: true,
+        onDismiss: () => { this.sheetTx = null; },
+        content: html`
+          <div class="x-sheet-header">
+            <span class="m-avatar">🔄</span>
+            <div style="flex: 1; min-width: 0">
+              <div class="x-sheet-desc">${tx.description}</div>
+              <div class="x-sheet-meta">
+                ${new Date(tx.date).toLocaleDateString(i18n.getLocale(), {
+                  weekday: 'short', day: 'numeric', month: 'long', year: 'numeric',
+                })}
+                ${account ? html` · ${account.type === 'CREDIT' ? '💳' : '🏦'} ${account.name}` : nothing}
+              </div>
+            </div>
+            <span class="m-amount ${amount >= 0 ? 'positive' : ''}" style="font-size: 18px">
+              ${amount < 0 ? '−' : '+'}${Math.abs(amount).toFixed(2)}
+            </span>
+          </div>
+
+          <div style="background: var(--md-sys-color-surface-container); border-radius: 12px; padding: 16px; margin: 12px 0;">
+            <div style="display: flex; align-items: center; gap: 8px; font-weight: 500; margin-bottom: 4px;">
+              <span>🔄</span>
+              <span>${label}</span>
+            </div>
+            <div style="font-size: 13px; color: var(--md-sys-color-on-surface-variant)">
+              ${i18n.t('transfers.linked_notice', { account: otherAccount })}
+            </div>
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 16px;">
+            <div style="display: flex; gap: 12px;">
+              <button
+                class="m-btn outlined"
+                style="flex: 1; color: var(--md-sys-color-error);"
+                @click="${async () => {
+                  await this.unlinkTransfer(tx.id);
+                }}">
+                ${icon('link_off', 20)} ${i18n.t('transfers.unlink')}
+              </button>
+              <button
+                class="m-btn outlined"
+                style="flex: 1; color: var(--md-sys-color-error);"
+                @click="${() => {
+                  this.sheetTx = null;
+                  this.deleteTransaction(tx.id);
+                }}">
+                ${icon('delete', 20)} ${i18n.t('common.delete')}
+              </button>
+            </div>
+            <button class="m-btn" style="width: 100%" @click="${() => { this.sheetTx = null; }}">
+              ${i18n.t('common.close')}
+            </button>
+          </div>
+        `,
+      });
+    }
+
     const query = this.sheetCategoryQuery.trim().toLowerCase();
     const options = this.getCategoryOptions(false)
       .filter(o => o.value !== 'uncategorized')
@@ -2885,6 +3042,7 @@ Tables: ${result.tables?.join(', ')}`;
             class="m-link"
             @click="${() => {
               this.filterCategoryId = '';
+              this.filterType = 'all';
               this.filterMinAmount = null;
               this.filterMaxAmount = null;
               this.filterDateFrom = '';
@@ -2894,6 +3052,23 @@ Tables: ${result.tables?.join(', ')}`;
             }}">
             ${i18n.t('mobile.clear_all')}
           </button>
+        </div>
+
+        <div class="m-field-group">
+          <span class="m-section-label">${i18n.t('transfers.type_all')}</span>
+          <select
+            class="m-field"
+            style="border-radius: 12px; width: 100%;"
+            .value="${this.filterType}"
+            @change="${(e: any) => {
+              this.filterType = e.target.value;
+              this.mobileVisibleCount = MOBILE_PAGE_SIZE;
+            }}">
+            <option value="all">${i18n.t('transfers.type_all')}</option>
+            <option value="expense">${i18n.t('transfers.type_expense')}</option>
+            <option value="income">${i18n.t('transfers.type_income')}</option>
+            <option value="transfer">${i18n.t('transfers.type_transfer')}</option>
+          </select>
         </div>
 
         <div class="m-field-group">
@@ -3202,85 +3377,231 @@ Tables: ${result.tables?.join(', ')}`;
         ></rule-editor>
       ` : ''}
 
+      ${this.transactionToDelete ? (() => {
+        const txToDelete = this.transactions.find(t => t.id === this.transactionToDelete);
+        const isTransfer = !!txToDelete?.isTransfer;
+        const targetAccName = txToDelete?.transferAccount?.name || i18n.t('common.account');
+        return html`
+          <div class="modal-overlay" @click="${() => this.transactionToDelete = null}">
+            <div class="modal" @click="${(e: Event) => e.stopPropagation()}">
+              <h3 style="margin-top: 0">${i18n.t('table.delete_transaction')}</h3>
+              <p>${isTransfer
+                ? i18n.t('transfers.delete_confirm', { account: targetAccName })
+                : i18n.t('common.confirm_delete')}</p>
+              <div class="modal-actions">
+                <button @click="${() => this.transactionToDelete = null}">${i18n.t('common.cancel')}</button>
+                <button
+                  class="danger"
+                  style="background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container)"
+                  @click="${this.confirmDelete}">
+                  ${i18n.t('common.delete')}
+                </button>
+              </div>
+            </div>
+          </div>
+        `;
+      })() : nothing}
+
       ${this.showAddForm && this.isMobile ? this.renderMobileAddSheet() : nothing}
     `;
   }
 
   /** Manual "Add transaction" as a sheet, replacing the desktop inline form. */
   private renderMobileAddSheet() {
+    const isTransfer = this.transactionMode === 'transfer';
+    const concreteAccountOptions = this.accounts.map(a => ({
+      value: a.id,
+      label: a.name,
+      icon: a.type === 'CREDIT' ? '💳' : '🏦',
+    }));
+
     return bottomSheet({
       open: true,
       onDismiss: () => { this.showAddForm = false; },
       content: html`
         <div class="m-sheet-title">${i18n.t('expenses.add_manual_title')}</div>
 
-        <div class="m-field-group">
-          <span class="m-section-label">${i18n.t('common.date')}</span>
-          <input
-            class="m-field"
-            type="date"
-            .value="${this.newTransaction.date}"
-            @input="${(e: any) => {
-              this.newTransaction = { ...this.newTransaction, date: e.target.value };
-            }}" />
-        </div>
-
-        <div class="m-field-group">
-          <span class="m-section-label">${i18n.t('common.description')}</span>
-          <input
-            class="m-field"
-            type="text"
-            .value="${this.newTransaction.description}"
-            @input="${(e: any) => {
-              this.newTransaction = { ...this.newTransaction, description: e.target.value };
-            }}"
-            @blur="${this.handleDescriptionBlur}" />
-        </div>
-
-        <div class="m-field-group">
-          <span class="m-section-label">${i18n.t('common.amount')}</span>
-          <input
-            class="m-field"
-            type="number"
-            inputmode="decimal"
-            placeholder="-10.00"
-            .value="${this.newTransaction.amount || ''}"
-            @input="${(e: any) => {
-              this.newTransaction = { ...this.newTransaction, amount: parseFloat(e.target.value) };
-            }}" />
-        </div>
-
-        <div class="m-field-group">
-          <span class="m-section-label">${i18n.t('common.category')}</span>
-          <filterable-select
-            .value="${this.newTransaction.categoryId || 'uncategorized'}"
-            .options="${this.getCategoryOptions(true)}"
-            .placeholder="${i18n.t('common.category')}"
-            @change="${(e: CustomEvent) => {
-              if (e.detail.value === 'new_category_inline') {
-                this.showAddCategoryModal = true;
-                return;
+        <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+          <button
+            class="m-filter-chip ${this.transactionMode === 'expense' ? 'selected' : ''}"
+            style="flex: 1; justify-content: center;"
+            @click="${() => { this.transactionMode = 'expense'; }}">
+            ${i18n.t('transfers.type_expense')}
+          </button>
+          <button
+            class="m-filter-chip ${this.transactionMode === 'income' ? 'selected' : ''}"
+            style="flex: 1; justify-content: center;"
+            @click="${() => { this.transactionMode = 'income'; }}">
+            ${i18n.t('transfers.type_income')}
+          </button>
+          <button
+            class="m-filter-chip ${this.transactionMode === 'transfer' ? 'selected' : ''}"
+            style="flex: 1; justify-content: center;"
+            @click="${() => {
+              this.transactionMode = 'transfer';
+              if (!this.transferForm.fromAccountId && this.selectedAccountId) {
+                this.transferForm = { ...this.transferForm, fromAccountId: this.selectedAccountId };
               }
-              this.newTransaction = {
-                ...this.newTransaction,
-                categoryId: e.detail.value === 'uncategorized' ? '' : e.detail.value,
-              };
             }}">
-          </filterable-select>
+            ${i18n.t('transfers.type_transfer')}
+          </button>
         </div>
 
-        <div class="m-field-group">
-          <span class="m-section-label">${i18n.t('common.notes')}</span>
-          <input
-            class="m-field"
-            type="text"
-            .value="${this.newTransaction.notes || ''}"
-            @input="${(e: any) => {
-              this.newTransaction = { ...this.newTransaction, notes: e.target.value };
-            }}" />
-        </div>
+        ${isTransfer ? html`
+          <div class="m-field-group">
+            <span class="m-section-label">${i18n.t('common.date')}</span>
+            <input
+              class="m-field"
+              type="date"
+              .value="${this.transferForm.date}"
+              @input="${(e: any) => {
+                this.transferForm = { ...this.transferForm, date: e.target.value };
+              }}" />
+          </div>
 
-        <div style="display: flex; gap: 12px;">
+          <div class="m-field-group">
+            <span class="m-section-label">${i18n.t('common.amount')}</span>
+            <input
+              class="m-field"
+              type="number"
+              inputmode="decimal"
+              step="0.01"
+              min="0.01"
+              placeholder="10.00"
+              .value="${this.transferForm.amount || ''}"
+              @input="${(e: any) => {
+                this.transferForm = { ...this.transferForm, amount: parseFloat(e.target.value) || 0 };
+              }}" />
+          </div>
+
+          <div class="m-field-group">
+            <span class="m-section-label">${i18n.t('transfers.from_account')}</span>
+            <select
+              class="m-field"
+              style="border-radius: 12px; width: 100%;"
+              .value="${this.transferForm.fromAccountId}"
+              @change="${(e: any) => {
+                this.transferForm = { ...this.transferForm, fromAccountId: e.target.value };
+              }}">
+              <option value="">-- ${i18n.t('transfers.from_account')} --</option>
+              ${concreteAccountOptions.map(acc => html`
+                <option value="${acc.value}" ?selected="${acc.value === this.transferForm.fromAccountId}">
+                  ${acc.icon} ${acc.label}
+                </option>
+              `)}
+            </select>
+          </div>
+
+          <div class="m-field-group">
+            <span class="m-section-label">${i18n.t('transfers.to_account')}</span>
+            <select
+              class="m-field"
+              style="border-radius: 12px; width: 100%;"
+              .value="${this.transferForm.toAccountId}"
+              @change="${(e: any) => {
+                this.transferForm = { ...this.transferForm, toAccountId: e.target.value };
+              }}">
+              <option value="">-- ${i18n.t('transfers.to_account')} --</option>
+              ${concreteAccountOptions.map(acc => html`
+                <option value="${acc.value}" ?selected="${acc.value === this.transferForm.toAccountId}">
+                  ${acc.icon} ${acc.label}
+                </option>
+              `)}
+            </select>
+          </div>
+
+          <div class="m-field-group">
+            <span class="m-section-label">${i18n.t('common.description')}</span>
+            <input
+              class="m-field"
+              type="text"
+              placeholder="${i18n.t('common.description')}"
+              .value="${this.transferForm.description}"
+              @input="${(e: any) => {
+                this.transferForm = { ...this.transferForm, description: e.target.value };
+              }}" />
+          </div>
+
+          <div class="m-field-group">
+            <span class="m-section-label">${i18n.t('common.notes')}</span>
+            <input
+              class="m-field"
+              type="text"
+              placeholder="${i18n.t('common.notes')}"
+              .value="${this.transferForm.notes || ''}"
+              @input="${(e: any) => {
+                this.transferForm = { ...this.transferForm, notes: e.target.value };
+              }}" />
+          </div>
+        ` : html`
+          <div class="m-field-group">
+            <span class="m-section-label">${i18n.t('common.date')}</span>
+            <input
+              class="m-field"
+              type="date"
+              .value="${this.newTransaction.date}"
+              @input="${(e: any) => {
+                this.newTransaction = { ...this.newTransaction, date: e.target.value };
+              }}" />
+          </div>
+
+          <div class="m-field-group">
+            <span class="m-section-label">${i18n.t('common.description')}</span>
+            <input
+              class="m-field"
+              type="text"
+              .value="${this.newTransaction.description}"
+              @input="${(e: any) => {
+                this.newTransaction = { ...this.newTransaction, description: e.target.value };
+              }}"
+              @blur="${this.handleDescriptionBlur}" />
+          </div>
+
+          <div class="m-field-group">
+            <span class="m-section-label">${i18n.t('common.amount')}</span>
+            <input
+              class="m-field"
+              type="number"
+              inputmode="decimal"
+              placeholder="${this.transactionMode === 'income' ? '10.00' : '-10.00'}"
+              .value="${this.newTransaction.amount || ''}"
+              @input="${(e: any) => {
+                this.newTransaction = { ...this.newTransaction, amount: parseFloat(e.target.value) || 0 };
+              }}" />
+          </div>
+
+          <div class="m-field-group">
+            <span class="m-section-label">${i18n.t('common.category')}</span>
+            <filterable-select
+              .value="${this.newTransaction.categoryId || 'uncategorized'}"
+              .options="${this.getCategoryOptions(true)}"
+              .placeholder="${i18n.t('common.category')}"
+              @change="${(e: CustomEvent) => {
+                if (e.detail.value === 'new_category_inline') {
+                  this.showAddCategoryModal = true;
+                  return;
+                }
+                this.newTransaction = {
+                  ...this.newTransaction,
+                  categoryId: e.detail.value === 'uncategorized' ? '' : e.detail.value,
+                };
+              }}">
+            </filterable-select>
+          </div>
+
+          <div class="m-field-group">
+            <span class="m-section-label">${i18n.t('common.notes')}</span>
+            <input
+              class="m-field"
+              type="text"
+              .value="${this.newTransaction.notes || ''}"
+              @input="${(e: any) => {
+                this.newTransaction = { ...this.newTransaction, notes: e.target.value };
+              }}" />
+          </div>
+        `}
+
+        <div style="display: flex; gap: 12px; margin-top: 16px;">
           <button class="m-btn outlined" style="flex: 1" @click="${() => { this.showAddForm = false; }}">
             ${i18n.t('common.cancel')}
           </button>
@@ -3322,6 +3643,7 @@ Tables: ${result.tables?.join(', ')}`;
     const buckets = new Map<string, { icon: string; name: string; total: number; unknown: boolean }>();
 
     this.filteredTransactions.forEach(tx => {
+      if (tx.isTransfer) return;
       const amount = Number(tx.amount) || 0;
       if (amount >= 0) return;
       const category = this.categories.find(c => c.id === tx.categoryId);
@@ -3434,6 +3756,7 @@ Tables: ${result.tables?.join(', ')}`;
 
   private clearAllFilters() {
     this.filterCategoryId = '';
+    this.filterType = 'all';
     this.filterMinAmount = null;
     this.filterMaxAmount = null;
     this.filterText = '';
@@ -3445,6 +3768,18 @@ Tables: ${result.tables?.join(', ')}`;
   /** One chip per active filter, each removable on its own. */
   private get filterChips() {
     const chips: { label: string; clear: () => void }[] = [];
+
+    if (this.filterType && this.filterType !== 'all') {
+      const typeLabel = this.filterType === 'transfer'
+        ? i18n.t('transfers.transfers')
+        : this.filterType === 'income'
+          ? i18n.t('common.income')
+          : i18n.t('common.expenses');
+      chips.push({
+        label: typeLabel,
+        clear: () => { this.filterType = 'all'; this.currentPage = 1; },
+      });
+    }
 
     if (this.filterCategoryId) {
       const category = this.categories.find(c => c.id === this.filterCategoryId);
@@ -3508,23 +3843,6 @@ Tables: ${result.tables?.join(', ')}`;
 
         ${this.renderSharedModals()}
         ${this.showAddForm ? this.renderDesktopAddModal() : nothing}
-        ${this.transactionToDelete ? html`
-          <div class="modal-overlay" @click="${() => this.transactionToDelete = null}">
-            <div class="modal" @click="${(e: Event) => e.stopPropagation()}">
-              <h3 style="margin-top: 0">${i18n.t('table.delete_transaction')}</h3>
-              <p>${i18n.t('common.confirm_delete')}</p>
-              <div class="modal-actions">
-                <button @click="${() => this.transactionToDelete = null}">${i18n.t('common.cancel')}</button>
-                <button
-                  class="danger"
-                  style="background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container)"
-                  @click="${this.confirmDelete}">
-                  ${i18n.t('common.delete')}
-                </button>
-              </div>
-            </div>
-          </div>
-        ` : nothing}
       </div>
     `;
   }
@@ -3884,6 +4202,18 @@ Tables: ${result.tables?.join(', ')}`;
     return html`
       <div class="dx-pop wide" style="padding: 12px">
         <div class="d-fields" style="grid-template-columns: repeat(2, minmax(120px, 1fr))">
+          ${formField(i18n.t('transfers.type_all'), html`
+            <select
+              class="d-input"
+              .value="${this.filterType}"
+              @change="${(e: any) => { this.filterType = e.target.value; this.currentPage = 1; }}">
+              <option value="all">${i18n.t('transfers.type_all')}</option>
+              <option value="expense">${i18n.t('transfers.type_expense')}</option>
+              <option value="income">${i18n.t('transfers.type_income')}</option>
+              <option value="transfer">${i18n.t('transfers.type_transfer')}</option>
+            </select>
+          `, true)}
+
           ${formField(i18n.t('common.category'), html`
             <select
               class="d-input"
@@ -4134,6 +4464,19 @@ Tables: ${result.tables?.join(', ')}`;
 
   /** Set / suggested / empty, and a one-click category picker on top of it. */
   private renderDesktopCategoryCell(tx: any) {
+    if (tx.isTransfer) {
+      const otherAccount = tx.transferAccount?.name || i18n.t('transfers.transfer');
+      const label = tx.amount < 0
+        ? i18n.t('transfers.transfer_to', { account: otherAccount })
+        : i18n.t('transfers.transfer_from', { account: otherAccount });
+      return html`
+        <div class="dx-cat-cell" style="cursor: default;" title="${label}">
+          <span class="d-emoji">🔄</span>
+          <span class="dx-cat-name" style="font-weight: 500">${label}</span>
+        </div>
+      `;
+    }
+
     const category = this.categories.find(c => c.id === tx.categoryId);
     const suggestion = tx._suggestion
       ? this.categories.find(c => c.id === tx._suggestion)
@@ -4231,6 +4574,86 @@ Tables: ${result.tables?.join(', ')}`;
   private renderDesktopRowExpand(tx: any) {
     const draft = this.rowDraft;
     if (!draft) return nothing;
+
+    if (tx.isTransfer) {
+      const otherAccount = tx.transferAccount?.name || i18n.t('transfers.transfer');
+      const transferLabel = tx.amount < 0
+        ? i18n.t('transfers.transfer_to', { account: otherAccount })
+        : i18n.t('transfers.transfer_from', { account: otherAccount });
+
+      return html`
+        <div
+          class="d-expand"
+          style="padding: 16px 8px 18px ${this.tightTable ? 20 : 148}px"
+          @click="${(e: Event) => e.stopPropagation()}">
+          <div
+            class="d-fields"
+            style="grid-template-columns: minmax(160px, 216px) minmax(110px, 132px) minmax(110px, 132px) minmax(140px, 1fr)">
+            ${formField(i18n.t('transfers.transfer'), html`
+              <div style="display: flex; align-items: center; gap: 8px; padding: 6px 12px; background: var(--md-sys-color-surface-container); border-radius: 8px; font-size: 13px; font-weight: 500; height: 36px; box-sizing: border-box;">
+                <span>🔄</span>
+                <span>${transferLabel}</span>
+              </div>
+            `)}
+
+            ${formField(i18n.t('common.date'), html`
+              <input
+                class="d-input mono"
+                type="text"
+                inputmode="numeric"
+                placeholder="yyyy-mm-dd"
+                .value="${draft.date}"
+                @input="${(e: any) => {
+                  this.rowDraft = { ...draft, date: this.normalizeDateInput(e.target.value) };
+                }}" />
+            `)}
+
+            ${formField(i18n.t('common.amount'), html`
+              <input
+                class="d-input amount"
+                type="number"
+                step="0.01"
+                .value="${draft.amount}"
+                @input="${(e: any) => { this.rowDraft = { ...draft, amount: e.target.value }; }}" />
+            `)}
+
+            ${formField(i18n.t('common.notes'), html`
+              <input
+                class="d-input"
+                type="text"
+                placeholder="${i18n.t('common.notes')}"
+                .value="${draft.notes}"
+                @input="${(e: any) => { this.rowDraft = { ...draft, notes: e.target.value }; }}" />
+            `)}
+          </div>
+
+          <div class="d-actions">
+            <button class="d-btn small plain" @click="${() => this.saveOpenRow(tx)}">
+              ${i18n.t('common.save')}
+            </button>
+            <button class="d-btn-text" @click="${() => this.toggleRow(tx)}">
+              ${i18n.t('common.cancel')}
+            </button>
+
+            <div class="d-actions-divider"></div>
+
+            <button class="d-btn-tonal" @click="${() => this.unlinkTransfer(tx.id)}" title="${i18n.t('transfers.unlink')}">
+              ${icon('link_off', 18)}
+              <span>${i18n.t('transfers.unlink')}</span>
+            </button>
+
+            <div class="d-spacer"></div>
+
+            <button class="d-btn-text destructive" @click="${() => this.deleteTransaction(tx.id)}">
+              ${icon('delete', 18)}
+              <span>${i18n.t('common.delete')}</span>
+            </button>
+          </div>
+
+          ${footnote('sync_alt', i18n.t('transfers.linked_notice', { account: otherAccount }))}
+        </div>
+      `;
+    }
 
     const category = this.categories.find(c => c.id === draft.categoryId);
     const account = this.accounts.find(a => a.id === tx.accountId);
@@ -4472,6 +4895,12 @@ Tables: ${result.tables?.join(', ')}`;
   /** The manual add form, as a dialog rather than a card that shoves the table down. */
   private renderDesktopAddModal() {
     const draft = this.newTransaction;
+    const isTransfer = this.transactionMode === 'transfer';
+    const concreteAccountOptions = this.accounts.map(a => ({
+      value: a.id,
+      label: a.name,
+      icon: a.type === 'CREDIT' ? '💳' : '🏦',
+    }));
 
     return html`
       <div class="modal-overlay" @click="${() => { this.showAddForm = false; }}">
@@ -4479,75 +4908,164 @@ Tables: ${result.tables?.join(', ')}`;
           class="modal"
           style="max-width: 640px"
           @click="${(e: Event) => e.stopPropagation()}">
-          <h3 style="margin-top: 0">${i18n.t('expenses.add_manual_title')}</h3>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+            <h3 style="margin: 0">${i18n.t('expenses.add_manual_title')}</h3>
+            ${segmented<'expense' | 'income' | 'transfer'>(
+              [
+                { value: 'expense', label: i18n.t('transfers.type_expense') },
+                { value: 'income', label: i18n.t('transfers.type_income') },
+                { value: 'transfer', label: i18n.t('transfers.type_transfer') },
+              ],
+              this.transactionMode,
+              (mode) => {
+                this.transactionMode = mode;
+                if (mode === 'transfer' && !this.transferForm.fromAccountId && this.selectedAccountId) {
+                  this.transferForm = { ...this.transferForm, fromAccountId: this.selectedAccountId };
+                }
+              },
+              true,
+            )}
+          </div>
 
           <div class="d-screen" style="display: block; height: auto; padding: 0; overflow: visible">
-            <div class="d-fields">
-              ${formField(i18n.t('common.date'), html`
-                <input
-                  class="d-input mono"
-                  type="date"
-                  .value="${draft.date}"
-                  @input="${(e: any) => { this.newTransaction = { ...draft, date: e.target.value }; }}" />
-              `)}
-              ${formField(i18n.t('common.amount'), html`
-                <input
-                  class="d-input amount"
-                  type="number"
-                  step="0.01"
-                  placeholder="-10.00"
-                  .value="${draft.amount || ''}"
-                  @input="${(e: any) => {
-                    this.newTransaction = { ...draft, amount: parseFloat(e.target.value) };
-                  }}" />
-              `)}
-              ${formField(i18n.t('common.description'), html`
-                <input
-                  class="d-input"
-                  type="text"
-                  .value="${draft.description}"
-                  @input="${(e: any) => {
-                    this.newTransaction = { ...draft, description: e.target.value };
-                  }}"
-                  @blur="${this.handleDescriptionBlur}" />
-              `, true)}
-              ${formField(i18n.t('common.category'), html`
-                <filterable-select
-                  .value="${draft.categoryId || 'uncategorized'}"
-                  .options="${this.getCategoryOptions(true)}"
-                  .placeholder="${i18n.t('common.category')}"
-                  @change="${(e: CustomEvent) => {
-                    if (e.detail.value === 'new_category_inline') {
-                      this.showAddCategoryModal = true;
-                      return;
-                    }
-                    this.newTransaction = {
-                      ...draft,
-                      categoryId: e.detail.value === 'uncategorized' ? '' : e.detail.value,
-                    };
-                  }}">
-                </filterable-select>
-              `)}
-              ${this.isCredit && this.costObjects.length > 0
-                ? formField(i18n.t('cost_objects.funding_source'), html`
+            ${isTransfer ? html`
+              <div class="d-fields">
+                ${formField(i18n.t('common.date'), html`
+                  <input
+                    class="d-input mono"
+                    type="date"
+                    .value="${this.transferForm.date}"
+                    @input="${(e: any) => { this.transferForm = { ...this.transferForm, date: e.target.value }; }}" />
+                `)}
+                ${formField(i18n.t('common.amount'), html`
+                  <input
+                    class="d-input amount"
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    placeholder="10.00"
+                    .value="${this.transferForm.amount || ''}"
+                    @input="${(e: any) => {
+                      this.transferForm = { ...this.transferForm, amount: parseFloat(e.target.value) || 0 };
+                    }}" />
+                `)}
+                ${formField(i18n.t('transfers.from_account'), html`
+                  <select
+                    class="d-input"
+                    .value="${this.transferForm.fromAccountId}"
+                    @change="${(e: any) => {
+                      this.transferForm = { ...this.transferForm, fromAccountId: e.target.value };
+                    }}">
+                    <option value="">-- ${i18n.t('transfers.from_account')} --</option>
+                    ${concreteAccountOptions.map(acc => html`
+                      <option value="${acc.value}" ?selected="${acc.value === this.transferForm.fromAccountId}">
+                        ${acc.icon} ${acc.label}
+                      </option>
+                    `)}
+                  </select>
+                `)}
+                ${formField(i18n.t('transfers.to_account'), html`
+                  <select
+                    class="d-input"
+                    .value="${this.transferForm.toAccountId}"
+                    @change="${(e: any) => {
+                      this.transferForm = { ...this.transferForm, toAccountId: e.target.value };
+                    }}">
+                    <option value="">-- ${i18n.t('transfers.to_account')} --</option>
+                    ${concreteAccountOptions.map(acc => html`
+                      <option value="${acc.value}" ?selected="${acc.value === this.transferForm.toAccountId}">
+                        ${acc.icon} ${acc.label}
+                      </option>
+                    `)}
+                  </select>
+                `)}
+                ${formField(i18n.t('common.description'), html`
+                  <input
+                    class="d-input"
+                    type="text"
+                    placeholder="${i18n.t('common.description')}"
+                    .value="${this.transferForm.description}"
+                    @input="${(e: any) => {
+                      this.transferForm = { ...this.transferForm, description: e.target.value };
+                    }}" />
+                `, true)}
+                ${formField(i18n.t('common.notes'), html`
+                  <input
+                    class="d-input"
+                    type="text"
+                    placeholder="${i18n.t('common.notes')}"
+                    .value="${this.transferForm.notes || ''}"
+                    @input="${(e: any) => { this.transferForm = { ...this.transferForm, notes: e.target.value }; }}" />
+                `, true)}
+              </div>
+            ` : html`
+              <div class="d-fields">
+                ${formField(i18n.t('common.date'), html`
+                  <input
+                    class="d-input mono"
+                    type="date"
+                    .value="${draft.date}"
+                    @input="${(e: any) => { this.newTransaction = { ...draft, date: e.target.value }; }}" />
+                `)}
+                ${formField(i18n.t('common.amount'), html`
+                  <input
+                    class="d-input amount"
+                    type="number"
+                    step="0.01"
+                    placeholder="${this.transactionMode === 'income' ? '10.00' : '-10.00'}"
+                    .value="${draft.amount || ''}"
+                    @input="${(e: any) => {
+                      this.newTransaction = { ...draft, amount: parseFloat(e.target.value) || 0 };
+                    }}" />
+                `)}
+                ${formField(i18n.t('common.description'), html`
+                  <input
+                    class="d-input"
+                    type="text"
+                    .value="${draft.description}"
+                    @input="${(e: any) => {
+                      this.newTransaction = { ...draft, description: e.target.value };
+                    }}"
+                    @blur="${this.handleDescriptionBlur}" />
+                `, true)}
+                ${formField(i18n.t('common.category'), html`
                   <filterable-select
-                    .value="${draft.costObjectId || ''}"
-                    .options="${this.getCostObjectOptions()}"
-                    .placeholder="${i18n.t('cost_objects.funding_source')}"
+                    .value="${draft.categoryId || 'uncategorized'}"
+                    .options="${this.getCategoryOptions(true)}"
+                    .placeholder="${i18n.t('common.category')}"
                     @change="${(e: CustomEvent) => {
-                      this.newTransaction = { ...draft, costObjectId: e.detail.value };
+                      if (e.detail.value === 'new_category_inline') {
+                        this.showAddCategoryModal = true;
+                        return;
+                      }
+                      this.newTransaction = {
+                        ...draft,
+                        categoryId: e.detail.value === 'uncategorized' ? '' : e.detail.value,
+                      };
                     }}">
                   </filterable-select>
-                `)
-                : nothing}
-              ${formField(i18n.t('common.notes'), html`
-                <input
-                  class="d-input"
-                  type="text"
-                  .value="${draft.notes || ''}"
-                  @input="${(e: any) => { this.newTransaction = { ...draft, notes: e.target.value }; }}" />
-              `, true)}
-            </div>
+                `)}
+                ${this.isCredit && this.costObjects.length > 0
+                  ? formField(i18n.t('cost_objects.funding_source'), html`
+                    <filterable-select
+                      .value="${draft.costObjectId || ''}"
+                      .options="${this.getCostObjectOptions()}"
+                      .placeholder="${i18n.t('cost_objects.funding_source')}"
+                      @change="${(e: CustomEvent) => {
+                        this.newTransaction = { ...draft, costObjectId: e.detail.value };
+                      }}">
+                    </filterable-select>
+                  `)
+                  : nothing}
+                ${formField(i18n.t('common.notes'), html`
+                  <input
+                    class="d-input"
+                    type="text"
+                    .value="${draft.notes || ''}"
+                    @input="${(e: any) => { this.newTransaction = { ...draft, notes: e.target.value }; }}" />
+                `, true)}
+              </div>
+            `}
 
             <div class="d-actions">
               <div class="d-spacer"></div>

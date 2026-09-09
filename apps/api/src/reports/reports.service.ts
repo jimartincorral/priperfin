@@ -32,7 +32,7 @@ export class ReportsService {
     // back into an expense category (a refund or a reimbursement) offsets what
     // was spent there, so a 400 restaurant bill with a 100 reimbursement counts
     // as 300 spent.
-    const where: any = { profileId };
+    const where: any = { profileId, isTransfer: false };
 
     // Only add date filter if dates are provided (not all_time mode)
     if (startDate && endDate) {
@@ -264,7 +264,7 @@ export class ReportsService {
     const divisor = await this.getAveragingDivisor(query, profileId);
 
     // Build where clause
-    const where: any = { profileId };
+    const where: any = { profileId, isTransfer: false };
 
     // Only add date filter if dates are provided (not all_time mode)
     if (startDate && endDate) {
@@ -392,7 +392,7 @@ export class ReportsService {
     const divisor = await this.getAveragingDivisor(query, profileId);
 
     // Build where clause for credit account transactions
-    const where: any = { profileId, accountId };
+    const where: any = { profileId, accountId, isTransfer: false };
 
     const { startDate, endDate } = this.getDateRange(query);
     if (startDate && endDate) {

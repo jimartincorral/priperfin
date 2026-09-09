@@ -20,6 +20,7 @@ import { Throttle } from '@nestjs/throttler';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { TransactionsService } from './transactions.service';
 import { CreateTransactionDto } from './create-transaction.dto';
+import { CreateTransferDto, LinkTransferDto } from './create-transfer.dto';
 import { UpdateTransactionDto } from './update-transaction.dto';
 import { GetTransactionsDto } from './get-transactions.dto';
 import { CreateSplitsDto } from './create-split.dto';
@@ -31,6 +32,43 @@ import { Profile } from '../generated/client';
 @UseGuards(SessionAuthGuard)
 export class TransactionsController {
   constructor(private readonly transactionsService: TransactionsService) {}
+
+  @Post('transfer')
+  @UsePipes(new ValidationPipe({ transform: true }))
+  createTransfer(
+    @Body() createTransferDto: CreateTransferDto,
+    @CurrentProfile() profile: Profile,
+  ) {
+    return this.transactionsService.createTransfer(
+      createTransferDto,
+      profile.id,
+    );
+  }
+
+  @Post('link-transfer')
+  @UsePipes(new ValidationPipe({ transform: true }))
+  linkTransfer(
+    @Body() linkTransferDto: LinkTransferDto,
+    @CurrentProfile() profile: Profile,
+  ) {
+    return this.transactionsService.linkAsTransfer(
+      linkTransferDto,
+      profile.id,
+    );
+  }
+
+  @Post(':id/unlink-transfer')
+  unlinkTransfer(
+    @Param('id') id: string,
+    @CurrentProfile() profile: Profile,
+  ) {
+    return this.transactionsService.unlinkTransfer(id, profile.id);
+  }
+
+  @Get('transfer-matches')
+  findTransferMatches(@CurrentProfile() profile: Profile) {
+    return this.transactionsService.findTransferMatches(profile.id);
+  }
 
   @Post()
   @UsePipes(new ValidationPipe({ transform: true }))

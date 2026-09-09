@@ -2177,12 +2177,14 @@ export namespace Prisma {
 
   export type AccountCountOutputType = {
     transactions: number
+    transferTransactions: number
     monthlyBalances: number
     accountBalances: number
   }
 
   export type AccountCountOutputTypeSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     transactions?: boolean | AccountCountOutputTypeCountTransactionsArgs
+    transferTransactions?: boolean | AccountCountOutputTypeCountTransferTransactionsArgs
     monthlyBalances?: boolean | AccountCountOutputTypeCountMonthlyBalancesArgs
     accountBalances?: boolean | AccountCountOutputTypeCountAccountBalancesArgs
   }
@@ -2202,6 +2204,13 @@ export namespace Prisma {
    * AccountCountOutputType without action
    */
   export type AccountCountOutputTypeCountTransactionsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: TransactionWhereInput
+  }
+
+  /**
+   * AccountCountOutputType without action
+   */
+  export type AccountCountOutputTypeCountTransferTransactionsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     where?: TransactionWhereInput
   }
 
@@ -4053,6 +4062,7 @@ export namespace Prisma {
     profile?: boolean | ProfileDefaultArgs<ExtArgs>
     bankConnection?: boolean | Account$bankConnectionArgs<ExtArgs>
     transactions?: boolean | Account$transactionsArgs<ExtArgs>
+    transferTransactions?: boolean | Account$transferTransactionsArgs<ExtArgs>
     monthlyBalances?: boolean | Account$monthlyBalancesArgs<ExtArgs>
     accountBalances?: boolean | Account$accountBalancesArgs<ExtArgs>
     _count?: boolean | AccountCountOutputTypeDefaultArgs<ExtArgs>
@@ -4106,6 +4116,7 @@ export namespace Prisma {
     profile?: boolean | ProfileDefaultArgs<ExtArgs>
     bankConnection?: boolean | Account$bankConnectionArgs<ExtArgs>
     transactions?: boolean | Account$transactionsArgs<ExtArgs>
+    transferTransactions?: boolean | Account$transferTransactionsArgs<ExtArgs>
     monthlyBalances?: boolean | Account$monthlyBalancesArgs<ExtArgs>
     accountBalances?: boolean | Account$accountBalancesArgs<ExtArgs>
     _count?: boolean | AccountCountOutputTypeDefaultArgs<ExtArgs>
@@ -4125,6 +4136,7 @@ export namespace Prisma {
       profile: Prisma.$ProfilePayload<ExtArgs>
       bankConnection: Prisma.$BankConnectionPayload<ExtArgs> | null
       transactions: Prisma.$TransactionPayload<ExtArgs>[]
+      transferTransactions: Prisma.$TransactionPayload<ExtArgs>[]
       monthlyBalances: Prisma.$MonthlyBalancePayload<ExtArgs>[]
       accountBalances: Prisma.$AccountBalancePayload<ExtArgs>[]
     }
@@ -4536,6 +4548,7 @@ export namespace Prisma {
     profile<T extends ProfileDefaultArgs<ExtArgs> = {}>(args?: Subset<T, ProfileDefaultArgs<ExtArgs>>): Prisma__ProfileClient<$Result.GetResult<Prisma.$ProfilePayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
     bankConnection<T extends Account$bankConnectionArgs<ExtArgs> = {}>(args?: Subset<T, Account$bankConnectionArgs<ExtArgs>>): Prisma__BankConnectionClient<$Result.GetResult<Prisma.$BankConnectionPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
     transactions<T extends Account$transactionsArgs<ExtArgs> = {}>(args?: Subset<T, Account$transactionsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$TransactionPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+    transferTransactions<T extends Account$transferTransactionsArgs<ExtArgs> = {}>(args?: Subset<T, Account$transferTransactionsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$TransactionPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     monthlyBalances<T extends Account$monthlyBalancesArgs<ExtArgs> = {}>(args?: Subset<T, Account$monthlyBalancesArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$MonthlyBalancePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     accountBalances<T extends Account$accountBalancesArgs<ExtArgs> = {}>(args?: Subset<T, Account$accountBalancesArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$AccountBalancePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     /**
@@ -4993,6 +5006,30 @@ export namespace Prisma {
    * Account.transactions
    */
   export type Account$transactionsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Transaction
+     */
+    select?: TransactionSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the Transaction
+     */
+    omit?: TransactionOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: TransactionInclude<ExtArgs> | null
+    where?: TransactionWhereInput
+    orderBy?: TransactionOrderByWithRelationInput | TransactionOrderByWithRelationInput[]
+    cursor?: TransactionWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: TransactionScalarFieldEnum | TransactionScalarFieldEnum[]
+  }
+
+  /**
+   * Account.transferTransactions
+   */
+  export type Account$transferTransactionsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     /**
      * Select specific fields to fetch from the Transaction
      */
@@ -6253,6 +6290,9 @@ export namespace Prisma {
     suggestedCategoryId: string | null
     merchant: string | null
     suggestedByRuleId: string | null
+    isTransfer: boolean | null
+    transferId: string | null
+    transferAccountId: string | null
     externalId: string | null
     createdAt: Date | null
     updatedAt: Date | null
@@ -6271,6 +6311,9 @@ export namespace Prisma {
     suggestedCategoryId: string | null
     merchant: string | null
     suggestedByRuleId: string | null
+    isTransfer: boolean | null
+    transferId: string | null
+    transferAccountId: string | null
     externalId: string | null
     createdAt: Date | null
     updatedAt: Date | null
@@ -6289,6 +6332,9 @@ export namespace Prisma {
     suggestedCategoryId: number
     merchant: number
     suggestedByRuleId: number
+    isTransfer: number
+    transferId: number
+    transferAccountId: number
     externalId: number
     createdAt: number
     updatedAt: number
@@ -6317,6 +6363,9 @@ export namespace Prisma {
     suggestedCategoryId?: true
     merchant?: true
     suggestedByRuleId?: true
+    isTransfer?: true
+    transferId?: true
+    transferAccountId?: true
     externalId?: true
     createdAt?: true
     updatedAt?: true
@@ -6335,6 +6384,9 @@ export namespace Prisma {
     suggestedCategoryId?: true
     merchant?: true
     suggestedByRuleId?: true
+    isTransfer?: true
+    transferId?: true
+    transferAccountId?: true
     externalId?: true
     createdAt?: true
     updatedAt?: true
@@ -6353,6 +6405,9 @@ export namespace Prisma {
     suggestedCategoryId?: true
     merchant?: true
     suggestedByRuleId?: true
+    isTransfer?: true
+    transferId?: true
+    transferAccountId?: true
     externalId?: true
     createdAt?: true
     updatedAt?: true
@@ -6458,6 +6513,9 @@ export namespace Prisma {
     suggestedCategoryId: string | null
     merchant: string | null
     suggestedByRuleId: string | null
+    isTransfer: boolean
+    transferId: string | null
+    transferAccountId: string | null
     externalId: string | null
     createdAt: Date
     updatedAt: Date
@@ -6495,6 +6553,9 @@ export namespace Prisma {
     suggestedCategoryId?: boolean
     merchant?: boolean
     suggestedByRuleId?: boolean
+    isTransfer?: boolean
+    transferId?: boolean
+    transferAccountId?: boolean
     externalId?: boolean
     createdAt?: boolean
     updatedAt?: boolean
@@ -6503,6 +6564,7 @@ export namespace Prisma {
     costObject?: boolean | Transaction$costObjectArgs<ExtArgs>
     profile?: boolean | ProfileDefaultArgs<ExtArgs>
     suggestedRule?: boolean | Transaction$suggestedRuleArgs<ExtArgs>
+    transferAccount?: boolean | Transaction$transferAccountArgs<ExtArgs>
     splits?: boolean | Transaction$splitsArgs<ExtArgs>
     _count?: boolean | TransactionCountOutputTypeDefaultArgs<ExtArgs>
   }, ExtArgs["result"]["transaction"]>
@@ -6520,6 +6582,9 @@ export namespace Prisma {
     suggestedCategoryId?: boolean
     merchant?: boolean
     suggestedByRuleId?: boolean
+    isTransfer?: boolean
+    transferId?: boolean
+    transferAccountId?: boolean
     externalId?: boolean
     createdAt?: boolean
     updatedAt?: boolean
@@ -6528,6 +6593,7 @@ export namespace Prisma {
     costObject?: boolean | Transaction$costObjectArgs<ExtArgs>
     profile?: boolean | ProfileDefaultArgs<ExtArgs>
     suggestedRule?: boolean | Transaction$suggestedRuleArgs<ExtArgs>
+    transferAccount?: boolean | Transaction$transferAccountArgs<ExtArgs>
   }, ExtArgs["result"]["transaction"]>
 
   export type TransactionSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
@@ -6543,6 +6609,9 @@ export namespace Prisma {
     suggestedCategoryId?: boolean
     merchant?: boolean
     suggestedByRuleId?: boolean
+    isTransfer?: boolean
+    transferId?: boolean
+    transferAccountId?: boolean
     externalId?: boolean
     createdAt?: boolean
     updatedAt?: boolean
@@ -6551,6 +6620,7 @@ export namespace Prisma {
     costObject?: boolean | Transaction$costObjectArgs<ExtArgs>
     profile?: boolean | ProfileDefaultArgs<ExtArgs>
     suggestedRule?: boolean | Transaction$suggestedRuleArgs<ExtArgs>
+    transferAccount?: boolean | Transaction$transferAccountArgs<ExtArgs>
   }, ExtArgs["result"]["transaction"]>
 
   export type TransactionSelectScalar = {
@@ -6566,18 +6636,22 @@ export namespace Prisma {
     suggestedCategoryId?: boolean
     merchant?: boolean
     suggestedByRuleId?: boolean
+    isTransfer?: boolean
+    transferId?: boolean
+    transferAccountId?: boolean
     externalId?: boolean
     createdAt?: boolean
     updatedAt?: boolean
   }
 
-  export type TransactionOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "date" | "amount" | "description" | "categoryId" | "accountId" | "costObjectId" | "profileId" | "notes" | "suggestedCategoryId" | "merchant" | "suggestedByRuleId" | "externalId" | "createdAt" | "updatedAt", ExtArgs["result"]["transaction"]>
+  export type TransactionOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "date" | "amount" | "description" | "categoryId" | "accountId" | "costObjectId" | "profileId" | "notes" | "suggestedCategoryId" | "merchant" | "suggestedByRuleId" | "isTransfer" | "transferId" | "transferAccountId" | "externalId" | "createdAt" | "updatedAt", ExtArgs["result"]["transaction"]>
   export type TransactionInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     category?: boolean | Transaction$categoryArgs<ExtArgs>
     account?: boolean | Transaction$accountArgs<ExtArgs>
     costObject?: boolean | Transaction$costObjectArgs<ExtArgs>
     profile?: boolean | ProfileDefaultArgs<ExtArgs>
     suggestedRule?: boolean | Transaction$suggestedRuleArgs<ExtArgs>
+    transferAccount?: boolean | Transaction$transferAccountArgs<ExtArgs>
     splits?: boolean | Transaction$splitsArgs<ExtArgs>
     _count?: boolean | TransactionCountOutputTypeDefaultArgs<ExtArgs>
   }
@@ -6587,6 +6661,7 @@ export namespace Prisma {
     costObject?: boolean | Transaction$costObjectArgs<ExtArgs>
     profile?: boolean | ProfileDefaultArgs<ExtArgs>
     suggestedRule?: boolean | Transaction$suggestedRuleArgs<ExtArgs>
+    transferAccount?: boolean | Transaction$transferAccountArgs<ExtArgs>
   }
   export type TransactionIncludeUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     category?: boolean | Transaction$categoryArgs<ExtArgs>
@@ -6594,6 +6669,7 @@ export namespace Prisma {
     costObject?: boolean | Transaction$costObjectArgs<ExtArgs>
     profile?: boolean | ProfileDefaultArgs<ExtArgs>
     suggestedRule?: boolean | Transaction$suggestedRuleArgs<ExtArgs>
+    transferAccount?: boolean | Transaction$transferAccountArgs<ExtArgs>
   }
 
   export type $TransactionPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
@@ -6604,6 +6680,7 @@ export namespace Prisma {
       costObject: Prisma.$CostObjectPayload<ExtArgs> | null
       profile: Prisma.$ProfilePayload<ExtArgs>
       suggestedRule: Prisma.$CategorizationRulePayload<ExtArgs> | null
+      transferAccount: Prisma.$AccountPayload<ExtArgs> | null
       splits: Prisma.$TransactionSplitPayload<ExtArgs>[]
     }
     scalars: $Extensions.GetPayloadResult<{
@@ -6619,6 +6696,9 @@ export namespace Prisma {
       suggestedCategoryId: string | null
       merchant: string | null
       suggestedByRuleId: string | null
+      isTransfer: boolean
+      transferId: string | null
+      transferAccountId: string | null
       externalId: string | null
       createdAt: Date
       updatedAt: Date
@@ -7021,6 +7101,7 @@ export namespace Prisma {
     costObject<T extends Transaction$costObjectArgs<ExtArgs> = {}>(args?: Subset<T, Transaction$costObjectArgs<ExtArgs>>): Prisma__CostObjectClient<$Result.GetResult<Prisma.$CostObjectPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
     profile<T extends ProfileDefaultArgs<ExtArgs> = {}>(args?: Subset<T, ProfileDefaultArgs<ExtArgs>>): Prisma__ProfileClient<$Result.GetResult<Prisma.$ProfilePayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
     suggestedRule<T extends Transaction$suggestedRuleArgs<ExtArgs> = {}>(args?: Subset<T, Transaction$suggestedRuleArgs<ExtArgs>>): Prisma__CategorizationRuleClient<$Result.GetResult<Prisma.$CategorizationRulePayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+    transferAccount<T extends Transaction$transferAccountArgs<ExtArgs> = {}>(args?: Subset<T, Transaction$transferAccountArgs<ExtArgs>>): Prisma__AccountClient<$Result.GetResult<Prisma.$AccountPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
     splits<T extends Transaction$splitsArgs<ExtArgs> = {}>(args?: Subset<T, Transaction$splitsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$TransactionSplitPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     /**
      * Attaches callbacks for the resolution and/or rejection of the Promise.
@@ -7063,6 +7144,9 @@ export namespace Prisma {
     readonly suggestedCategoryId: FieldRef<"Transaction", 'String'>
     readonly merchant: FieldRef<"Transaction", 'String'>
     readonly suggestedByRuleId: FieldRef<"Transaction", 'String'>
+    readonly isTransfer: FieldRef<"Transaction", 'Boolean'>
+    readonly transferId: FieldRef<"Transaction", 'String'>
+    readonly transferAccountId: FieldRef<"Transaction", 'String'>
     readonly externalId: FieldRef<"Transaction", 'String'>
     readonly createdAt: FieldRef<"Transaction", 'DateTime'>
     readonly updatedAt: FieldRef<"Transaction", 'DateTime'>
@@ -7533,6 +7617,25 @@ export namespace Prisma {
      */
     include?: CategorizationRuleInclude<ExtArgs> | null
     where?: CategorizationRuleWhereInput
+  }
+
+  /**
+   * Transaction.transferAccount
+   */
+  export type Transaction$transferAccountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Account
+     */
+    select?: AccountSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the Account
+     */
+    omit?: AccountOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: AccountInclude<ExtArgs> | null
+    where?: AccountWhereInput
   }
 
   /**
@@ -19288,6 +19391,9 @@ export namespace Prisma {
     suggestedCategoryId: 'suggestedCategoryId',
     merchant: 'merchant',
     suggestedByRuleId: 'suggestedByRuleId',
+    isTransfer: 'isTransfer',
+    transferId: 'transferId',
+    transferAccountId: 'transferAccountId',
     externalId: 'externalId',
     createdAt: 'createdAt',
     updatedAt: 'updatedAt'
@@ -19655,6 +19761,7 @@ export namespace Prisma {
     profile?: XOR<ProfileScalarRelationFilter, ProfileWhereInput>
     bankConnection?: XOR<BankConnectionNullableScalarRelationFilter, BankConnectionWhereInput> | null
     transactions?: TransactionListRelationFilter
+    transferTransactions?: TransactionListRelationFilter
     monthlyBalances?: MonthlyBalanceListRelationFilter
     accountBalances?: AccountBalanceListRelationFilter
   }
@@ -19673,6 +19780,7 @@ export namespace Prisma {
     profile?: ProfileOrderByWithRelationInput
     bankConnection?: BankConnectionOrderByWithRelationInput
     transactions?: TransactionOrderByRelationAggregateInput
+    transferTransactions?: TransactionOrderByRelationAggregateInput
     monthlyBalances?: MonthlyBalanceOrderByRelationAggregateInput
     accountBalances?: AccountBalanceOrderByRelationAggregateInput
   }
@@ -19694,6 +19802,7 @@ export namespace Prisma {
     profile?: XOR<ProfileScalarRelationFilter, ProfileWhereInput>
     bankConnection?: XOR<BankConnectionNullableScalarRelationFilter, BankConnectionWhereInput> | null
     transactions?: TransactionListRelationFilter
+    transferTransactions?: TransactionListRelationFilter
     monthlyBalances?: MonthlyBalanceListRelationFilter
     accountBalances?: AccountBalanceListRelationFilter
   }, "id">
@@ -19819,6 +19928,9 @@ export namespace Prisma {
     suggestedCategoryId?: StringNullableFilter<"Transaction"> | string | null
     merchant?: StringNullableFilter<"Transaction"> | string | null
     suggestedByRuleId?: StringNullableFilter<"Transaction"> | string | null
+    isTransfer?: BoolFilter<"Transaction"> | boolean
+    transferId?: StringNullableFilter<"Transaction"> | string | null
+    transferAccountId?: StringNullableFilter<"Transaction"> | string | null
     externalId?: StringNullableFilter<"Transaction"> | string | null
     createdAt?: DateTimeFilter<"Transaction"> | Date | string
     updatedAt?: DateTimeFilter<"Transaction"> | Date | string
@@ -19827,6 +19939,7 @@ export namespace Prisma {
     costObject?: XOR<CostObjectNullableScalarRelationFilter, CostObjectWhereInput> | null
     profile?: XOR<ProfileScalarRelationFilter, ProfileWhereInput>
     suggestedRule?: XOR<CategorizationRuleNullableScalarRelationFilter, CategorizationRuleWhereInput> | null
+    transferAccount?: XOR<AccountNullableScalarRelationFilter, AccountWhereInput> | null
     splits?: TransactionSplitListRelationFilter
   }
 
@@ -19843,6 +19956,9 @@ export namespace Prisma {
     suggestedCategoryId?: SortOrderInput | SortOrder
     merchant?: SortOrderInput | SortOrder
     suggestedByRuleId?: SortOrderInput | SortOrder
+    isTransfer?: SortOrder
+    transferId?: SortOrderInput | SortOrder
+    transferAccountId?: SortOrderInput | SortOrder
     externalId?: SortOrderInput | SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
@@ -19851,6 +19967,7 @@ export namespace Prisma {
     costObject?: CostObjectOrderByWithRelationInput
     profile?: ProfileOrderByWithRelationInput
     suggestedRule?: CategorizationRuleOrderByWithRelationInput
+    transferAccount?: AccountOrderByWithRelationInput
     splits?: TransactionSplitOrderByRelationAggregateInput
   }
 
@@ -19871,6 +19988,9 @@ export namespace Prisma {
     suggestedCategoryId?: StringNullableFilter<"Transaction"> | string | null
     merchant?: StringNullableFilter<"Transaction"> | string | null
     suggestedByRuleId?: StringNullableFilter<"Transaction"> | string | null
+    isTransfer?: BoolFilter<"Transaction"> | boolean
+    transferId?: StringNullableFilter<"Transaction"> | string | null
+    transferAccountId?: StringNullableFilter<"Transaction"> | string | null
     createdAt?: DateTimeFilter<"Transaction"> | Date | string
     updatedAt?: DateTimeFilter<"Transaction"> | Date | string
     category?: XOR<CategoryNullableScalarRelationFilter, CategoryWhereInput> | null
@@ -19878,6 +19998,7 @@ export namespace Prisma {
     costObject?: XOR<CostObjectNullableScalarRelationFilter, CostObjectWhereInput> | null
     profile?: XOR<ProfileScalarRelationFilter, ProfileWhereInput>
     suggestedRule?: XOR<CategorizationRuleNullableScalarRelationFilter, CategorizationRuleWhereInput> | null
+    transferAccount?: XOR<AccountNullableScalarRelationFilter, AccountWhereInput> | null
     splits?: TransactionSplitListRelationFilter
   }, "id" | "externalId">
 
@@ -19894,6 +20015,9 @@ export namespace Prisma {
     suggestedCategoryId?: SortOrderInput | SortOrder
     merchant?: SortOrderInput | SortOrder
     suggestedByRuleId?: SortOrderInput | SortOrder
+    isTransfer?: SortOrder
+    transferId?: SortOrderInput | SortOrder
+    transferAccountId?: SortOrderInput | SortOrder
     externalId?: SortOrderInput | SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
@@ -19920,6 +20044,9 @@ export namespace Prisma {
     suggestedCategoryId?: StringNullableWithAggregatesFilter<"Transaction"> | string | null
     merchant?: StringNullableWithAggregatesFilter<"Transaction"> | string | null
     suggestedByRuleId?: StringNullableWithAggregatesFilter<"Transaction"> | string | null
+    isTransfer?: BoolWithAggregatesFilter<"Transaction"> | boolean
+    transferId?: StringNullableWithAggregatesFilter<"Transaction"> | string | null
+    transferAccountId?: StringNullableWithAggregatesFilter<"Transaction"> | string | null
     externalId?: StringNullableWithAggregatesFilter<"Transaction"> | string | null
     createdAt?: DateTimeWithAggregatesFilter<"Transaction"> | Date | string
     updatedAt?: DateTimeWithAggregatesFilter<"Transaction"> | Date | string
@@ -20831,6 +20958,7 @@ export namespace Prisma {
     profile: ProfileCreateNestedOneWithoutAccountsInput
     bankConnection?: BankConnectionCreateNestedOneWithoutAccountsInput
     transactions?: TransactionCreateNestedManyWithoutAccountInput
+    transferTransactions?: TransactionCreateNestedManyWithoutTransferAccountInput
     monthlyBalances?: MonthlyBalanceCreateNestedManyWithoutAccountInput
     accountBalances?: AccountBalanceCreateNestedManyWithoutAccountInput
   }
@@ -20847,6 +20975,7 @@ export namespace Prisma {
     createdAt?: Date | string
     updatedAt?: Date | string
     transactions?: TransactionUncheckedCreateNestedManyWithoutAccountInput
+    transferTransactions?: TransactionUncheckedCreateNestedManyWithoutTransferAccountInput
     monthlyBalances?: MonthlyBalanceUncheckedCreateNestedManyWithoutAccountInput
     accountBalances?: AccountBalanceUncheckedCreateNestedManyWithoutAccountInput
   }
@@ -20863,6 +20992,7 @@ export namespace Prisma {
     profile?: ProfileUpdateOneRequiredWithoutAccountsNestedInput
     bankConnection?: BankConnectionUpdateOneWithoutAccountsNestedInput
     transactions?: TransactionUpdateManyWithoutAccountNestedInput
+    transferTransactions?: TransactionUpdateManyWithoutTransferAccountNestedInput
     monthlyBalances?: MonthlyBalanceUpdateManyWithoutAccountNestedInput
     accountBalances?: AccountBalanceUpdateManyWithoutAccountNestedInput
   }
@@ -20879,6 +21009,7 @@ export namespace Prisma {
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     transactions?: TransactionUncheckedUpdateManyWithoutAccountNestedInput
+    transferTransactions?: TransactionUncheckedUpdateManyWithoutTransferAccountNestedInput
     monthlyBalances?: MonthlyBalanceUncheckedUpdateManyWithoutAccountNestedInput
     accountBalances?: AccountBalanceUncheckedUpdateManyWithoutAccountNestedInput
   }
@@ -21005,6 +21136,8 @@ export namespace Prisma {
     notes?: string | null
     suggestedCategoryId?: string | null
     merchant?: string | null
+    isTransfer?: boolean
+    transferId?: string | null
     externalId?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -21013,6 +21146,7 @@ export namespace Prisma {
     costObject?: CostObjectCreateNestedOneWithoutTransactionsInput
     profile: ProfileCreateNestedOneWithoutTransactionsInput
     suggestedRule?: CategorizationRuleCreateNestedOneWithoutSuggestedTransactionsInput
+    transferAccount?: AccountCreateNestedOneWithoutTransferTransactionsInput
     splits?: TransactionSplitCreateNestedManyWithoutParentInput
   }
 
@@ -21029,6 +21163,9 @@ export namespace Prisma {
     suggestedCategoryId?: string | null
     merchant?: string | null
     suggestedByRuleId?: string | null
+    isTransfer?: boolean
+    transferId?: string | null
+    transferAccountId?: string | null
     externalId?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -21043,6 +21180,8 @@ export namespace Prisma {
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     suggestedCategoryId?: NullableStringFieldUpdateOperationsInput | string | null
     merchant?: NullableStringFieldUpdateOperationsInput | string | null
+    isTransfer?: BoolFieldUpdateOperationsInput | boolean
+    transferId?: NullableStringFieldUpdateOperationsInput | string | null
     externalId?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -21051,6 +21190,7 @@ export namespace Prisma {
     costObject?: CostObjectUpdateOneWithoutTransactionsNestedInput
     profile?: ProfileUpdateOneRequiredWithoutTransactionsNestedInput
     suggestedRule?: CategorizationRuleUpdateOneWithoutSuggestedTransactionsNestedInput
+    transferAccount?: AccountUpdateOneWithoutTransferTransactionsNestedInput
     splits?: TransactionSplitUpdateManyWithoutParentNestedInput
   }
 
@@ -21067,6 +21207,9 @@ export namespace Prisma {
     suggestedCategoryId?: NullableStringFieldUpdateOperationsInput | string | null
     merchant?: NullableStringFieldUpdateOperationsInput | string | null
     suggestedByRuleId?: NullableStringFieldUpdateOperationsInput | string | null
+    isTransfer?: BoolFieldUpdateOperationsInput | boolean
+    transferId?: NullableStringFieldUpdateOperationsInput | string | null
+    transferAccountId?: NullableStringFieldUpdateOperationsInput | string | null
     externalId?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -21086,6 +21229,9 @@ export namespace Prisma {
     suggestedCategoryId?: string | null
     merchant?: string | null
     suggestedByRuleId?: string | null
+    isTransfer?: boolean
+    transferId?: string | null
+    transferAccountId?: string | null
     externalId?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -21099,6 +21245,8 @@ export namespace Prisma {
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     suggestedCategoryId?: NullableStringFieldUpdateOperationsInput | string | null
     merchant?: NullableStringFieldUpdateOperationsInput | string | null
+    isTransfer?: BoolFieldUpdateOperationsInput | boolean
+    transferId?: NullableStringFieldUpdateOperationsInput | string | null
     externalId?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -21117,6 +21265,9 @@ export namespace Prisma {
     suggestedCategoryId?: NullableStringFieldUpdateOperationsInput | string | null
     merchant?: NullableStringFieldUpdateOperationsInput | string | null
     suggestedByRuleId?: NullableStringFieldUpdateOperationsInput | string | null
+    isTransfer?: BoolFieldUpdateOperationsInput | boolean
+    transferId?: NullableStringFieldUpdateOperationsInput | string | null
+    transferAccountId?: NullableStringFieldUpdateOperationsInput | string | null
     externalId?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -22382,6 +22533,11 @@ export namespace Prisma {
     updatedAt?: SortOrder
   }
 
+  export type BoolFilter<$PrismaModel = never> = {
+    equals?: boolean | BooleanFieldRefInput<$PrismaModel>
+    not?: NestedBoolFilter<$PrismaModel> | boolean
+  }
+
   export type AccountNullableScalarRelationFilter = {
     is?: AccountWhereInput | null
     isNot?: AccountWhereInput | null
@@ -22410,6 +22566,9 @@ export namespace Prisma {
     suggestedCategoryId?: SortOrder
     merchant?: SortOrder
     suggestedByRuleId?: SortOrder
+    isTransfer?: SortOrder
+    transferId?: SortOrder
+    transferAccountId?: SortOrder
     externalId?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
@@ -22432,6 +22591,9 @@ export namespace Prisma {
     suggestedCategoryId?: SortOrder
     merchant?: SortOrder
     suggestedByRuleId?: SortOrder
+    isTransfer?: SortOrder
+    transferId?: SortOrder
+    transferAccountId?: SortOrder
     externalId?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
@@ -22450,6 +22612,9 @@ export namespace Prisma {
     suggestedCategoryId?: SortOrder
     merchant?: SortOrder
     suggestedByRuleId?: SortOrder
+    isTransfer?: SortOrder
+    transferId?: SortOrder
+    transferAccountId?: SortOrder
     externalId?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
@@ -22459,9 +22624,12 @@ export namespace Prisma {
     amount?: SortOrder
   }
 
-  export type BoolFilter<$PrismaModel = never> = {
+  export type BoolWithAggregatesFilter<$PrismaModel = never> = {
     equals?: boolean | BooleanFieldRefInput<$PrismaModel>
-    not?: NestedBoolFilter<$PrismaModel> | boolean
+    not?: NestedBoolWithAggregatesFilter<$PrismaModel> | boolean
+    _count?: NestedIntFilter<$PrismaModel>
+    _min?: NestedBoolFilter<$PrismaModel>
+    _max?: NestedBoolFilter<$PrismaModel>
   }
 
   export type IntFilter<$PrismaModel = never> = {
@@ -22538,14 +22706,6 @@ export namespace Prisma {
   export type CategorizationRuleSumOrderByAggregateInput = {
     priority?: SortOrder
     matchCount?: SortOrder
-  }
-
-  export type BoolWithAggregatesFilter<$PrismaModel = never> = {
-    equals?: boolean | BooleanFieldRefInput<$PrismaModel>
-    not?: NestedBoolWithAggregatesFilter<$PrismaModel> | boolean
-    _count?: NestedIntFilter<$PrismaModel>
-    _min?: NestedBoolFilter<$PrismaModel>
-    _max?: NestedBoolFilter<$PrismaModel>
   }
 
   export type IntWithAggregatesFilter<$PrismaModel = never> = {
@@ -23341,6 +23501,13 @@ export namespace Prisma {
     connect?: TransactionWhereUniqueInput | TransactionWhereUniqueInput[]
   }
 
+  export type TransactionCreateNestedManyWithoutTransferAccountInput = {
+    create?: XOR<TransactionCreateWithoutTransferAccountInput, TransactionUncheckedCreateWithoutTransferAccountInput> | TransactionCreateWithoutTransferAccountInput[] | TransactionUncheckedCreateWithoutTransferAccountInput[]
+    connectOrCreate?: TransactionCreateOrConnectWithoutTransferAccountInput | TransactionCreateOrConnectWithoutTransferAccountInput[]
+    createMany?: TransactionCreateManyTransferAccountInputEnvelope
+    connect?: TransactionWhereUniqueInput | TransactionWhereUniqueInput[]
+  }
+
   export type MonthlyBalanceCreateNestedManyWithoutAccountInput = {
     create?: XOR<MonthlyBalanceCreateWithoutAccountInput, MonthlyBalanceUncheckedCreateWithoutAccountInput> | MonthlyBalanceCreateWithoutAccountInput[] | MonthlyBalanceUncheckedCreateWithoutAccountInput[]
     connectOrCreate?: MonthlyBalanceCreateOrConnectWithoutAccountInput | MonthlyBalanceCreateOrConnectWithoutAccountInput[]
@@ -23359,6 +23526,13 @@ export namespace Prisma {
     create?: XOR<TransactionCreateWithoutAccountInput, TransactionUncheckedCreateWithoutAccountInput> | TransactionCreateWithoutAccountInput[] | TransactionUncheckedCreateWithoutAccountInput[]
     connectOrCreate?: TransactionCreateOrConnectWithoutAccountInput | TransactionCreateOrConnectWithoutAccountInput[]
     createMany?: TransactionCreateManyAccountInputEnvelope
+    connect?: TransactionWhereUniqueInput | TransactionWhereUniqueInput[]
+  }
+
+  export type TransactionUncheckedCreateNestedManyWithoutTransferAccountInput = {
+    create?: XOR<TransactionCreateWithoutTransferAccountInput, TransactionUncheckedCreateWithoutTransferAccountInput> | TransactionCreateWithoutTransferAccountInput[] | TransactionUncheckedCreateWithoutTransferAccountInput[]
+    connectOrCreate?: TransactionCreateOrConnectWithoutTransferAccountInput | TransactionCreateOrConnectWithoutTransferAccountInput[]
+    createMany?: TransactionCreateManyTransferAccountInputEnvelope
     connect?: TransactionWhereUniqueInput | TransactionWhereUniqueInput[]
   }
 
@@ -23424,6 +23598,20 @@ export namespace Prisma {
     deleteMany?: TransactionScalarWhereInput | TransactionScalarWhereInput[]
   }
 
+  export type TransactionUpdateManyWithoutTransferAccountNestedInput = {
+    create?: XOR<TransactionCreateWithoutTransferAccountInput, TransactionUncheckedCreateWithoutTransferAccountInput> | TransactionCreateWithoutTransferAccountInput[] | TransactionUncheckedCreateWithoutTransferAccountInput[]
+    connectOrCreate?: TransactionCreateOrConnectWithoutTransferAccountInput | TransactionCreateOrConnectWithoutTransferAccountInput[]
+    upsert?: TransactionUpsertWithWhereUniqueWithoutTransferAccountInput | TransactionUpsertWithWhereUniqueWithoutTransferAccountInput[]
+    createMany?: TransactionCreateManyTransferAccountInputEnvelope
+    set?: TransactionWhereUniqueInput | TransactionWhereUniqueInput[]
+    disconnect?: TransactionWhereUniqueInput | TransactionWhereUniqueInput[]
+    delete?: TransactionWhereUniqueInput | TransactionWhereUniqueInput[]
+    connect?: TransactionWhereUniqueInput | TransactionWhereUniqueInput[]
+    update?: TransactionUpdateWithWhereUniqueWithoutTransferAccountInput | TransactionUpdateWithWhereUniqueWithoutTransferAccountInput[]
+    updateMany?: TransactionUpdateManyWithWhereWithoutTransferAccountInput | TransactionUpdateManyWithWhereWithoutTransferAccountInput[]
+    deleteMany?: TransactionScalarWhereInput | TransactionScalarWhereInput[]
+  }
+
   export type MonthlyBalanceUpdateManyWithoutAccountNestedInput = {
     create?: XOR<MonthlyBalanceCreateWithoutAccountInput, MonthlyBalanceUncheckedCreateWithoutAccountInput> | MonthlyBalanceCreateWithoutAccountInput[] | MonthlyBalanceUncheckedCreateWithoutAccountInput[]
     connectOrCreate?: MonthlyBalanceCreateOrConnectWithoutAccountInput | MonthlyBalanceCreateOrConnectWithoutAccountInput[]
@@ -23463,6 +23651,20 @@ export namespace Prisma {
     connect?: TransactionWhereUniqueInput | TransactionWhereUniqueInput[]
     update?: TransactionUpdateWithWhereUniqueWithoutAccountInput | TransactionUpdateWithWhereUniqueWithoutAccountInput[]
     updateMany?: TransactionUpdateManyWithWhereWithoutAccountInput | TransactionUpdateManyWithWhereWithoutAccountInput[]
+    deleteMany?: TransactionScalarWhereInput | TransactionScalarWhereInput[]
+  }
+
+  export type TransactionUncheckedUpdateManyWithoutTransferAccountNestedInput = {
+    create?: XOR<TransactionCreateWithoutTransferAccountInput, TransactionUncheckedCreateWithoutTransferAccountInput> | TransactionCreateWithoutTransferAccountInput[] | TransactionUncheckedCreateWithoutTransferAccountInput[]
+    connectOrCreate?: TransactionCreateOrConnectWithoutTransferAccountInput | TransactionCreateOrConnectWithoutTransferAccountInput[]
+    upsert?: TransactionUpsertWithWhereUniqueWithoutTransferAccountInput | TransactionUpsertWithWhereUniqueWithoutTransferAccountInput[]
+    createMany?: TransactionCreateManyTransferAccountInputEnvelope
+    set?: TransactionWhereUniqueInput | TransactionWhereUniqueInput[]
+    disconnect?: TransactionWhereUniqueInput | TransactionWhereUniqueInput[]
+    delete?: TransactionWhereUniqueInput | TransactionWhereUniqueInput[]
+    connect?: TransactionWhereUniqueInput | TransactionWhereUniqueInput[]
+    update?: TransactionUpdateWithWhereUniqueWithoutTransferAccountInput | TransactionUpdateWithWhereUniqueWithoutTransferAccountInput[]
+    updateMany?: TransactionUpdateManyWithWhereWithoutTransferAccountInput | TransactionUpdateManyWithWhereWithoutTransferAccountInput[]
     deleteMany?: TransactionScalarWhereInput | TransactionScalarWhereInput[]
   }
 
@@ -23622,6 +23824,12 @@ export namespace Prisma {
     connect?: CategorizationRuleWhereUniqueInput
   }
 
+  export type AccountCreateNestedOneWithoutTransferTransactionsInput = {
+    create?: XOR<AccountCreateWithoutTransferTransactionsInput, AccountUncheckedCreateWithoutTransferTransactionsInput>
+    connectOrCreate?: AccountCreateOrConnectWithoutTransferTransactionsInput
+    connect?: AccountWhereUniqueInput
+  }
+
   export type TransactionSplitCreateNestedManyWithoutParentInput = {
     create?: XOR<TransactionSplitCreateWithoutParentInput, TransactionSplitUncheckedCreateWithoutParentInput> | TransactionSplitCreateWithoutParentInput[] | TransactionSplitUncheckedCreateWithoutParentInput[]
     connectOrCreate?: TransactionSplitCreateOrConnectWithoutParentInput | TransactionSplitCreateOrConnectWithoutParentInput[]
@@ -23634,6 +23842,10 @@ export namespace Prisma {
     connectOrCreate?: TransactionSplitCreateOrConnectWithoutParentInput | TransactionSplitCreateOrConnectWithoutParentInput[]
     createMany?: TransactionSplitCreateManyParentInputEnvelope
     connect?: TransactionSplitWhereUniqueInput | TransactionSplitWhereUniqueInput[]
+  }
+
+  export type BoolFieldUpdateOperationsInput = {
+    set?: boolean
   }
 
   export type CategoryUpdateOneWithoutTransactionsNestedInput = {
@@ -23682,6 +23894,16 @@ export namespace Prisma {
     delete?: CategorizationRuleWhereInput | boolean
     connect?: CategorizationRuleWhereUniqueInput
     update?: XOR<XOR<CategorizationRuleUpdateToOneWithWhereWithoutSuggestedTransactionsInput, CategorizationRuleUpdateWithoutSuggestedTransactionsInput>, CategorizationRuleUncheckedUpdateWithoutSuggestedTransactionsInput>
+  }
+
+  export type AccountUpdateOneWithoutTransferTransactionsNestedInput = {
+    create?: XOR<AccountCreateWithoutTransferTransactionsInput, AccountUncheckedCreateWithoutTransferTransactionsInput>
+    connectOrCreate?: AccountCreateOrConnectWithoutTransferTransactionsInput
+    upsert?: AccountUpsertWithoutTransferTransactionsInput
+    disconnect?: AccountWhereInput | boolean
+    delete?: AccountWhereInput | boolean
+    connect?: AccountWhereUniqueInput
+    update?: XOR<XOR<AccountUpdateToOneWithWhereWithoutTransferTransactionsInput, AccountUpdateWithoutTransferTransactionsInput>, AccountUncheckedUpdateWithoutTransferTransactionsInput>
   }
 
   export type TransactionSplitUpdateManyWithoutParentNestedInput = {
@@ -23736,10 +23958,6 @@ export namespace Prisma {
     connectOrCreate?: TransactionCreateOrConnectWithoutSuggestedRuleInput | TransactionCreateOrConnectWithoutSuggestedRuleInput[]
     createMany?: TransactionCreateManySuggestedRuleInputEnvelope
     connect?: TransactionWhereUniqueInput | TransactionWhereUniqueInput[]
-  }
-
-  export type BoolFieldUpdateOperationsInput = {
-    set?: boolean
   }
 
   export type IntFieldUpdateOperationsInput = {
@@ -24625,19 +24843,19 @@ export namespace Prisma {
     not?: NestedBoolFilter<$PrismaModel> | boolean
   }
 
-  export type NestedEnumRuleModeFilter<$PrismaModel = never> = {
-    equals?: $Enums.RuleMode | EnumRuleModeFieldRefInput<$PrismaModel>
-    in?: $Enums.RuleMode[]
-    notIn?: $Enums.RuleMode[]
-    not?: NestedEnumRuleModeFilter<$PrismaModel> | $Enums.RuleMode
-  }
-
   export type NestedBoolWithAggregatesFilter<$PrismaModel = never> = {
     equals?: boolean | BooleanFieldRefInput<$PrismaModel>
     not?: NestedBoolWithAggregatesFilter<$PrismaModel> | boolean
     _count?: NestedIntFilter<$PrismaModel>
     _min?: NestedBoolFilter<$PrismaModel>
     _max?: NestedBoolFilter<$PrismaModel>
+  }
+
+  export type NestedEnumRuleModeFilter<$PrismaModel = never> = {
+    equals?: $Enums.RuleMode | EnumRuleModeFieldRefInput<$PrismaModel>
+    in?: $Enums.RuleMode[]
+    notIn?: $Enums.RuleMode[]
+    not?: NestedEnumRuleModeFilter<$PrismaModel> | $Enums.RuleMode
   }
 
   export type NestedIntWithAggregatesFilter<$PrismaModel = never> = {
@@ -24852,6 +25070,8 @@ export namespace Prisma {
     notes?: string | null
     suggestedCategoryId?: string | null
     merchant?: string | null
+    isTransfer?: boolean
+    transferId?: string | null
     externalId?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -24859,6 +25079,7 @@ export namespace Prisma {
     costObject?: CostObjectCreateNestedOneWithoutTransactionsInput
     profile: ProfileCreateNestedOneWithoutTransactionsInput
     suggestedRule?: CategorizationRuleCreateNestedOneWithoutSuggestedTransactionsInput
+    transferAccount?: AccountCreateNestedOneWithoutTransferTransactionsInput
     splits?: TransactionSplitCreateNestedManyWithoutParentInput
   }
 
@@ -24874,6 +25095,9 @@ export namespace Prisma {
     suggestedCategoryId?: string | null
     merchant?: string | null
     suggestedByRuleId?: string | null
+    isTransfer?: boolean
+    transferId?: string | null
+    transferAccountId?: string | null
     externalId?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -25189,6 +25413,9 @@ export namespace Prisma {
     suggestedCategoryId?: StringNullableFilter<"Transaction"> | string | null
     merchant?: StringNullableFilter<"Transaction"> | string | null
     suggestedByRuleId?: StringNullableFilter<"Transaction"> | string | null
+    isTransfer?: BoolFilter<"Transaction"> | boolean
+    transferId?: StringNullableFilter<"Transaction"> | string | null
+    transferAccountId?: StringNullableFilter<"Transaction"> | string | null
     externalId?: StringNullableFilter<"Transaction"> | string | null
     createdAt?: DateTimeFilter<"Transaction"> | Date | string
     updatedAt?: DateTimeFilter<"Transaction"> | Date | string
@@ -25406,6 +25633,8 @@ export namespace Prisma {
     notes?: string | null
     suggestedCategoryId?: string | null
     merchant?: string | null
+    isTransfer?: boolean
+    transferId?: string | null
     externalId?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -25413,6 +25642,7 @@ export namespace Prisma {
     costObject?: CostObjectCreateNestedOneWithoutTransactionsInput
     profile: ProfileCreateNestedOneWithoutTransactionsInput
     suggestedRule?: CategorizationRuleCreateNestedOneWithoutSuggestedTransactionsInput
+    transferAccount?: AccountCreateNestedOneWithoutTransferTransactionsInput
     splits?: TransactionSplitCreateNestedManyWithoutParentInput
   }
 
@@ -25428,6 +25658,9 @@ export namespace Prisma {
     suggestedCategoryId?: string | null
     merchant?: string | null
     suggestedByRuleId?: string | null
+    isTransfer?: boolean
+    transferId?: string | null
+    transferAccountId?: string | null
     externalId?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -25441,6 +25674,57 @@ export namespace Prisma {
 
   export type TransactionCreateManyAccountInputEnvelope = {
     data: TransactionCreateManyAccountInput | TransactionCreateManyAccountInput[]
+  }
+
+  export type TransactionCreateWithoutTransferAccountInput = {
+    id?: string
+    date: Date | string
+    amount: Decimal | DecimalJsLike | number | string
+    description: string
+    notes?: string | null
+    suggestedCategoryId?: string | null
+    merchant?: string | null
+    isTransfer?: boolean
+    transferId?: string | null
+    externalId?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    category?: CategoryCreateNestedOneWithoutTransactionsInput
+    account?: AccountCreateNestedOneWithoutTransactionsInput
+    costObject?: CostObjectCreateNestedOneWithoutTransactionsInput
+    profile: ProfileCreateNestedOneWithoutTransactionsInput
+    suggestedRule?: CategorizationRuleCreateNestedOneWithoutSuggestedTransactionsInput
+    splits?: TransactionSplitCreateNestedManyWithoutParentInput
+  }
+
+  export type TransactionUncheckedCreateWithoutTransferAccountInput = {
+    id?: string
+    date: Date | string
+    amount: Decimal | DecimalJsLike | number | string
+    description: string
+    categoryId?: string | null
+    accountId?: string | null
+    costObjectId?: string | null
+    profileId: string
+    notes?: string | null
+    suggestedCategoryId?: string | null
+    merchant?: string | null
+    suggestedByRuleId?: string | null
+    isTransfer?: boolean
+    transferId?: string | null
+    externalId?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    splits?: TransactionSplitUncheckedCreateNestedManyWithoutParentInput
+  }
+
+  export type TransactionCreateOrConnectWithoutTransferAccountInput = {
+    where: TransactionWhereUniqueInput
+    create: XOR<TransactionCreateWithoutTransferAccountInput, TransactionUncheckedCreateWithoutTransferAccountInput>
+  }
+
+  export type TransactionCreateManyTransferAccountInputEnvelope = {
+    data: TransactionCreateManyTransferAccountInput | TransactionCreateManyTransferAccountInput[]
   }
 
   export type MonthlyBalanceCreateWithoutAccountInput = {
@@ -25593,6 +25877,22 @@ export namespace Prisma {
     data: XOR<TransactionUpdateManyMutationInput, TransactionUncheckedUpdateManyWithoutAccountInput>
   }
 
+  export type TransactionUpsertWithWhereUniqueWithoutTransferAccountInput = {
+    where: TransactionWhereUniqueInput
+    update: XOR<TransactionUpdateWithoutTransferAccountInput, TransactionUncheckedUpdateWithoutTransferAccountInput>
+    create: XOR<TransactionCreateWithoutTransferAccountInput, TransactionUncheckedCreateWithoutTransferAccountInput>
+  }
+
+  export type TransactionUpdateWithWhereUniqueWithoutTransferAccountInput = {
+    where: TransactionWhereUniqueInput
+    data: XOR<TransactionUpdateWithoutTransferAccountInput, TransactionUncheckedUpdateWithoutTransferAccountInput>
+  }
+
+  export type TransactionUpdateManyWithWhereWithoutTransferAccountInput = {
+    where: TransactionScalarWhereInput
+    data: XOR<TransactionUpdateManyMutationInput, TransactionUncheckedUpdateManyWithoutTransferAccountInput>
+  }
+
   export type MonthlyBalanceUpsertWithWhereUniqueWithoutAccountInput = {
     where: MonthlyBalanceWhereUniqueInput
     update: XOR<MonthlyBalanceUpdateWithoutAccountInput, MonthlyBalanceUncheckedUpdateWithoutAccountInput>
@@ -25695,6 +25995,8 @@ export namespace Prisma {
     notes?: string | null
     suggestedCategoryId?: string | null
     merchant?: string | null
+    isTransfer?: boolean
+    transferId?: string | null
     externalId?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -25702,6 +26004,7 @@ export namespace Prisma {
     account?: AccountCreateNestedOneWithoutTransactionsInput
     profile: ProfileCreateNestedOneWithoutTransactionsInput
     suggestedRule?: CategorizationRuleCreateNestedOneWithoutSuggestedTransactionsInput
+    transferAccount?: AccountCreateNestedOneWithoutTransferTransactionsInput
     splits?: TransactionSplitCreateNestedManyWithoutParentInput
   }
 
@@ -25717,6 +26020,9 @@ export namespace Prisma {
     suggestedCategoryId?: string | null
     merchant?: string | null
     suggestedByRuleId?: string | null
+    isTransfer?: boolean
+    transferId?: string | null
+    transferAccountId?: string | null
     externalId?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -25888,6 +26194,7 @@ export namespace Prisma {
     updatedAt?: Date | string
     profile: ProfileCreateNestedOneWithoutAccountsInput
     bankConnection?: BankConnectionCreateNestedOneWithoutAccountsInput
+    transferTransactions?: TransactionCreateNestedManyWithoutTransferAccountInput
     monthlyBalances?: MonthlyBalanceCreateNestedManyWithoutAccountInput
     accountBalances?: AccountBalanceCreateNestedManyWithoutAccountInput
   }
@@ -25903,6 +26210,7 @@ export namespace Prisma {
     lastSyncedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
+    transferTransactions?: TransactionUncheckedCreateNestedManyWithoutTransferAccountInput
     monthlyBalances?: MonthlyBalanceUncheckedCreateNestedManyWithoutAccountInput
     accountBalances?: AccountBalanceUncheckedCreateNestedManyWithoutAccountInput
   }
@@ -26013,6 +26321,43 @@ export namespace Prisma {
     create: XOR<CategorizationRuleCreateWithoutSuggestedTransactionsInput, CategorizationRuleUncheckedCreateWithoutSuggestedTransactionsInput>
   }
 
+  export type AccountCreateWithoutTransferTransactionsInput = {
+    id?: string
+    name: string
+    initialBalance?: Decimal | DecimalJsLike | number | string
+    type?: $Enums.AccountType
+    bankAccountUid?: string | null
+    lastSyncedAt?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    profile: ProfileCreateNestedOneWithoutAccountsInput
+    bankConnection?: BankConnectionCreateNestedOneWithoutAccountsInput
+    transactions?: TransactionCreateNestedManyWithoutAccountInput
+    monthlyBalances?: MonthlyBalanceCreateNestedManyWithoutAccountInput
+    accountBalances?: AccountBalanceCreateNestedManyWithoutAccountInput
+  }
+
+  export type AccountUncheckedCreateWithoutTransferTransactionsInput = {
+    id?: string
+    name: string
+    initialBalance?: Decimal | DecimalJsLike | number | string
+    type?: $Enums.AccountType
+    profileId: string
+    bankConnectionId?: string | null
+    bankAccountUid?: string | null
+    lastSyncedAt?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    transactions?: TransactionUncheckedCreateNestedManyWithoutAccountInput
+    monthlyBalances?: MonthlyBalanceUncheckedCreateNestedManyWithoutAccountInput
+    accountBalances?: AccountBalanceUncheckedCreateNestedManyWithoutAccountInput
+  }
+
+  export type AccountCreateOrConnectWithoutTransferTransactionsInput = {
+    where: AccountWhereUniqueInput
+    create: XOR<AccountCreateWithoutTransferTransactionsInput, AccountUncheckedCreateWithoutTransferTransactionsInput>
+  }
+
   export type TransactionSplitCreateWithoutParentInput = {
     id?: string
     amount: Decimal | DecimalJsLike | number | string
@@ -26111,6 +26456,7 @@ export namespace Prisma {
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     profile?: ProfileUpdateOneRequiredWithoutAccountsNestedInput
     bankConnection?: BankConnectionUpdateOneWithoutAccountsNestedInput
+    transferTransactions?: TransactionUpdateManyWithoutTransferAccountNestedInput
     monthlyBalances?: MonthlyBalanceUpdateManyWithoutAccountNestedInput
     accountBalances?: AccountBalanceUpdateManyWithoutAccountNestedInput
   }
@@ -26126,6 +26472,7 @@ export namespace Prisma {
     lastSyncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    transferTransactions?: TransactionUncheckedUpdateManyWithoutTransferAccountNestedInput
     monthlyBalances?: MonthlyBalanceUncheckedUpdateManyWithoutAccountNestedInput
     accountBalances?: AccountBalanceUncheckedUpdateManyWithoutAccountNestedInput
   }
@@ -26249,6 +26596,49 @@ export namespace Prisma {
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
+  export type AccountUpsertWithoutTransferTransactionsInput = {
+    update: XOR<AccountUpdateWithoutTransferTransactionsInput, AccountUncheckedUpdateWithoutTransferTransactionsInput>
+    create: XOR<AccountCreateWithoutTransferTransactionsInput, AccountUncheckedCreateWithoutTransferTransactionsInput>
+    where?: AccountWhereInput
+  }
+
+  export type AccountUpdateToOneWithWhereWithoutTransferTransactionsInput = {
+    where?: AccountWhereInput
+    data: XOR<AccountUpdateWithoutTransferTransactionsInput, AccountUncheckedUpdateWithoutTransferTransactionsInput>
+  }
+
+  export type AccountUpdateWithoutTransferTransactionsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    initialBalance?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    type?: EnumAccountTypeFieldUpdateOperationsInput | $Enums.AccountType
+    bankAccountUid?: NullableStringFieldUpdateOperationsInput | string | null
+    lastSyncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    profile?: ProfileUpdateOneRequiredWithoutAccountsNestedInput
+    bankConnection?: BankConnectionUpdateOneWithoutAccountsNestedInput
+    transactions?: TransactionUpdateManyWithoutAccountNestedInput
+    monthlyBalances?: MonthlyBalanceUpdateManyWithoutAccountNestedInput
+    accountBalances?: AccountBalanceUpdateManyWithoutAccountNestedInput
+  }
+
+  export type AccountUncheckedUpdateWithoutTransferTransactionsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    initialBalance?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    type?: EnumAccountTypeFieldUpdateOperationsInput | $Enums.AccountType
+    profileId?: StringFieldUpdateOperationsInput | string
+    bankConnectionId?: NullableStringFieldUpdateOperationsInput | string | null
+    bankAccountUid?: NullableStringFieldUpdateOperationsInput | string | null
+    lastSyncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    transactions?: TransactionUncheckedUpdateManyWithoutAccountNestedInput
+    monthlyBalances?: MonthlyBalanceUncheckedUpdateManyWithoutAccountNestedInput
+    accountBalances?: AccountBalanceUncheckedUpdateManyWithoutAccountNestedInput
+  }
+
   export type TransactionSplitUpsertWithWhereUniqueWithoutParentInput = {
     where: TransactionSplitWhereUniqueInput
     update: XOR<TransactionSplitUpdateWithoutParentInput, TransactionSplitUncheckedUpdateWithoutParentInput>
@@ -26351,6 +26741,8 @@ export namespace Prisma {
     notes?: string | null
     suggestedCategoryId?: string | null
     merchant?: string | null
+    isTransfer?: boolean
+    transferId?: string | null
     externalId?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -26358,6 +26750,7 @@ export namespace Prisma {
     account?: AccountCreateNestedOneWithoutTransactionsInput
     costObject?: CostObjectCreateNestedOneWithoutTransactionsInput
     profile: ProfileCreateNestedOneWithoutTransactionsInput
+    transferAccount?: AccountCreateNestedOneWithoutTransferTransactionsInput
     splits?: TransactionSplitCreateNestedManyWithoutParentInput
   }
 
@@ -26373,6 +26766,9 @@ export namespace Prisma {
     notes?: string | null
     suggestedCategoryId?: string | null
     merchant?: string | null
+    isTransfer?: boolean
+    transferId?: string | null
+    transferAccountId?: string | null
     externalId?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -26670,6 +27066,8 @@ export namespace Prisma {
     notes?: string | null
     suggestedCategoryId?: string | null
     merchant?: string | null
+    isTransfer?: boolean
+    transferId?: string | null
     externalId?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -26678,6 +27076,7 @@ export namespace Prisma {
     costObject?: CostObjectCreateNestedOneWithoutTransactionsInput
     profile: ProfileCreateNestedOneWithoutTransactionsInput
     suggestedRule?: CategorizationRuleCreateNestedOneWithoutSuggestedTransactionsInput
+    transferAccount?: AccountCreateNestedOneWithoutTransferTransactionsInput
   }
 
   export type TransactionUncheckedCreateWithoutSplitsInput = {
@@ -26693,6 +27092,9 @@ export namespace Prisma {
     suggestedCategoryId?: string | null
     merchant?: string | null
     suggestedByRuleId?: string | null
+    isTransfer?: boolean
+    transferId?: string | null
+    transferAccountId?: string | null
     externalId?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -26790,6 +27192,8 @@ export namespace Prisma {
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     suggestedCategoryId?: NullableStringFieldUpdateOperationsInput | string | null
     merchant?: NullableStringFieldUpdateOperationsInput | string | null
+    isTransfer?: BoolFieldUpdateOperationsInput | boolean
+    transferId?: NullableStringFieldUpdateOperationsInput | string | null
     externalId?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -26798,6 +27202,7 @@ export namespace Prisma {
     costObject?: CostObjectUpdateOneWithoutTransactionsNestedInput
     profile?: ProfileUpdateOneRequiredWithoutTransactionsNestedInput
     suggestedRule?: CategorizationRuleUpdateOneWithoutSuggestedTransactionsNestedInput
+    transferAccount?: AccountUpdateOneWithoutTransferTransactionsNestedInput
   }
 
   export type TransactionUncheckedUpdateWithoutSplitsInput = {
@@ -26813,6 +27218,9 @@ export namespace Prisma {
     suggestedCategoryId?: NullableStringFieldUpdateOperationsInput | string | null
     merchant?: NullableStringFieldUpdateOperationsInput | string | null
     suggestedByRuleId?: NullableStringFieldUpdateOperationsInput | string | null
+    isTransfer?: BoolFieldUpdateOperationsInput | boolean
+    transferId?: NullableStringFieldUpdateOperationsInput | string | null
+    transferAccountId?: NullableStringFieldUpdateOperationsInput | string | null
     externalId?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -27151,6 +27559,7 @@ export namespace Prisma {
     updatedAt?: Date | string
     bankConnection?: BankConnectionCreateNestedOneWithoutAccountsInput
     transactions?: TransactionCreateNestedManyWithoutAccountInput
+    transferTransactions?: TransactionCreateNestedManyWithoutTransferAccountInput
     monthlyBalances?: MonthlyBalanceCreateNestedManyWithoutAccountInput
     accountBalances?: AccountBalanceCreateNestedManyWithoutAccountInput
   }
@@ -27166,6 +27575,7 @@ export namespace Prisma {
     createdAt?: Date | string
     updatedAt?: Date | string
     transactions?: TransactionUncheckedCreateNestedManyWithoutAccountInput
+    transferTransactions?: TransactionUncheckedCreateNestedManyWithoutTransferAccountInput
     monthlyBalances?: MonthlyBalanceUncheckedCreateNestedManyWithoutAccountInput
     accountBalances?: AccountBalanceUncheckedCreateNestedManyWithoutAccountInput
   }
@@ -27218,6 +27628,8 @@ export namespace Prisma {
     notes?: string | null
     suggestedCategoryId?: string | null
     merchant?: string | null
+    isTransfer?: boolean
+    transferId?: string | null
     externalId?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -27225,6 +27637,7 @@ export namespace Prisma {
     account?: AccountCreateNestedOneWithoutTransactionsInput
     costObject?: CostObjectCreateNestedOneWithoutTransactionsInput
     suggestedRule?: CategorizationRuleCreateNestedOneWithoutSuggestedTransactionsInput
+    transferAccount?: AccountCreateNestedOneWithoutTransferTransactionsInput
     splits?: TransactionSplitCreateNestedManyWithoutParentInput
   }
 
@@ -27240,6 +27653,9 @@ export namespace Prisma {
     suggestedCategoryId?: string | null
     merchant?: string | null
     suggestedByRuleId?: string | null
+    isTransfer?: boolean
+    transferId?: string | null
+    transferAccountId?: string | null
     externalId?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -27661,6 +28077,7 @@ export namespace Prisma {
     updatedAt?: Date | string
     profile: ProfileCreateNestedOneWithoutAccountsInput
     transactions?: TransactionCreateNestedManyWithoutAccountInput
+    transferTransactions?: TransactionCreateNestedManyWithoutTransferAccountInput
     monthlyBalances?: MonthlyBalanceCreateNestedManyWithoutAccountInput
     accountBalances?: AccountBalanceCreateNestedManyWithoutAccountInput
   }
@@ -27676,6 +28093,7 @@ export namespace Prisma {
     createdAt?: Date | string
     updatedAt?: Date | string
     transactions?: TransactionUncheckedCreateNestedManyWithoutAccountInput
+    transferTransactions?: TransactionUncheckedCreateNestedManyWithoutTransferAccountInput
     monthlyBalances?: MonthlyBalanceUncheckedCreateNestedManyWithoutAccountInput
     accountBalances?: AccountBalanceUncheckedCreateNestedManyWithoutAccountInput
   }
@@ -27840,6 +28258,7 @@ export namespace Prisma {
     profile: ProfileCreateNestedOneWithoutAccountsInput
     bankConnection?: BankConnectionCreateNestedOneWithoutAccountsInput
     transactions?: TransactionCreateNestedManyWithoutAccountInput
+    transferTransactions?: TransactionCreateNestedManyWithoutTransferAccountInput
     accountBalances?: AccountBalanceCreateNestedManyWithoutAccountInput
   }
 
@@ -27855,6 +28274,7 @@ export namespace Prisma {
     createdAt?: Date | string
     updatedAt?: Date | string
     transactions?: TransactionUncheckedCreateNestedManyWithoutAccountInput
+    transferTransactions?: TransactionUncheckedCreateNestedManyWithoutTransferAccountInput
     accountBalances?: AccountBalanceUncheckedCreateNestedManyWithoutAccountInput
   }
 
@@ -27886,6 +28306,7 @@ export namespace Prisma {
     profile?: ProfileUpdateOneRequiredWithoutAccountsNestedInput
     bankConnection?: BankConnectionUpdateOneWithoutAccountsNestedInput
     transactions?: TransactionUpdateManyWithoutAccountNestedInput
+    transferTransactions?: TransactionUpdateManyWithoutTransferAccountNestedInput
     accountBalances?: AccountBalanceUpdateManyWithoutAccountNestedInput
   }
 
@@ -27901,6 +28322,7 @@ export namespace Prisma {
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     transactions?: TransactionUncheckedUpdateManyWithoutAccountNestedInput
+    transferTransactions?: TransactionUncheckedUpdateManyWithoutTransferAccountNestedInput
     accountBalances?: AccountBalanceUncheckedUpdateManyWithoutAccountNestedInput
   }
 
@@ -27916,6 +28338,7 @@ export namespace Prisma {
     profile: ProfileCreateNestedOneWithoutAccountsInput
     bankConnection?: BankConnectionCreateNestedOneWithoutAccountsInput
     transactions?: TransactionCreateNestedManyWithoutAccountInput
+    transferTransactions?: TransactionCreateNestedManyWithoutTransferAccountInput
     monthlyBalances?: MonthlyBalanceCreateNestedManyWithoutAccountInput
   }
 
@@ -27931,6 +28354,7 @@ export namespace Prisma {
     createdAt?: Date | string
     updatedAt?: Date | string
     transactions?: TransactionUncheckedCreateNestedManyWithoutAccountInput
+    transferTransactions?: TransactionUncheckedCreateNestedManyWithoutTransferAccountInput
     monthlyBalances?: MonthlyBalanceUncheckedCreateNestedManyWithoutAccountInput
   }
 
@@ -27962,6 +28386,7 @@ export namespace Prisma {
     profile?: ProfileUpdateOneRequiredWithoutAccountsNestedInput
     bankConnection?: BankConnectionUpdateOneWithoutAccountsNestedInput
     transactions?: TransactionUpdateManyWithoutAccountNestedInput
+    transferTransactions?: TransactionUpdateManyWithoutTransferAccountNestedInput
     monthlyBalances?: MonthlyBalanceUpdateManyWithoutAccountNestedInput
   }
 
@@ -27977,6 +28402,7 @@ export namespace Prisma {
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     transactions?: TransactionUncheckedUpdateManyWithoutAccountNestedInput
+    transferTransactions?: TransactionUncheckedUpdateManyWithoutTransferAccountNestedInput
     monthlyBalances?: MonthlyBalanceUncheckedUpdateManyWithoutAccountNestedInput
   }
 
@@ -28004,6 +28430,9 @@ export namespace Prisma {
     suggestedCategoryId?: string | null
     merchant?: string | null
     suggestedByRuleId?: string | null
+    isTransfer?: boolean
+    transferId?: string | null
+    transferAccountId?: string | null
     externalId?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -28119,6 +28548,8 @@ export namespace Prisma {
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     suggestedCategoryId?: NullableStringFieldUpdateOperationsInput | string | null
     merchant?: NullableStringFieldUpdateOperationsInput | string | null
+    isTransfer?: BoolFieldUpdateOperationsInput | boolean
+    transferId?: NullableStringFieldUpdateOperationsInput | string | null
     externalId?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -28126,6 +28557,7 @@ export namespace Prisma {
     costObject?: CostObjectUpdateOneWithoutTransactionsNestedInput
     profile?: ProfileUpdateOneRequiredWithoutTransactionsNestedInput
     suggestedRule?: CategorizationRuleUpdateOneWithoutSuggestedTransactionsNestedInput
+    transferAccount?: AccountUpdateOneWithoutTransferTransactionsNestedInput
     splits?: TransactionSplitUpdateManyWithoutParentNestedInput
   }
 
@@ -28141,6 +28573,9 @@ export namespace Prisma {
     suggestedCategoryId?: NullableStringFieldUpdateOperationsInput | string | null
     merchant?: NullableStringFieldUpdateOperationsInput | string | null
     suggestedByRuleId?: NullableStringFieldUpdateOperationsInput | string | null
+    isTransfer?: BoolFieldUpdateOperationsInput | boolean
+    transferId?: NullableStringFieldUpdateOperationsInput | string | null
+    transferAccountId?: NullableStringFieldUpdateOperationsInput | string | null
     externalId?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -28159,6 +28594,9 @@ export namespace Prisma {
     suggestedCategoryId?: NullableStringFieldUpdateOperationsInput | string | null
     merchant?: NullableStringFieldUpdateOperationsInput | string | null
     suggestedByRuleId?: NullableStringFieldUpdateOperationsInput | string | null
+    isTransfer?: BoolFieldUpdateOperationsInput | boolean
+    transferId?: NullableStringFieldUpdateOperationsInput | string | null
+    transferAccountId?: NullableStringFieldUpdateOperationsInput | string | null
     externalId?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -28340,6 +28778,29 @@ export namespace Prisma {
     suggestedCategoryId?: string | null
     merchant?: string | null
     suggestedByRuleId?: string | null
+    isTransfer?: boolean
+    transferId?: string | null
+    transferAccountId?: string | null
+    externalId?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type TransactionCreateManyTransferAccountInput = {
+    id?: string
+    date: Date | string
+    amount: Decimal | DecimalJsLike | number | string
+    description: string
+    categoryId?: string | null
+    accountId?: string | null
+    costObjectId?: string | null
+    profileId: string
+    notes?: string | null
+    suggestedCategoryId?: string | null
+    merchant?: string | null
+    suggestedByRuleId?: string | null
+    isTransfer?: boolean
+    transferId?: string | null
     externalId?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -28370,6 +28831,8 @@ export namespace Prisma {
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     suggestedCategoryId?: NullableStringFieldUpdateOperationsInput | string | null
     merchant?: NullableStringFieldUpdateOperationsInput | string | null
+    isTransfer?: BoolFieldUpdateOperationsInput | boolean
+    transferId?: NullableStringFieldUpdateOperationsInput | string | null
     externalId?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -28377,6 +28840,7 @@ export namespace Prisma {
     costObject?: CostObjectUpdateOneWithoutTransactionsNestedInput
     profile?: ProfileUpdateOneRequiredWithoutTransactionsNestedInput
     suggestedRule?: CategorizationRuleUpdateOneWithoutSuggestedTransactionsNestedInput
+    transferAccount?: AccountUpdateOneWithoutTransferTransactionsNestedInput
     splits?: TransactionSplitUpdateManyWithoutParentNestedInput
   }
 
@@ -28392,6 +28856,9 @@ export namespace Prisma {
     suggestedCategoryId?: NullableStringFieldUpdateOperationsInput | string | null
     merchant?: NullableStringFieldUpdateOperationsInput | string | null
     suggestedByRuleId?: NullableStringFieldUpdateOperationsInput | string | null
+    isTransfer?: BoolFieldUpdateOperationsInput | boolean
+    transferId?: NullableStringFieldUpdateOperationsInput | string | null
+    transferAccountId?: NullableStringFieldUpdateOperationsInput | string | null
     externalId?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -28410,6 +28877,71 @@ export namespace Prisma {
     suggestedCategoryId?: NullableStringFieldUpdateOperationsInput | string | null
     merchant?: NullableStringFieldUpdateOperationsInput | string | null
     suggestedByRuleId?: NullableStringFieldUpdateOperationsInput | string | null
+    isTransfer?: BoolFieldUpdateOperationsInput | boolean
+    transferId?: NullableStringFieldUpdateOperationsInput | string | null
+    transferAccountId?: NullableStringFieldUpdateOperationsInput | string | null
+    externalId?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type TransactionUpdateWithoutTransferAccountInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    date?: DateTimeFieldUpdateOperationsInput | Date | string
+    amount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    description?: StringFieldUpdateOperationsInput | string
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
+    suggestedCategoryId?: NullableStringFieldUpdateOperationsInput | string | null
+    merchant?: NullableStringFieldUpdateOperationsInput | string | null
+    isTransfer?: BoolFieldUpdateOperationsInput | boolean
+    transferId?: NullableStringFieldUpdateOperationsInput | string | null
+    externalId?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    category?: CategoryUpdateOneWithoutTransactionsNestedInput
+    account?: AccountUpdateOneWithoutTransactionsNestedInput
+    costObject?: CostObjectUpdateOneWithoutTransactionsNestedInput
+    profile?: ProfileUpdateOneRequiredWithoutTransactionsNestedInput
+    suggestedRule?: CategorizationRuleUpdateOneWithoutSuggestedTransactionsNestedInput
+    splits?: TransactionSplitUpdateManyWithoutParentNestedInput
+  }
+
+  export type TransactionUncheckedUpdateWithoutTransferAccountInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    date?: DateTimeFieldUpdateOperationsInput | Date | string
+    amount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    description?: StringFieldUpdateOperationsInput | string
+    categoryId?: NullableStringFieldUpdateOperationsInput | string | null
+    accountId?: NullableStringFieldUpdateOperationsInput | string | null
+    costObjectId?: NullableStringFieldUpdateOperationsInput | string | null
+    profileId?: StringFieldUpdateOperationsInput | string
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
+    suggestedCategoryId?: NullableStringFieldUpdateOperationsInput | string | null
+    merchant?: NullableStringFieldUpdateOperationsInput | string | null
+    suggestedByRuleId?: NullableStringFieldUpdateOperationsInput | string | null
+    isTransfer?: BoolFieldUpdateOperationsInput | boolean
+    transferId?: NullableStringFieldUpdateOperationsInput | string | null
+    externalId?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    splits?: TransactionSplitUncheckedUpdateManyWithoutParentNestedInput
+  }
+
+  export type TransactionUncheckedUpdateManyWithoutTransferAccountInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    date?: DateTimeFieldUpdateOperationsInput | Date | string
+    amount?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    description?: StringFieldUpdateOperationsInput | string
+    categoryId?: NullableStringFieldUpdateOperationsInput | string | null
+    accountId?: NullableStringFieldUpdateOperationsInput | string | null
+    costObjectId?: NullableStringFieldUpdateOperationsInput | string | null
+    profileId?: StringFieldUpdateOperationsInput | string
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
+    suggestedCategoryId?: NullableStringFieldUpdateOperationsInput | string | null
+    merchant?: NullableStringFieldUpdateOperationsInput | string | null
+    suggestedByRuleId?: NullableStringFieldUpdateOperationsInput | string | null
+    isTransfer?: BoolFieldUpdateOperationsInput | boolean
+    transferId?: NullableStringFieldUpdateOperationsInput | string | null
     externalId?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -28478,6 +29010,9 @@ export namespace Prisma {
     suggestedCategoryId?: string | null
     merchant?: string | null
     suggestedByRuleId?: string | null
+    isTransfer?: boolean
+    transferId?: string | null
+    transferAccountId?: string | null
     externalId?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -28501,6 +29036,8 @@ export namespace Prisma {
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     suggestedCategoryId?: NullableStringFieldUpdateOperationsInput | string | null
     merchant?: NullableStringFieldUpdateOperationsInput | string | null
+    isTransfer?: BoolFieldUpdateOperationsInput | boolean
+    transferId?: NullableStringFieldUpdateOperationsInput | string | null
     externalId?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -28508,6 +29045,7 @@ export namespace Prisma {
     account?: AccountUpdateOneWithoutTransactionsNestedInput
     profile?: ProfileUpdateOneRequiredWithoutTransactionsNestedInput
     suggestedRule?: CategorizationRuleUpdateOneWithoutSuggestedTransactionsNestedInput
+    transferAccount?: AccountUpdateOneWithoutTransferTransactionsNestedInput
     splits?: TransactionSplitUpdateManyWithoutParentNestedInput
   }
 
@@ -28523,6 +29061,9 @@ export namespace Prisma {
     suggestedCategoryId?: NullableStringFieldUpdateOperationsInput | string | null
     merchant?: NullableStringFieldUpdateOperationsInput | string | null
     suggestedByRuleId?: NullableStringFieldUpdateOperationsInput | string | null
+    isTransfer?: BoolFieldUpdateOperationsInput | boolean
+    transferId?: NullableStringFieldUpdateOperationsInput | string | null
+    transferAccountId?: NullableStringFieldUpdateOperationsInput | string | null
     externalId?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -28541,6 +29082,9 @@ export namespace Prisma {
     suggestedCategoryId?: NullableStringFieldUpdateOperationsInput | string | null
     merchant?: NullableStringFieldUpdateOperationsInput | string | null
     suggestedByRuleId?: NullableStringFieldUpdateOperationsInput | string | null
+    isTransfer?: BoolFieldUpdateOperationsInput | boolean
+    transferId?: NullableStringFieldUpdateOperationsInput | string | null
+    transferAccountId?: NullableStringFieldUpdateOperationsInput | string | null
     externalId?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -28628,6 +29172,9 @@ export namespace Prisma {
     notes?: string | null
     suggestedCategoryId?: string | null
     merchant?: string | null
+    isTransfer?: boolean
+    transferId?: string | null
+    transferAccountId?: string | null
     externalId?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -28641,6 +29188,8 @@ export namespace Prisma {
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     suggestedCategoryId?: NullableStringFieldUpdateOperationsInput | string | null
     merchant?: NullableStringFieldUpdateOperationsInput | string | null
+    isTransfer?: BoolFieldUpdateOperationsInput | boolean
+    transferId?: NullableStringFieldUpdateOperationsInput | string | null
     externalId?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -28648,6 +29197,7 @@ export namespace Prisma {
     account?: AccountUpdateOneWithoutTransactionsNestedInput
     costObject?: CostObjectUpdateOneWithoutTransactionsNestedInput
     profile?: ProfileUpdateOneRequiredWithoutTransactionsNestedInput
+    transferAccount?: AccountUpdateOneWithoutTransferTransactionsNestedInput
     splits?: TransactionSplitUpdateManyWithoutParentNestedInput
   }
 
@@ -28663,6 +29213,9 @@ export namespace Prisma {
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     suggestedCategoryId?: NullableStringFieldUpdateOperationsInput | string | null
     merchant?: NullableStringFieldUpdateOperationsInput | string | null
+    isTransfer?: BoolFieldUpdateOperationsInput | boolean
+    transferId?: NullableStringFieldUpdateOperationsInput | string | null
+    transferAccountId?: NullableStringFieldUpdateOperationsInput | string | null
     externalId?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -28681,6 +29234,9 @@ export namespace Prisma {
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     suggestedCategoryId?: NullableStringFieldUpdateOperationsInput | string | null
     merchant?: NullableStringFieldUpdateOperationsInput | string | null
+    isTransfer?: BoolFieldUpdateOperationsInput | boolean
+    transferId?: NullableStringFieldUpdateOperationsInput | string | null
+    transferAccountId?: NullableStringFieldUpdateOperationsInput | string | null
     externalId?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -28741,6 +29297,9 @@ export namespace Prisma {
     suggestedCategoryId?: string | null
     merchant?: string | null
     suggestedByRuleId?: string | null
+    isTransfer?: boolean
+    transferId?: string | null
+    transferAccountId?: string | null
     externalId?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -28892,6 +29451,7 @@ export namespace Prisma {
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     bankConnection?: BankConnectionUpdateOneWithoutAccountsNestedInput
     transactions?: TransactionUpdateManyWithoutAccountNestedInput
+    transferTransactions?: TransactionUpdateManyWithoutTransferAccountNestedInput
     monthlyBalances?: MonthlyBalanceUpdateManyWithoutAccountNestedInput
     accountBalances?: AccountBalanceUpdateManyWithoutAccountNestedInput
   }
@@ -28907,6 +29467,7 @@ export namespace Prisma {
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     transactions?: TransactionUncheckedUpdateManyWithoutAccountNestedInput
+    transferTransactions?: TransactionUncheckedUpdateManyWithoutTransferAccountNestedInput
     monthlyBalances?: MonthlyBalanceUncheckedUpdateManyWithoutAccountNestedInput
     accountBalances?: AccountBalanceUncheckedUpdateManyWithoutAccountNestedInput
   }
@@ -28962,6 +29523,8 @@ export namespace Prisma {
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     suggestedCategoryId?: NullableStringFieldUpdateOperationsInput | string | null
     merchant?: NullableStringFieldUpdateOperationsInput | string | null
+    isTransfer?: BoolFieldUpdateOperationsInput | boolean
+    transferId?: NullableStringFieldUpdateOperationsInput | string | null
     externalId?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -28969,6 +29532,7 @@ export namespace Prisma {
     account?: AccountUpdateOneWithoutTransactionsNestedInput
     costObject?: CostObjectUpdateOneWithoutTransactionsNestedInput
     suggestedRule?: CategorizationRuleUpdateOneWithoutSuggestedTransactionsNestedInput
+    transferAccount?: AccountUpdateOneWithoutTransferTransactionsNestedInput
     splits?: TransactionSplitUpdateManyWithoutParentNestedInput
   }
 
@@ -28984,6 +29548,9 @@ export namespace Prisma {
     suggestedCategoryId?: NullableStringFieldUpdateOperationsInput | string | null
     merchant?: NullableStringFieldUpdateOperationsInput | string | null
     suggestedByRuleId?: NullableStringFieldUpdateOperationsInput | string | null
+    isTransfer?: BoolFieldUpdateOperationsInput | boolean
+    transferId?: NullableStringFieldUpdateOperationsInput | string | null
+    transferAccountId?: NullableStringFieldUpdateOperationsInput | string | null
     externalId?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -29002,6 +29569,9 @@ export namespace Prisma {
     suggestedCategoryId?: NullableStringFieldUpdateOperationsInput | string | null
     merchant?: NullableStringFieldUpdateOperationsInput | string | null
     suggestedByRuleId?: NullableStringFieldUpdateOperationsInput | string | null
+    isTransfer?: BoolFieldUpdateOperationsInput | boolean
+    transferId?: NullableStringFieldUpdateOperationsInput | string | null
+    transferAccountId?: NullableStringFieldUpdateOperationsInput | string | null
     externalId?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -29205,6 +29775,7 @@ export namespace Prisma {
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     profile?: ProfileUpdateOneRequiredWithoutAccountsNestedInput
     transactions?: TransactionUpdateManyWithoutAccountNestedInput
+    transferTransactions?: TransactionUpdateManyWithoutTransferAccountNestedInput
     monthlyBalances?: MonthlyBalanceUpdateManyWithoutAccountNestedInput
     accountBalances?: AccountBalanceUpdateManyWithoutAccountNestedInput
   }
@@ -29220,6 +29791,7 @@ export namespace Prisma {
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     transactions?: TransactionUncheckedUpdateManyWithoutAccountNestedInput
+    transferTransactions?: TransactionUncheckedUpdateManyWithoutTransferAccountNestedInput
     monthlyBalances?: MonthlyBalanceUncheckedUpdateManyWithoutAccountNestedInput
     accountBalances?: AccountBalanceUncheckedUpdateManyWithoutAccountNestedInput
   }

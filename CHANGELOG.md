@@ -1,5 +1,20 @@
 # Changelog
 
+## v1.21.0 - 2026-09-09
+
+Introduces first-class account transfers with two-legged matching across accounts.
+
+- **Account Transfers**: Record money movements between accounts (e.g. Checking → Savings) as linked two-legged transfers sharing a transfer ID, keeping balances accurate across both accounts.
+- **Double-Counting Protection**: Transfers are excluded from expense totals, income totals, category breakdowns, Sankey diagrams, and cost object reports, ensuring money moving between accounts is never misclassified as household spend or income.
+- **Paired Editing & Deletion**: Updating the amount or date on either leg automatically updates the counterpart leg in the other account. Deleting one leg cleans up both legs with a confirmation prompt.
+- **Automatic & Manual Matching**: Open Banking bank sync automatically pairs opposite matching transactions across accounts within ±3 days. Transactions can also be manually linked or unlinked at any time.
+- **Desktop & Mobile UI**:
+  - Add Transaction modal and mobile sheet include a switcher for Expense, Income, and Transfer with source and destination account selectors.
+  - Transactions display transfer badges and counterpart account names (`🔄 Transfer to {Account}` / `🔄 Transfer from {Account}`) instead of category selectors.
+  - Expandable rows and mobile sheets offer 1-tap transfer unlinking and counterpart account details.
+  - Filter by Type (All / Expenses / Income / Transfers) in both desktop and mobile views.
+  - Full English and Spanish localization support.
+
 ## v1.20.2 - 2026-09-07
 
 Fixes sorting on the Goals screen, which ordered amounts as text.

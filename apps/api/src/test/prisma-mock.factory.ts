@@ -134,8 +134,14 @@ export function createPrismaMock() {
   };
 
   prismaMock.$transaction.mockImplementation(
-    (callback: (tx: typeof prismaMock) => Promise<unknown>) => {
-      return callback(prismaMock);
+    (input: ((tx: typeof prismaMock) => Promise<unknown>) | Promise<unknown>[]) => {
+      if (Array.isArray(input)) {
+        return Promise.all(input);
+      }
+      if (typeof input === 'function') {
+        return input(prismaMock);
+      }
+      return Promise.resolve(input);
     },
   );
 

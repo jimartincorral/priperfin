@@ -166,6 +166,9 @@ exports.Prisma.TransactionScalarFieldEnum = {
   suggestedCategoryId: 'suggestedCategoryId',
   merchant: 'merchant',
   suggestedByRuleId: 'suggestedByRuleId',
+  isTransfer: 'isTransfer',
+  transferId: 'transferId',
+  transferAccountId: 'transferAccountId',
   externalId: 'externalId',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'

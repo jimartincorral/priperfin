@@ -45,4 +45,8 @@ export class GetTransactionsDto {
   @IsOptional()
   @IsString()
   accountId?: string;
+
+  @IsOptional()
+  @IsString()
+  type?: string;
 }
