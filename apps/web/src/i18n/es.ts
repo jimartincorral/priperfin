@@ -433,6 +433,8 @@ export const es = {
         target_months: 'Meses para Financiar',
         evergreen: 'Perenne',
         building: 'Construyendo...',
+        edit_total_savings: 'Editar ahorro total',
+        edit_total_savings_hint: 'El bote completo que tienes ahorrado. Los objetivos se asignan desde él.',
         status: {
             on_track: 'En Progreso',
             at_risk: 'En Riesgo',
