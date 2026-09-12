@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.21.1 - 2026-09-12
+
+Closes two mobile-only gaps where the phone layout could not reach something the desktop layout could.
+
+- **Bank sync on mobile**: the *Sync Bank* action existed in the desktop toolbar and in the mobile empty state only, so once a single transaction was listed for the period there was no way to trigger a sync from a phone. It now sits in the mobile Expenses title row beside search and filter, disabled and spinning while a sync is in flight.
+- **Editable savings pot on mobile**: the Goals savings pot is an inline field in the desktop strip, but the mobile *Saved so far* tile rendered it as a read-only figure. The tile is now a tap target that opens a bottom sheet editor, matching the sheets the rest of the mobile Goals screen already uses. Unassigned recalculates on save, and both layouts write through one shared path.
+
 ## v1.21.0 - 2026-09-09
 
 Introduces first-class account transfers with two-legged matching across accounts.
