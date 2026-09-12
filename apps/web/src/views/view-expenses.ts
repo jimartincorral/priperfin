@@ -2354,6 +2354,16 @@ Tables: ${result.tables?.join(', ')}`;
             title="${i18n.t('filters.search')}">
             ${icon('search', 24)}
           </button>
+          <!-- Same action as the desktop toolbar's sync button; without it the
+               mobile layout could only reach a sync from the empty state. -->
+          <button
+            class="m-icon-btn ${this.bankSyncing ? 'spinning' : ''}"
+            ?disabled="${this.bankSyncing}"
+            @click="${this.handleBankSync}"
+            title="${i18n.t('bank_sync.sync_all')}"
+            aria-label="${i18n.t('bank_sync.sync_all')}">
+            ${icon('sync', 24)}
+          </button>
           <button class="m-icon-btn" @click="${() => { this.showFilterSheet = true; }}"
             title="${i18n.t('mobile.filters')}">
             ${icon('filter_list', 24)}

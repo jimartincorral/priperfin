@@ -433,6 +433,8 @@ export const en = {
         target_months: 'Target Months',
         evergreen: 'Evergreen',
         building: 'Building...',
+        edit_total_savings: 'Edit total savings',
+        edit_total_savings_hint: 'The full pot you have saved. Goals are assigned out of it.',
         status: {
             on_track: 'On Track',
             at_risk: 'At Risk',
