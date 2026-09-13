@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.22.0 - 2026-09-13
+
+Adds OFX/QFX bank statement import alongside CSV.
+
+- The import wizard now accepts `.ofx`/`.qfx` files in addition to CSV, parsing both SGML-style (OFX 1.x) and XML-style (OFX 2.x) exports client-side, with charset-aware decoding for non-UTF-8 bank files.
+- OFX files skip the column-mapping step entirely, going straight to the review screen, since OFX fields are already unambiguous.
+- Each transaction's bank-assigned FITID is used for duplicate detection, reusing the same review/merge flow as CSV imports.
+
 ## v1.21.0 - 2026-09-09
 
 Introduces first-class account transfers with two-legged matching across accounts.
