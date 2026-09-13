@@ -65,11 +65,13 @@ export interface PillOptions {
   label: unknown;
   title?: string;
   onClick?: () => void;
+  /** 22px instead of 32px, for a pill sharing a line inside a side panel. */
+  compact?: boolean;
 }
 
 /** 32px status pill used in the summary strips. */
 export function statusPill(opts: PillOptions): TemplateResult {
-  const kind = opts.kind ?? 'neutral';
+  const kind = `${opts.kind ?? 'neutral'}${opts.compact ? ' compact' : ''}`;
   const body = html`
     ${opts.glyph ? icon(opts.glyph, 16) : nothing}
     <span>${opts.label}</span>
@@ -132,6 +134,22 @@ export interface RankedBarOptions {
   thick?: boolean;
   onClick?: () => void;
   title?: string;
+  /** Paints the fill and the amount in the over-budget treatment. */
+  over?: boolean;
+  /**
+   * Budget marker, 0-100, for a bar whose track spans the *spend* rather than
+   * the budget: everything right of the tick is the overspend, drawn to scale.
+   */
+  tickPercent?: number;
+  /** Left half of a caption line under the bar, e.g. "of €150 budget". */
+  hint?: unknown;
+  /** Right half of that caption line, e.g. "over by €12 · 108%". */
+  caption?: unknown;
+  /** Colour for `caption`; `link` also makes it a button (see `onCaptionClick`). */
+  captionTone?: 'muted' | 'error' | 'link';
+  onCaptionClick?: () => void;
+  /** Pads the row and rules it off from the next one. */
+  divided?: boolean;
 }
 
 /**
@@ -141,24 +159,40 @@ export interface RankedBarOptions {
  */
 export function rankedBar(opts: RankedBarOptions): TemplateResult {
   const width = Math.max(0, Math.min(100, opts.percent));
+  const tick = opts.tickPercent === undefined
+    ? null
+    : Math.max(0, Math.min(100, opts.tickPercent));
+  const caption = opts.caption;
+  const tone = opts.captionTone ?? 'muted';
   return html`
     <div
-      class="d-ranked ${opts.onClick ? 'clickable' : ''}"
+      class="d-ranked ${opts.onClick ? 'clickable' : ''} ${opts.divided ? 'divided' : ''}"
       title="${opts.title ?? ''}"
       @click="${opts.onClick ?? nothing}">
       <div class="d-ranked-head">
         ${opts.emoji ? html`<span class="d-emoji">${opts.emoji}</span>` : nothing}
         <span class="d-ranked-name">${opts.name}</span>
-        <span class="d-ranked-amount">${opts.amount}</span>
+        <span class="d-ranked-amount ${opts.over ? 'over' : ''}">${opts.amount}</span>
       </div>
       <div class="d-ranked-foot">
-        <div class="d-bar ${opts.thick ? 'thick' : ''}">
+        <div class="d-bar ${opts.thick ? 'thick' : ''} ${tick === null ? '' : 'marked'}">
           <div
-            class="d-bar-fill"
-            style="width: ${width}%${opts.color ? `; background: ${opts.color}` : ''}"></div>
+            class="d-bar-fill ${opts.over ? 'over' : ''}"
+            style="width: ${width}%${opts.color && !opts.over ? `; background: ${opts.color}` : ''}"></div>
+          ${tick === null ? nothing : html`<div class="d-bar-tick" style="left: ${tick}%"></div>`}
         </div>
         ${opts.share !== undefined ? html`<span class="d-ranked-share">${opts.share}</span>` : nothing}
       </div>
+      ${opts.hint === undefined && caption === undefined ? nothing : html`
+        <div class="d-ranked-caption">
+          <span class="d-panel-hint">${opts.hint ?? ''}</span>
+          ${caption === undefined
+            ? nothing
+            : tone === 'link'
+              ? html`<button class="d-link small" @click="${opts.onCaptionClick ?? nothing}">${caption}</button>`
+              : html`<span class="d-ranked-status ${tone}">${caption}</span>`}
+        </div>
+      `}
     </div>
   `;
 }
@@ -711,6 +745,12 @@ export const desktopUI = css`
     font: 500 12px/16px 'Roboto', sans-serif;
   }
   .d-pill.delta.down { background: var(--pf-status-ok-bg); color: var(--pf-status-ok-text); }
+  .d-pill.compact {
+    height: 22px;
+    padding: 0 10px;
+    border-radius: 11px;
+    font: 500 11px/14px 'Roboto', sans-serif;
+  }
 
   /* Small pills inside rows and cards. */
   .d-tag {
@@ -796,6 +836,20 @@ export const desktopUI = css`
   .d-panel-body.stack { display: flex; flex-direction: column; gap: 12px; }
   /* A scrolling column must not squeeze its rows to fit. */
   .d-panel-body.stack > * { flex-shrink: 0; }
+  /* A summary line ruled off under a panel's heading block. Wraps rather than
+     squeezing its trailing pill, which no side column has room for. */
+  .d-panel-strip {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    row-gap: 6px;
+    flex-shrink: 0;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--md-sys-color-surface-container-high);
+  }
+  .d-panel-strip .d-panel-hint { text-wrap: pretty; }
   .d-panel-foot {
     display: flex;
     align-items: baseline;
@@ -848,6 +902,9 @@ export const desktopUI = css`
   }
   .d-bar.thick { height: 8px; border-radius: 4px; }
   .d-bar.detail { height: 10px; border-radius: 5px; overflow: visible; }
+  /* A tick sitting proud of the track would be clipped by the default hidden overflow. */
+  .d-bar.marked { overflow: visible; }
+  .d-bar.marked .d-bar-fill { border-radius: 4px; }
   .d-bar-fill {
     height: 100%;
     border-radius: inherit;
@@ -867,6 +924,13 @@ export const desktopUI = css`
 
   .d-ranked { display: flex; flex-direction: column; gap: 5px; }
   .d-ranked.clickable { cursor: pointer; }
+  .d-ranked.divided {
+    padding: 10px 0;
+    border-bottom: 1px solid var(--md-sys-color-surface-container-high);
+  }
+  .d-ranked.divided:last-child { border-bottom: none; }
+  /* Divided rows carry their own padding, so the stack's own gap gets out of the way. */
+  .d-panel-body.stack.divided { gap: 2px; }
   .d-ranked-head { display: flex; align-items: center; gap: 8px; }
   .d-ranked-name {
     flex: 1;
@@ -891,6 +955,26 @@ export const desktopUI = css`
     color: var(--md-sys-color-on-surface-variant);
     flex-shrink: 0;
   }
+  .d-ranked-amount.over { color: var(--md-sys-color-error); }
+  .d-ranked-caption {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .d-ranked-caption .d-panel-hint {
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .d-ranked-status {
+    flex-shrink: 0;
+    font: 500 12px/16px 'Roboto', sans-serif;
+    color: var(--md-sys-color-on-surface-variant);
+    white-space: nowrap;
+  }
+  .d-ranked-status.error { color: var(--md-sys-color-error); }
 
   /* ---- tables and rows ---- */
 

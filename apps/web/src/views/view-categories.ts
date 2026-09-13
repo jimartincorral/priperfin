@@ -492,6 +492,9 @@ export class ViewCategories extends LitElement {
     super.connectedCallback();
     this.unwatchViewport = watchMobileViewport(this);
     this.unwatchWidth = watchViewportWidth(this);
+    // Arriving from another view's "Set budget" — land on that category, not the whole list.
+    const query = new URLSearchParams(window.location.search).get('q');
+    if (query) this.categoryQuery = query;
     await this.loadData();
   }
 
