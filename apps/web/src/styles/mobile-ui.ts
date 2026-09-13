@@ -257,6 +257,13 @@ export const mobileUI = css`
   }
   .m-icon-btn:active { background: var(--md-sys-color-surface-container-highest); }
   .m-icon-btn.danger { color: var(--md-sys-color-error); }
+  .m-icon-btn:disabled { opacity: 0.4; cursor: default; }
+  .m-icon-btn:disabled:active { background: transparent; }
+  .m-icon-btn.spinning .m-icon { animation: m-spin 1s linear infinite; }
+  @keyframes m-spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) {
+    .m-icon-btn.spinning .m-icon { animation: none; }
+  }
 
   .m-btn {
     height: 48px;

@@ -68,6 +68,9 @@ export class ViewGoals extends LitElement {
   @state() private distributeScope: 'unassigned' | 'all' = 'unassigned';
   @state() showContributeSheet = false;
   @state() contributeAmount = '';
+  /** Mobile editor for the savings pot; the desktop strip edits it inline. */
+  @state() showTotalSavingsSheet = false;
+  @state() totalSavingsDraft = '';
   @state() goalToDelete: string | null = null;
   /** Inline validation messages for the mobile goal form, keyed by field. */
   @state() formErrors: Record<string, string> = {};
@@ -524,6 +527,24 @@ export class ViewGoals extends LitElement {
       grid-template-columns: 1fr 1fr;
       gap: 12px;
     }
+
+    /* A tile that is also a tap target: strip the button chrome, keep the tile.
+       Explicit column flow - a <button> centres its children otherwise, which
+       would put the label beside the figure instead of above it. */
+    .g-tile-btn {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      justify-content: center;
+      border: none;
+      width: 100%;
+      text-align: left;
+      font: inherit;
+      color: inherit;
+      cursor: pointer;
+    }
+    .g-tile-btn:active { background: var(--md-sys-color-surface-container-high); }
+    .g-tile-btn .m-icon { color: var(--md-sys-color-on-surface-variant); }
 
     .g-cards {
       display: flex;
@@ -984,6 +1005,11 @@ export class ViewGoals extends LitElement {
 
   async handleTotalSavingsChange(e: Event) {
     const val = parseFloat((e.target as HTMLInputElement).value) || 0;
+    await this.setTotalSavings(val);
+  }
+
+  /** Single write path for the savings pot, shared by both layouts. */
+  private async setTotalSavings(val: number) {
     this.totalSavings = val;
     localStorage.setItem('priperfin_total_savings', val.toString());
     this.calculateUnassigned();
@@ -995,6 +1021,16 @@ export class ViewGoals extends LitElement {
     } catch (err) {
       console.error('Failed to persist total savings setting', err);
     }
+  }
+
+  private openTotalSavingsSheet() {
+    this.totalSavingsDraft = this.totalSavings ? String(this.totalSavings) : '';
+    this.showTotalSavingsSheet = true;
+  }
+
+  private async saveTotalSavings(val: number) {
+    this.showTotalSavingsSheet = false;
+    await this.setTotalSavings(val);
   }
 
   // --- Inline Editing Logic ---
@@ -1514,10 +1550,13 @@ export class ViewGoals extends LitElement {
         </div>
 
         <div class="g-tiles">
-          <div class="m-tile">
+          <button class="m-tile g-tile-btn" @click="${() => this.openTotalSavingsSheet()}">
             <div class="m-tile-label">${i18n.t('mobile.saved_so_far')}</div>
-            <div class="m-tile-value">${this.money(this.totalSavings)}</div>
-          </div>
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <span class="m-tile-value">${this.money(this.totalSavings)}</span>
+              ${icon('edit', 16)}
+            </div>
+          </button>
           <div class="m-tile">
             <div class="m-tile-label">${i18n.t('mobile.unassigned')}</div>
             <div style="display: flex; align-items: baseline; gap: 8px;">
@@ -1627,6 +1666,7 @@ export class ViewGoals extends LitElement {
         </div>
 
         ${this.renderDistributeSheet()}
+        ${this.renderTotalSavingsSheet()}
         ${snackbar(this.snack)}
       </div>
     `;
@@ -2043,6 +2083,44 @@ export class ViewGoals extends LitElement {
             </button>
           `)}
         </div>
+      `,
+    });
+  }
+
+  private renderTotalSavingsSheet() {
+    const parsed = parseFloat(this.totalSavingsDraft);
+    // An empty field is a deliberate "zero it out", so allow it; anything
+    // else has to parse, and a negative pot is not a thing.
+    const blank = this.totalSavingsDraft.trim() === '';
+    const value = blank ? 0 : parsed;
+    const valid = blank || (Number.isFinite(parsed) && parsed >= 0);
+
+    return bottomSheet({
+      open: this.showTotalSavingsSheet,
+      onDismiss: () => { this.showTotalSavingsSheet = false; },
+      content: html`
+        <div class="m-sheet-title">${i18n.t('goals.edit_total_savings')}</div>
+        <div class="m-subtitle">${i18n.t('goals.edit_total_savings_hint')}</div>
+        <div class="g-prefix-field" style="background: var(--md-sys-color-surface-container)">
+          <span>${this.symbol}</span>
+          <input
+            type="number"
+            inputmode="decimal"
+            step="0.01"
+            min="0"
+            placeholder="0.00"
+            .value="${this.totalSavingsDraft}"
+            @input="${(e: any) => { this.totalSavingsDraft = e.target.value; }}"
+            @keydown="${(e: KeyboardEvent) => {
+              if (e.key === 'Enter' && valid) this.saveTotalSavings(value);
+            }}" />
+        </div>
+        <button
+          class="m-btn block"
+          ?disabled="${!valid}"
+          @click="${() => this.saveTotalSavings(value)}">
+          ${i18n.t('common.save')}
+        </button>
       `,
     });
   }
