@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.23.0 - 2026-09-13
+
+Adds budget comparison to the "Where it went" panel on the desktop Expenses screen.
+
+- Each category row now shows its spend against that category's monthly budget, with over-budget rows called out in red, alongside a panel summary of total budgeted spend and a count of the categories over.
+- A **Categories / Subcategories** toggle switches the grouping level, so a parent that looks fine in aggregate can be drilled into — a group may sit inside its budget while one of its subcategories is well over. The choice is remembered per device.
+- Within budget, the bar fills to spend against budget. Over budget, the track spans the spend and a tick marks the budget line, so the overspend is drawn to scale rather than a bar pinned at full width.
+- Budgets are monthly amounts, so the comparison applies to Month periods directly and Year periods scaled by 12. Custom and All time keep the previous share-of-spend bars and say why the comparison is unavailable.
+- Categories with no budget offer a **Set budget** link that opens Settings → Categories with the search already narrowed to that category.
+
 ## v1.22.0 - 2026-09-13
 
 Adds OFX/QFX bank statement import alongside CSV.
