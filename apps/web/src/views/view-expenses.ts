@@ -261,6 +261,8 @@ export class ViewExpenses extends LitElement {
   @state() private catCellFor: string | null = null;
   /** 44px rows comfortable, 36px compact. Remembered per device. */
   @state() private density: 'comfortable' | 'compact' = 'comfortable';
+  /** Grouping level of the "Where it went" panel. Remembered per device. */
+  @state() private budgetGroupLevel: 'parent' | 'sub' = 'parent';
   /** Drives the responsive drop of the side column; kept in sync on resize. */
   @state() viewportWidth = window.innerWidth;
 
@@ -1431,6 +1433,11 @@ export class ViewExpenses extends LitElement {
     const storedDensity = localStorage.getItem('priperfin_row_density');
     if (storedDensity === 'compact' || storedDensity === 'comfortable') {
       this.density = storedDensity;
+    }
+
+    const storedGroupLevel = localStorage.getItem('priperfin_budget_group_level');
+    if (storedGroupLevel === 'parent' || storedGroupLevel === 'sub') {
+      this.budgetGroupLevel = storedGroupLevel;
     }
 
     this.loadFiltersFromURL();
@@ -3648,27 +3655,97 @@ Tables: ${result.tables?.join(', ')}`;
     return `${value < 0 ? '−' : '+'}${this.money(value)}`;
   }
 
-  /** Spend per category across the filtered set, ranked. Income is excluded. */
-  private get filteredCategoryTotals() {
-    const buckets = new Map<string, { icon: string; name: string; total: number; unknown: boolean }>();
+  /**
+   * Spend per category id across the filtered set, before any roll-up. Income
+   * and transfers are excluded; rows pointing nowhere land under `uncategorized`.
+   */
+  private get filteredSpendByCategory(): Map<string, number> {
+    const spend = new Map<string, number>();
+    const known = new Set(this.categories.map(c => c.id));
 
     this.filteredTransactions.forEach(tx => {
       if (tx.isTransfer) return;
       const amount = Number(tx.amount) || 0;
       if (amount >= 0) return;
-      const category = this.categories.find(c => c.id === tx.categoryId);
-      const key = category?.id ?? 'uncategorized';
-      const bucket = buckets.get(key) ?? {
-        icon: category?.icon || '',
-        name: category?.name || i18n.t('common.uncategorized'),
-        total: 0,
-        unknown: !category,
-      };
-      bucket.total += Math.abs(amount);
-      buckets.set(key, bucket);
+      const key = known.has(tx.categoryId) ? tx.categoryId : 'uncategorized';
+      spend.set(key, (spend.get(key) ?? 0) + Math.abs(amount));
     });
 
-    return [...buckets.values()].sort((a, b) => b.total - a.total);
+    return spend;
+  }
+
+  /**
+   * Budgets are monthly amounts, so they only line up with the filtered set in
+   * the periods that map onto a whole number of months. Mirrors the guard
+   * `view-reports.ts` puts on its own budget panel.
+   */
+  private get canCompareBudget() {
+    return this.dateFilterMode === 'month' || this.dateFilterMode === 'year';
+  }
+
+  /**
+   * Spend across the filtered set at the panel's grouping level, ranked, each
+   * row measured against its budget where there is one to measure against.
+   */
+  private get budgetPanel() {
+    const spend = this.filteredSpendByCategory;
+    const bySub = this.budgetGroupLevel === 'sub';
+    // A year of a monthly budget, as `getBudgetItems()` scales it in Reports.
+    const factor = this.dateFilterMode === 'year' ? 12 : 1;
+
+    const childrenOf = (id: string) => this.categories.filter(c => c.parentId === id);
+    const scope = bySub
+      // Leaves, plus any group holding spend of its own — that spend belongs to
+      // no child and would otherwise drop out of the panel entirely.
+      ? this.categories.filter(c => childrenOf(c.id).length === 0 || (spend.get(c.id) ?? 0) > 0)
+      : this.categories.filter(c => !c.parentId);
+
+    const rows = scope
+      .map(cat => {
+        const isGroup = childrenOf(cat.id).length > 0;
+        // A group rolls up its children's spend; its own budget caps the lot.
+        const spent = bySub
+          ? spend.get(cat.id) ?? 0
+          : [cat, ...childrenOf(cat.id)].reduce((sum, c) => sum + (spend.get(c.id) ?? 0), 0);
+        const monthly = Number(cat.budget) || 0;
+        // A group's budget covers the whole family, so it means nothing against
+        // the sliver of spend booked directly on the group — and counting it
+        // here would double up with the children's own budgets.
+        const budgeted = this.canCompareBudget && monthly > 0 && !(bySub && isGroup);
+        return {
+          id: cat.id,
+          icon: cat.icon || '',
+          name: cat.name,
+          spent,
+          budget: budgeted ? monthly * factor : null,
+          groupOwnSpend: bySub && isGroup,
+          unknown: false,
+        };
+      })
+      .filter(row => row.spent > 0);
+
+    const uncategorized = spend.get('uncategorized') ?? 0;
+    if (uncategorized > 0) {
+      rows.push({
+        id: 'uncategorized',
+        icon: '',
+        name: i18n.t('common.uncategorized'),
+        spent: uncategorized,
+        budget: null,
+        groupOwnSpend: false,
+        unknown: true,
+      });
+    }
+
+    rows.sort((a, b) => b.spent - a.spent);
+
+    return {
+      rows: rows.map(row => ({ ...row, over: row.budget !== null && row.spent > row.budget })),
+      sum: rows.reduce((total, row) => total + row.spent, 0),
+      budgetedSpent: rows.reduce((total, row) => total + (row.budget === null ? 0 : row.spent), 0),
+      budgetTotal: rows.reduce((total, row) => total + (row.budget ?? 0), 0),
+      overCount: rows.filter(row => row.budget !== null && row.spent > row.budget).length,
+    };
   }
 
   /** Rows a rule already matched, and how many distinct rules that involves. */
@@ -4836,9 +4913,17 @@ Tables: ${result.tables?.join(', ')}`;
   }
 
   private renderDesktopSide() {
-    const totals = this.filteredCategoryTotals;
-    const sum = totals.reduce((acc, entry) => acc + entry.total, 0);
+    const { rows, sum, budgetedSpent, budgetTotal, overCount } = this.budgetPanel;
+    const compare = this.canCompareBudget;
+    const bySub = this.budgetGroupLevel === 'sub';
     const suggestions = this.pendingSuggestions;
+
+    const acrossKey = bySub
+      ? (rows.length === 1 ? 'desktop.across_subcategory_one' : 'desktop.across_subcategories')
+      : (rows.length === 1 ? 'desktop.across_category_one' : 'desktop.across_categories');
+    const overKey = bySub
+      ? (overCount === 1 ? 'desktop.over_budget_subcategory_one' : 'desktop.over_budget_subcategories')
+      : (overCount === 1 ? 'desktop.over_budget_category_one' : 'desktop.over_budget_categories');
 
     return html`
       <div style="display: flex; flex-direction: column; gap: 12px; min-height: 0">
@@ -4849,28 +4934,55 @@ Tables: ${result.tables?.join(', ')}`;
             <span class="d-panel-caption">${i18n.t('desktop.filtered_set')}</span>
           </div>
           <div class="d-panel-caption">
-            ${i18n.t(
-              totals.length === 1 ? 'desktop.across_category_one' : 'desktop.across_categories',
-              { amount: this.money(sum), count: totals.length })}
+            ${i18n.t(acrossKey, { amount: this.money(sum), count: rows.length })}
           </div>
 
-          <div class="d-panel-body stack">
-            ${totals.length === 0
+          <div style="margin-top: 10px">
+            ${segmented<'parent' | 'sub'>(
+              [
+                { value: 'parent', label: i18n.t('desktop.group_categories') },
+                { value: 'sub', label: i18n.t('desktop.group_subcategories') },
+              ],
+              this.budgetGroupLevel,
+              (level) => {
+                this.budgetGroupLevel = level;
+                localStorage.setItem('priperfin_budget_group_level', level);
+              },
+              true,
+            )}
+          </div>
+
+          ${!compare
+            ? html`
+              <div class="d-panel-strip">
+                <span class="d-panel-hint">${i18n.t('desktop.budget_hint_period')}</span>
+              </div>
+            `
+            : budgetTotal > 0
+              ? html`
+                <div class="d-panel-strip">
+                  <span class="d-panel-caption">
+                    ${i18n.t('desktop.budgeted_of', {
+                      spent: this.money(budgetedSpent),
+                      budget: this.money(budgetTotal),
+                    })}
+                  </span>
+                  <div class="d-spacer"></div>
+                  ${overCount > 0
+                    ? statusPill({
+                        kind: 'warning',
+                        compact: true,
+                        label: i18n.t(overKey, { count: overCount }),
+                      })
+                    : nothing}
+                </div>
+              `
+              : nothing}
+
+          <div class="d-panel-body stack ${compare ? 'divided' : ''}">
+            ${rows.length === 0
               ? html`<div class="d-panel-caption">${i18n.t('reports.no_data')}</div>`
-              : totals.map(entry => {
-                  // One figure drives both the bar and its label.
-                  const share = sum > 0 ? (entry.total / sum) * 100 : 0;
-                  return rankedBar({
-                    emoji: entry.icon,
-                    name: entry.name,
-                    amount: this.money(entry.total),
-                    percent: share,
-                    share: `${Math.round(share)}%`,
-                    color: entry.unknown
-                      ? 'var(--md-sys-color-outline)'
-                      : 'var(--md-sys-color-primary)',
-                  });
-                })}
+              : rows.map(row => this.renderSideRow(row, sum, compare))}
           </div>
         </div>
 
@@ -4897,9 +5009,89 @@ Tables: ${result.tables?.join(', ')}`;
     `;
   }
 
+  /**
+   * One row of the "Where it went" panel. Without a budget to measure against
+   * the bar keeps its original meaning — this category's share of the filtered
+   * spend — so the panel stays readable in the periods budgets cannot reach.
+   */
+  private renderSideRow(
+    row: {
+      id: string;
+      icon: string;
+      name: string;
+      spent: number;
+      budget: number | null;
+      over: boolean;
+      groupOwnSpend: boolean;
+      unknown: boolean;
+    },
+    sum: number,
+    compare: boolean,
+  ) {
+    // One figure drives both the bar and its label.
+    const share = sum > 0 ? (row.spent / sum) * 100 : 0;
+    const color = row.unknown
+      ? 'var(--md-sys-color-outline)'
+      : 'var(--md-sys-color-primary)';
+    const base = {
+      emoji: row.icon,
+      name: row.name,
+      amount: this.money(row.spent),
+      color,
+    };
+
+    if (!compare) {
+      return rankedBar({ ...base, percent: share, share: `${Math.round(share)}%` });
+    }
+
+    if (row.budget === null) {
+      return rankedBar({
+        ...base,
+        percent: share,
+        thick: true,
+        divided: true,
+        hint: row.groupOwnSpend
+          ? i18n.t('desktop.group_own_spend')
+          : i18n.t('desktop.no_budget_set'),
+        // Nothing to set a budget on: the uncategorised bucket is not a
+        // category, and a group already has one — just not at this level.
+        caption: row.unknown || row.groupOwnSpend ? undefined : i18n.t('desktop.set_budget'),
+        captionTone: 'link',
+        onCaptionClick: () => this.navigateToCategoryBudget(row.name),
+      });
+    }
+
+    const used = row.budget > 0 ? Math.round((row.spent / row.budget) * 100) : 0;
+    const diff = Math.abs(row.budget - row.spent);
+
+    return rankedBar({
+      ...base,
+      // Over budget the track spans the *spend*, so the overage past the tick is
+      // drawn to scale instead of a bar pinned at 100%.
+      percent: row.over ? 100 : (row.budget > 0 ? (row.spent / row.budget) * 100 : 0),
+      tickPercent: row.over ? (row.budget / row.spent) * 100 : undefined,
+      over: row.over,
+      thick: true,
+      divided: true,
+      hint: i18n.t('desktop.of_amount_budget', { amount: this.money(row.budget) }),
+      caption: `${row.over
+        ? i18n.t('desktop.over_by_short', { amount: this.money(diff) })
+        : i18n.t('mobile.left_over', { amount: this.money(diff) })} · ${used}%`,
+      captionTone: row.over ? 'error' : 'muted',
+    });
+  }
+
   private navigateToRules() {
     const basePath = getAppBasePath(document.baseURI);
     window.location.href = new URL(`${basePath}rules`, window.location.origin).href;
+  }
+
+  /** Opens Categories with the search seeded, so the row to budget is right there. */
+  private navigateToCategoryBudget(name: string) {
+    const basePath = getAppBasePath(document.baseURI);
+    const url = new URL(`${basePath}categories`, window.location.origin);
+    url.searchParams.set('q', name);
+    window.location.href = url.href;
   }
 
   /** The manual add form, as a dialog rather than a card that shoves the table down. */

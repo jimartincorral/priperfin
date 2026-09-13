@@ -3,6 +3,7 @@ import { customElement, state, property } from 'lit/decorators.js';
 import Papa from 'papaparse';
 import { i18n } from '../i18n/i18n';
 import { api } from '../api/client';
+import { isOfxFilename, readOfxFile, parseOfxTransactions, extractOfxAccountId } from '../utils/ofx-utils';
 
 // localStorage keys for persisting user preferences
 const STORAGE_KEYS = {
@@ -18,6 +19,8 @@ export class CsvWizard extends LitElement {
     @property({ type: Array }) accounts: any[] = [];
     @state() step = 1; // 1: Upload, 2: Map, 3: Review
     @state() file: File | null = null;
+    @state() fileFormat: 'csv' | 'ofx' = 'csv';
+    @state() ofxAccountHint: string | null = null;
     @state() parsedData: any[] = [];
     @state() headers: string[] = [];
     @state() selectedAccountId: string = '';
@@ -130,12 +133,18 @@ export class CsvWizard extends LitElement {
         const input = e.target as HTMLInputElement;
         if (input.files && input.files[0]) {
             this.file = input.files[0];
+            this.fileFormat = isOfxFilename(this.file.name) ? 'ofx' : 'csv';
             this.parseFile();
         }
     }
 
     parseFile() {
         if (!this.file) return;
+        if (this.fileFormat === 'ofx') {
+            this.parseOfxFile();
+            return;
+        }
+
         this.loading = true;
         this.error = '';
 
@@ -156,6 +165,30 @@ export class CsvWizard extends LitElement {
                 this.loading = false;
             }
         });
+    }
+
+    async parseOfxFile() {
+        if (!this.file) return;
+        this.loading = true;
+        this.error = '';
+
+        try {
+            const text = await readOfxFile(this.file);
+            this.ofxAccountHint = extractOfxAccountId(text);
+            this.processedRows = parseOfxTransactions(text);
+            this.loading = false;
+
+            if (this.processedRows.length === 0) {
+                this.error = i18n.t('expenses.csv_wizard.no_valid_rows');
+                return;
+            }
+
+            // OFX rows are already fully parsed (no column mapping needed) - go straight to review.
+            this.step = 3;
+        } catch (err: any) {
+            this.error = i18n.t('expenses.csv_wizard.failed_to_parse') + ': ' + (err.message || err);
+            this.loading = false;
+        }
     }
 
     autoMap() {
@@ -458,6 +491,8 @@ export class CsvWizard extends LitElement {
     reset() {
         this.step = 1;
         this.file = null;
+        this.fileFormat = 'csv';
+        this.ofxAccountHint = null;
         this.parsedData = [];
         this.headers = [];
         this.mapping = { date: '', amount: '', description: '', notes: '' };
@@ -511,7 +546,7 @@ export class CsvWizard extends LitElement {
               </div>
             ` : ''}
             <p>${i18n.t('expenses.csv_wizard.select_file')}</p>
-            <input type="file" accept=".csv" @change="${this.handleFile}" />
+            <input type="file" accept=".csv,.ofx,.qfx" @change="${this.handleFile}" />
             ${this.loading ? html`<p>${i18n.t('expenses.csv_wizard.parsing')}</p>` : ''}
         </div>
         <div class="actions">
@@ -594,7 +629,12 @@ export class CsvWizard extends LitElement {
         if (this.step === 3) {
             return html`
         <p>${i18n.t('expenses.csv_wizard.ready_to_import')} <b>${this.processedRows.length}</b> ${i18n.t('expenses.csv_wizard.transactions')}.</p>
-        
+        ${this.fileFormat === 'ofx' && this.ofxAccountHint ? html`
+            <p style="font-size: 0.85rem; color: var(--md-sys-color-on-surface-variant);">
+                ${i18n.t('csv_wizard.ofx_account_hint').replace('{account}', this.ofxAccountHint)}
+            </p>
+        ` : ''}
+
         <table class="preview-table">
             <thead><tr><th>${i18n.t('expenses.csv_wizard.date')}</th><th>${i18n.t('expenses.csv_wizard.description')}</th><th>${i18n.t('expenses.csv_wizard.amount')}</th></tr></thead>
             <tbody>
@@ -610,7 +650,7 @@ export class CsvWizard extends LitElement {
         ${this.processedRows.length > 5 ? html`<p>${i18n.t('expenses.csv_wizard.and_more').replace('{count}', String(this.processedRows.length - 5))}</p>` : ''}
 
         <div class="actions">
-            <button class="secondary" @click="${() => this.step = 2}">${i18n.t('expenses.csv_wizard.back')}</button>
+            <button class="secondary" @click="${() => this.step = this.fileFormat === 'ofx' ? 1 : 2}">${i18n.t('expenses.csv_wizard.back')}</button>
             <button class="primary" @click="${this.submit}">${i18n.t('expenses.csv_wizard.import_now')}</button>
         </div>
       `;

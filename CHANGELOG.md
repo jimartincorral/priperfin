@@ -1,11 +1,29 @@
 # Changelog
 
-## v1.21.1 - 2026-09-12
+## v1.23.1 - 2026-09-13
 
 Closes two mobile-only gaps where the phone layout could not reach something the desktop layout could.
 
 - **Bank sync on mobile**: the *Sync Bank* action existed in the desktop toolbar and in the mobile empty state only, so once a single transaction was listed for the period there was no way to trigger a sync from a phone. It now sits in the mobile Expenses title row beside search and filter, disabled and spinning while a sync is in flight.
 - **Editable savings pot on mobile**: the Goals savings pot is an inline field in the desktop strip, but the mobile *Saved so far* tile rendered it as a read-only figure. The tile is now a tap target that opens a bottom sheet editor, matching the sheets the rest of the mobile Goals screen already uses. Unassigned recalculates on save, and both layouts write through one shared path.
+
+## v1.23.0 - 2026-09-13
+
+Adds budget comparison to the "Where it went" panel on the desktop Expenses screen.
+
+- Each category row now shows its spend against that category's monthly budget, with over-budget rows called out in red, alongside a panel summary of total budgeted spend and a count of the categories over.
+- A **Categories / Subcategories** toggle switches the grouping level, so a parent that looks fine in aggregate can be drilled into — a group may sit inside its budget while one of its subcategories is well over. The choice is remembered per device.
+- Within budget, the bar fills to spend against budget. Over budget, the track spans the spend and a tick marks the budget line, so the overspend is drawn to scale rather than a bar pinned at full width.
+- Budgets are monthly amounts, so the comparison applies to Month periods directly and Year periods scaled by 12. Custom and All time keep the previous share-of-spend bars and say why the comparison is unavailable.
+- Categories with no budget offer a **Set budget** link that opens Settings → Categories with the search already narrowed to that category.
+
+## v1.22.0 - 2026-09-13
+
+Adds OFX/QFX bank statement import alongside CSV.
+
+- The import wizard now accepts `.ofx`/`.qfx` files in addition to CSV, parsing both SGML-style (OFX 1.x) and XML-style (OFX 2.x) exports client-side, with charset-aware decoding for non-UTF-8 bank files.
+- OFX files skip the column-mapping step entirely, going straight to the review screen, since OFX fields are already unambiguous.
+- Each transaction's bank-assigned FITID is used for duplicate detection, reusing the same review/merge flow as CSV imports.
 
 ## v1.21.0 - 2026-09-09
 
