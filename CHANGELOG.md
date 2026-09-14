@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.24.1 - 2026-09-14
+
+Makes the desktop Goals cards more compact so more goals fit on screen at once.
+
+- Tighter card density on the desktop Goals screen: reduced row padding, smaller gaps between and within cards, and a step-down in card text sizes (name, amounts, tags, captions). No information was removed, and the mobile layout is unchanged.
+
 ## v1.24.0 - 2026-09-14
 
 Changes the default pagination on the Expenses screen so all transactions are visible at once.
