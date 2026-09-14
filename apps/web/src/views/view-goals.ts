@@ -761,8 +761,8 @@ export class ViewGoals extends LitElement {
       /* minmax(0, ...) on the meta columns, or they starve column one */
       grid-template-columns: minmax(0, 1fr) minmax(0, 200px) minmax(0, 150px) minmax(0, 132px) 28px;
       align-items: center;
-      gap: 16px;
-      padding: 14px 16px;
+      gap: 12px;
+      padding: 6px 14px;
       cursor: pointer;
       background: none;
       width: 100%;
@@ -783,27 +783,32 @@ export class ViewGoals extends LitElement {
     .dg-name {
       flex: 1 1 auto;
       min-width: 0;
-      font: 500 15px/20px 'Roboto', sans-serif;
+      font: 500 14px/19px 'Roboto', sans-serif;
       color: var(--md-sys-color-on-surface);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
     }
     .dg-saved {
-      font: 500 16px/22px 'Roboto Mono', ui-monospace, monospace;
+      font: 500 15px/20px 'Roboto Mono', ui-monospace, monospace;
       color: var(--md-sys-color-on-surface);
       white-space: nowrap;
     }
     .dg-monthly {
-      font: 500 14px/20px 'Roboto Mono', ui-monospace, monospace;
+      font: 500 13px/18px 'Roboto Mono', ui-monospace, monospace;
       color: var(--md-sys-color-on-surface);
       white-space: nowrap;
     }
     .dg-date {
-      font: 400 14px/20px 'Roboto', sans-serif;
+      font: 400 13px/18px 'Roboto', sans-serif;
       color: var(--md-sys-color-on-surface);
       white-space: nowrap;
     }
+    /* Card-scoped text trims (Option A). Kept under .dg-card so the shared
+       .d-tag / .d-panel-caption / .d-micro classes stay full-size elsewhere. */
+    .dg-card .d-tag { height: 21px; padding: 0 8px; font-size: 11px; }
+    .dg-card .d-panel-caption { font: 400 11px/15px 'Roboto', sans-serif; }
+    .dg-card .d-micro { font-size: 10px; }
 
     .dg-expand {
       padding: 16px;
@@ -2242,7 +2247,7 @@ export class ViewGoals extends LitElement {
         <div
           class="d-content scroll top"
           style="grid-template-columns: ${showSide ? 'minmax(0, 1fr) 360px' : 'minmax(0, 1fr)'}">
-          <div style="min-width: 0; display: flex; flex-direction: column; gap: 12px">
+          <div style="min-width: 0; display: flex; flex-direction: column; gap: 6px">
             ${this.loading
               ? this.renderDesktopSkeletons()
               : this.sortedGoals.map(goal => this.renderGoalCard(goal))}
@@ -2566,10 +2571,10 @@ export class ViewGoals extends LitElement {
           role="button"
           tabindex="0"
           @click="${() => this.toggleGoalCard(goal)}">
-          <div style="min-width: 0; display: flex; flex-direction: column; gap: 8px">
+          <div style="min-width: 0; display: flex; flex-direction: column; gap: 5px">
             <!-- Wrapping is what keeps the name legible as the column narrows -->
             <div class="dg-title-row">
-              <span class="d-emoji" style="font-size: 15px">${this.goalIcon(goal)}</span>
+              <span class="d-emoji" style="font-size: 14px">${this.goalIcon(goal)}</span>
               <span class="dg-name">${goal.name}</span>
               <span class="d-tag ${status.kind === 'behind'
                 ? 'warning'
