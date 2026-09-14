@@ -299,8 +299,8 @@ export class ViewExpenses extends LitElement {
 
   // Non-reactive property to preserve scroll position across renders
   private _preservedScrollY: number | null = null;
-  private _autoPageSizeToTotalOnNextLoad = false;
-  private _allTimePageSizeSuggested = false;
+  /** Once the user picks a page size manually, stop defaulting it to the total row count. */
+  private _userChosePageSize = false;
   get filteredTransactions() {
     let filtered = this.transactions;
 
@@ -1640,20 +1640,14 @@ export class ViewExpenses extends LitElement {
       if (txsResult.status === 'fulfilled') {
         this.transactions = txsResult.value;
 
-        const shouldSuggestAllTimePageSize =
-          this.dateFilterMode === 'all_time' &&
-          (this._autoPageSizeToTotalOnNextLoad || !this._allTimePageSizeSuggested);
-
-        if (shouldSuggestAllTimePageSize) {
+        // Default the page size to the total row count so all rows show on one
+        // page, until the user picks a specific size from the menu.
+        if (!this._userChosePageSize) {
           const totalRows = this.filteredTransactions.length;
           if (totalRows > 0) {
             this.pageSize = totalRows;
             this.currentPage = 1;
           }
-          this._allTimePageSizeSuggested = true;
-          this._autoPageSizeToTotalOnNextLoad = false;
-        } else if (this.dateFilterMode !== 'all_time') {
-          this._allTimePageSizeSuggested = false;
         }
       } else {
         console.error('Failed to load transactions', txsResult.reason);
@@ -2243,7 +2237,6 @@ Tables: ${result.tables?.join(', ')}`;
   }
 
   applyPeriodSheet() {
-    const previousMode = this.dateFilterMode;
     this.dateFilterMode = this.sheetMode;
     this.year = this.sheetYear;
     this.month = this.sheetMonth;
@@ -2252,10 +2245,6 @@ Tables: ${result.tables?.join(', ')}`;
     this.showPeriodSheet = false;
     this.mobileVisibleCount = MOBILE_PAGE_SIZE;
 
-    if (previousMode === 'all_time' && this.dateFilterMode !== 'all_time') {
-      this._allTimePageSizeSuggested = false;
-    }
-    this._autoPageSizeToTotalOnNextLoad = this.dateFilterMode === 'all_time';
     this.loadData(false);
   }
 
@@ -4794,6 +4783,7 @@ Tables: ${result.tables?.join(', ')}`;
                   @click="${() => {
                     this.pageSize = size;
                     this.currentPage = 1;
+                    this._userChosePageSize = true;
                     this.showPageSizeMenu = false;
                   }}">
                   <span>${size}${size === total ? ` (${i18n.t('common.total')})` : ''}</span>
