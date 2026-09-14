@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.24.0 - 2026-09-14
+
+Changes the default pagination on the Expenses screen so all transactions are visible at once.
+
+- The **Rows per page** control now defaults to the total number of transactions in the current view, so every filtered row shows on a single page by default across all period modes (Month, Year, Custom, All time) — previously this only happened in All time.
+- Picking a specific size (20/50/100/200) from the menu still sticks for the session; the total remains available as an option.
+
 ## v1.23.1 - 2026-09-13
 
 Closes two mobile-only gaps where the phone layout could not reach something the desktop layout could.
