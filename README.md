@@ -25,7 +25,7 @@ database:
 | --- | --- |
 | [Home Assistant add-on](#home-assistant-add-on) | You already run Home Assistant |
 | [Local server via Docker](#run-as-a-local-server-docker) | Windows or macOS, no Home Assistant, nothing to code-sign |
-| [Desktop app](#desktop-app) | A real app window; macOS works today, Windows needs Smart App Control off until the installer is signed |
+| [Desktop app](#desktop-app) | A real app window. Unsigned, so both systems ask you to confirm on first launch; Windows PCs with Smart App Control on need it switched off |
 
 ### Home Assistant add-on
 
@@ -68,11 +68,6 @@ for Windows to block.
 
 ## Desktop App
 
-> **Windows note:** the installer is not code-signed yet, so machines with
-> **Smart App Control** enabled will block it outright, with no way to allow it.
-> If that affects you, use the Docker option above instead. macOS is fine —
-> Gatekeeper does have a bypass, documented below.
-
 Download the latest installer from the
 [Releases page](https://github.com/jimartincorral/priperfin/releases/latest).
 Home Assistant is not required, and nothing needs to be installed first — no
@@ -88,48 +83,62 @@ any machine that can reach your Home Assistant instance.
 
 ### First launch
 
-These builds are **not code-signed yet**, so Windows and macOS will both warn
-you the first time you open the app. This is expected, and you only have to get
-past it once.
+The installers are **not code-signed**. That is deliberate: signing costs money
+every year on both platforms, and PriPerFin is a free project. Windows and macOS
+will therefore warn you before running it. Here is how to get past each warning.
 
-**Windows.** SmartScreen shows *"Windows protected your PC"*. Click
-**More info**, then **Run anyway**.
+#### Windows
 
-If instead you see *"Smart App Control has blocked this app"*, that is a
-different and stricter feature, and there is **no "Run anyway" button** — Smart
-App Control blocks any app that is not validly signed, with no per-app
-exception. It is on by default on some clean installs of Windows 11 (upgrades
-generally have it off). Your options are:
+**SmartScreen** — *"Windows protected your PC"*. This is the usual case. Click
+**More info**, then **Run anyway**. You only need to do this once.
 
-- Install on a machine or virtual machine where Smart App Control is off.
-- Turn Smart App Control off, under **Windows Security → App & browser control
-  → Smart App Control**. **Check your Windows build first** (run `winver`): on
-  Windows 11 24H2 build 26100.8116, 25H2 build 26200.8116 and later you can
-  turn it back on afterwards, but on earlier builds turning it off is permanent
-  until you reset or reinstall Windows. Do not do this casually on a machine
-  you rely on.
+**Smart App Control** — *"Smart App Control has blocked this app"*. This is a
+different, stricter feature, and it has **no "Run anyway" button**: it blocks
+every app that isn't signed, and it checks again **every time the app starts**,
+not just when you install it. So if your PC has it switched on, PriPerFin can
+only run with Smart App Control switched **off — and left off**.
 
-Clearing the file's mark-of-the-web (`Unblock-File` in PowerShell) does **not**
-help here — Smart App Control judges the signature, not where the file came
-from.
+It is on by default only on some clean installs of Windows 11; PCs upgraded
+from an older Windows usually have it off. To check or change it, open **Windows
+Security → App & browser control → Smart App Control settings**.
 
-The real fix is for these builds to be code-signed, which is tracked as a
-follow-up. Until then, Smart App Control will block the installer.
+> **Before you switch it off, check your Windows version** (press Win+R, type
+> `winver`). On Windows 11 24H2 build 26100.8116, 25H2 build 26200.8116 and
+> later, you can switch it back on whenever you like. On earlier builds,
+> switching it off is **permanent** until you reset or reinstall Windows.
 
-**macOS.** Drag PriPerFin to your Applications folder, then:
+If you'd rather keep Smart App Control on, use the
+[Docker option](#run-as-a-local-server-docker) instead. Clearing the file's
+mark-of-the-web (`Unblock-File` in PowerShell) does not help — Smart App Control
+judges the signature, not where the file came from.
 
-1. Open **Applications** in Finder, right-click (or Control-click) **PriPerFin**
-   and choose **Open**, then **Open** again in the dialog.
-2. On macOS 15 and later that may not be offered. Try to open the app normally,
-   then go to **System Settings → Privacy & Security**, scroll to the message
-   about PriPerFin and click **Open Anyway**.
-3. If macOS says the app *"is damaged and can't be opened"* — that is the
-   message Gatekeeper uses for a quarantined unsigned app, not actual
-   corruption — clear the quarantine flag and open it again:
+#### macOS
 
-   ```bash
-   xattr -dr com.apple.quarantine /Applications/PriPerFin.app
-   ```
+Open the `.dmg` and drag **PriPerFin** into your **Applications** folder.
+
+**macOS 15 Sequoia and later:**
+
+1. Double-click **PriPerFin** in Applications. macOS blocks it, saying Apple
+   could not verify it is free of malware. Click **Done**.
+2. Open **System Settings → Privacy & Security** and scroll down to the
+   message about PriPerFin.
+3. Click **Open Anyway**, then enter your Mac's password.
+4. Click **Open** in the confirmation that follows.
+
+**macOS 14 Sonoma and earlier:** right-click (or Control-click) **PriPerFin** in
+Applications, choose **Open**, then click **Open** again.
+
+You only need to do this once per downloaded version. The app doesn't update
+itself, so each new version you download asks again.
+
+If macOS instead says the app *"is damaged and can't be opened"*, please
+[open an issue](https://github.com/jimartincorral/priperfin/issues) — the build
+is meant to prevent that. As a workaround, run this in Terminal and open the app
+again:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/PriPerFin.app
+```
 
 ### Where your data lives
 

@@ -226,6 +226,29 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: ${{ secrets.CSC_LINK != '' && 'true' || 'false' }}
         run: node apps/desktop/scripts/pack.mjs $EB_ARGS
 
+      # electron-builder skips macOS signing (no Developer ID), so
+      # scripts/adhoc-sign.cjs seals the bundle with an ad-hoc signature in
+      # afterPack. Prove it: a broken or missing seal makes macOS report the
+      # app as "damaged", with no "Open Anyway" button. Not spctl -- that checks
+      # for a Developer ID and always rejects an ad-hoc app.
+      - name: Verify macOS ad-hoc signature
+        if: matrix.label == 'macos-arm64'
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          apps=(apps/desktop/release/mac*/*.app)
+          if [ ${#apps[@]} -eq 0 ]; then
+            echo "::error::No .app bundle found under apps/desktop/release/mac*/"
+            ls -la apps/desktop/release || true
+            exit 1
+          fi
+          for app in "${apps[@]}"; do
+            echo "Verifying ${app}"
+            codesign --verify --deep --strict --verbose=2 "${app}"
+            codesign --display --verbose=2 "${app}" 2>&1 | grep -E '^(Identifier|Format|Signature|TeamIdentifier)=' || true
+          done
+
       - name: Locate artifact
         id: artifact
         shell: bash

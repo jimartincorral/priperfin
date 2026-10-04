@@ -121,9 +121,20 @@ for `GET /health` before loading the window.
 produced on macOS and an `.exe` only on Windows, because the native modules
 (`better-sqlite3`, `bcrypt`) are compiled for the host at package time.
 
-Builds are currently unsigned. The signing and notarization hooks are in place
-and activate automatically once the relevant secrets exist — see
-`apps/desktop/electron-builder.yml` and `apps/desktop/scripts/notarize.cjs`.
+Builds are **unsigned by decision** — signing costs money on both platforms and
+the project spends none. Users get past SmartScreen / Gatekeeper with the steps in
+the README; Windows PCs with Smart App Control on must switch it off (it blocks
+unsigned apps on every launch) or use Docker. Don't describe signing as a planned
+fix in docs or release notes.
+
+- **macOS bundles are ad-hoc sealed** by `apps/desktop/scripts/adhoc-sign.cjs`
+  (electron-builder `afterPack`). electron-builder with `mac.identity: null` skips
+  signing entirely, which leaves a broken signature that macOS reports as
+  "damaged" with no "Open Anyway" button. CI runs
+  `codesign --verify --deep --strict` on the `.app`; never remove that step.
+- The Developer ID / notarization hooks (`CSC_*`, `APPLE_*`,
+  `scripts/notarize.cjs`) stay in place and activate automatically if those
+  secrets are ever added; the ad-hoc hook then steps aside.
 
 ### Releasing New Versions
 

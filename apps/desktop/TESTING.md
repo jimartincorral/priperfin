@@ -36,12 +36,11 @@ Download the two artifacts from the PR run — that is what you install below.
    your PC"* → **More info** → **Run anyway**.
 
    If **Smart App Control** blocks it instead, there is no bypass: it rejects
-   any app without a valid signature, per-app exceptions do not exist, and
-   clearing the mark-of-the-web does not help. Test on a machine or VM with it
-   off. Turning it off is permanent before Windows 11 24H2 build 26100.8116 /
-   25H2 build 26200.8116. Until the installer is code-signed, every user with
-   Smart App Control on is blocked the same way — so treat signing as a release
-   blocker for Windows, not a polish item.
+   any app without a valid signature, on every launch, and clearing the
+   mark-of-the-web does not help. Test on a machine or VM with it off. Turning
+   it off is permanent before Windows 11 24H2 build 26100.8116 / 25H2 build
+   26200.8116. This is expected — the installers are unsigned by decision, and
+   the README tells Smart App Control users to switch it off or use Docker.
 2. A wizard appears (not a one-click install), the install directory can be
    changed, and **no UAC prompt appears** — it is a per-user install.
 3. The window shows the splash, then "Preparing database…", then
@@ -52,12 +51,18 @@ Download the two artifacts from the PR run — that is what you install below.
 ### macOS (Apple silicon)
 
 1. Mount `PriPerFin-<version>-arm64.dmg` and drag the app to Applications.
-2. Get past Gatekeeper — one of:
-   - right-click (or Control-click) → **Open** → **Open**
-   - System Settings → Privacy & Security → **Open Anyway**
-   - `xattr -dr com.apple.quarantine /Applications/PriPerFin.app`
-3. Confirm it launches. An unsigned arm64 binary still needs an ad-hoc
-   signature to run at all; `mac.identity: null` is what provides it.
+2. Double-click it. **The block must say Apple "could not verify" the app —
+   not that it "is damaged".** "Damaged" means the ad-hoc seal from
+   `scripts/adhoc-sign.cjs` is broken or missing, and users get no "Open
+   Anyway" button; treat that as a release blocker. (CI checks the seal with
+   `codesign --verify --deep --strict`, so this should already be caught.)
+3. Get past Gatekeeper the way the README tells users to:
+   - macOS 15+: System Settings → Privacy & Security → **Open Anyway** →
+     password → **Open**.
+   - macOS 14 and earlier: right-click (or Control-click) → **Open** → **Open**.
+4. Confirm it launches. Apple silicon refuses to run native code with no
+   signature at all, so this also proves the nested `.node` files and the
+   Prisma schema engine were signed.
 
 ## Tier 2 — functional sweep
 

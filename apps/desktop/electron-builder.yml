@@ -112,9 +112,13 @@ mac:
   icon: build/resources/icon.png
   category: public.app-category.finance
   darkModeSupport: true
-  # identity: null skips Developer ID signing but still ad-hoc signs, which
-  # Apple Silicon REQUIRES for the binary to launch at all. Do not change this
-  # to `false` — that disables signing entirely and the app will be killed.
+  # No Developer ID: the app ships unsigned by choice. With identity: null,
+  # electron-builder skips macOS signing entirely — it does NOT ad-hoc sign.
+  # Packaging has already modified the Electron bundle, so left alone the app
+  # would carry a broken signature, which macOS reports as "damaged" with no
+  # "Open Anyway" button. scripts/adhoc-sign.cjs (afterPack, below) seals the
+  # whole bundle with an ad-hoc signature instead, and CI verifies the seal with
+  # `codesign --verify --deep --strict`.
   identity: null
   # Flip to true at the same time as real signing; notarization requires it,
   # and hardened runtime plus an ad-hoc signature breaks V8's JIT.
@@ -140,4 +144,7 @@ dmg:
 
 # Enabled automatically once APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD /
 # APPLE_TEAM_ID are present; a no-op without them.
+# Ad-hoc seal for the unsigned macOS build; steps aside if a Developer ID is
+# configured. Runs before electron-builder's signing step and the DMG build.
+afterPack: scripts/adhoc-sign.cjs
 afterSign: scripts/notarize.cjs
