@@ -18,10 +18,14 @@ A comprehensive personal finance management system for Home Assistant.
 
 ## Installation
 
-PriPerFin can run two ways: as a Home Assistant add-on, or as a standalone
-desktop app on Windows or macOS. Both run the same application against your own
-local database — pick whichever suits you. See [Desktop App](#desktop-app) for
-the second option.
+PriPerFin runs three ways, all the same application against your own local
+database:
+
+| | Best for |
+| --- | --- |
+| [Home Assistant add-on](#home-assistant-add-on) | You already run Home Assistant |
+| [Local server via Docker](#run-as-a-local-server-docker) | Windows or macOS, no Home Assistant, nothing to code-sign |
+| [Desktop app](#desktop-app) | A real app window. Unsigned, so both systems ask you to confirm on first launch; Windows PCs with Smart App Control on need it switched off |
 
 ### Home Assistant add-on
 
@@ -30,6 +34,37 @@ the second option.
 3. Configure the add-on options (optional)
 4. Start the add-on
 5. Access the web interface at `http://homeassistant.local:3000`
+
+## Run as a local server (Docker)
+
+If you just want PriPerFin running on your own machine, this is the most
+reliable option on Windows and macOS. Everything inside the container is Linux,
+so **Windows Smart App Control and macOS Gatekeeper are not involved** — there
+are no unsigned Windows or macOS binaries for them to object to.
+
+You need [Docker Desktop](https://www.docker.com/products/docker-desktop/)
+(free for personal use). Then, from a copy of this repository:
+
+```bash
+docker compose up -d
+```
+
+Open <http://localhost:3000>.
+
+On Apple silicon, point it at the arm64 image first:
+
+```bash
+PRIPERFIN_IMAGE=ghcr.io/jimartincorral/priperfin-aarch64:1.25.0 docker compose up -d
+```
+
+Your database and backups live in the `priperfin-data` Docker volume, so they
+survive upgrades. To update, `docker compose pull && docker compose up -d`. To
+stop it, `docker compose down` (this keeps the volume; `docker compose down -v`
+would delete your data).
+
+Trade-off: it runs in a browser tab rather than an app window, and it needs
+Docker Desktop installed. In exchange there is nothing to code-sign and nothing
+for Windows to block.
 
 ## Desktop App
 
@@ -48,27 +83,62 @@ any machine that can reach your Home Assistant instance.
 
 ### First launch
 
-These builds are **not code-signed yet**, so Windows and macOS will both warn
-you the first time you open the app. This is expected, and you only have to get
-past it once.
+The installers are **not code-signed**. That is deliberate: signing costs money
+every year on both platforms, and PriPerFin is a free project. Windows and macOS
+will therefore warn you before running it. Here is how to get past each warning.
 
-**Windows.** SmartScreen shows *"Windows protected your PC"*. Click
-**More info**, then **Run anyway**.
+#### Windows
 
-**macOS.** Drag PriPerFin to your Applications folder, then:
+**SmartScreen** — *"Windows protected your PC"*. This is the usual case. Click
+**More info**, then **Run anyway**. You only need to do this once.
 
-1. Open **Applications** in Finder, right-click (or Control-click) **PriPerFin**
-   and choose **Open**, then **Open** again in the dialog.
-2. On macOS 15 and later that may not be offered. Try to open the app normally,
-   then go to **System Settings → Privacy & Security**, scroll to the message
-   about PriPerFin and click **Open Anyway**.
-3. If macOS says the app *"is damaged and can't be opened"* — that is the
-   message Gatekeeper uses for a quarantined unsigned app, not actual
-   corruption — clear the quarantine flag and open it again:
+**Smart App Control** — *"Smart App Control has blocked this app"*. This is a
+different, stricter feature, and it has **no "Run anyway" button**: it blocks
+every app that isn't signed, and it checks again **every time the app starts**,
+not just when you install it. So if your PC has it switched on, PriPerFin can
+only run with Smart App Control switched **off — and left off**.
 
-   ```bash
-   xattr -dr com.apple.quarantine /Applications/PriPerFin.app
-   ```
+It is on by default only on some clean installs of Windows 11; PCs upgraded
+from an older Windows usually have it off. To check or change it, open **Windows
+Security → App & browser control → Smart App Control settings**.
+
+> **Before you switch it off, check your Windows version** (press Win+R, type
+> `winver`). On Windows 11 24H2 build 26100.8116, 25H2 build 26200.8116 and
+> later, you can switch it back on whenever you like. On earlier builds,
+> switching it off is **permanent** until you reset or reinstall Windows.
+
+If you'd rather keep Smart App Control on, use the
+[Docker option](#run-as-a-local-server-docker) instead. Clearing the file's
+mark-of-the-web (`Unblock-File` in PowerShell) does not help — Smart App Control
+judges the signature, not where the file came from.
+
+#### macOS
+
+Open the `.dmg` and drag **PriPerFin** into your **Applications** folder.
+
+**macOS 15 Sequoia and later:**
+
+1. Double-click **PriPerFin** in Applications. macOS blocks it, saying Apple
+   could not verify it is free of malware. Click **Done**.
+2. Open **System Settings → Privacy & Security** and scroll down to the
+   message about PriPerFin.
+3. Click **Open Anyway**, then enter your Mac's password.
+4. Click **Open** in the confirmation that follows.
+
+**macOS 14 Sonoma and earlier:** right-click (or Control-click) **PriPerFin** in
+Applications, choose **Open**, then click **Open** again.
+
+You only need to do this once per downloaded version. The app doesn't update
+itself, so each new version you download asks again.
+
+If macOS instead says the app *"is damaged and can't be opened"*, please
+[open an issue](https://github.com/jimartincorral/priperfin/issues) — the build
+is meant to prevent that. As a workaround, run this in Terminal and open the app
+again:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/PriPerFin.app
+```
 
 ### Where your data lives
 

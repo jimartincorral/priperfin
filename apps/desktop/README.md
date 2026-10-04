@@ -83,6 +83,14 @@ Electron's ABI. It also means dev exercises the packaging path.
 - **`prebuilds/` is excluded from the package.** `node-gyp-build` checks
   `build/Release` before `prebuilds`, so the Electron-ABI binary wins — but only
   if the rebuild produced one, which is why that is asserted.
+- **The macOS app needs an explicit ad-hoc seal.** With `mac.identity: null`,
+  electron-builder skips signing entirely — it does not ad-hoc sign. Packaging
+  has modified the Electron bundle by then, so without
+  `scripts/adhoc-sign.cjs` (`afterPack`) the app ships with a broken signature,
+  which macOS calls "damaged" with no "Open Anyway" button. The hook signs the
+  nested Mach-O files under `Resources/server` first (`--deep` doesn't treat
+  `extraResources` as code), then seals the bundle. CI verifies it with
+  `codesign --verify --deep --strict`.
 - **Never drop `--publish never`.** electron-builder's GitHub publisher creates
   *draft* releases, which Home Assistant cannot see.
 - **pnpm's symlinked `node_modules` is not a problem here.** The packaged server
