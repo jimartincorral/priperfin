@@ -148,6 +148,11 @@ and activate automatically once the relevant secrets exist — see
    Do **not** delete and re-cut the tag — the Home Assistant image is already
    published against it.
 
+   Before tagging, work through `apps/desktop/TESTING.md` against the
+   installers built by the PR's `Installer (…)` jobs. Every PR produces
+   downloadable `.exe` and `.dmg` artifacts, so a release never has to be cut
+   just to test one.
+
 ### Quick Release Command
 ```bash
 # 1. Update config.yaml and CHANGELOG.md first!

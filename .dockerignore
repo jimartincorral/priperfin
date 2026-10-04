@@ -12,3 +12,8 @@ build-output.txt
 .idea
 *.log
 coverage
+
+# Desktop app build outputs. The add-on image needs none of it, and the staged
+# server tree is hundreds of MB of build context.
+apps/desktop/build
+apps/desktop/release

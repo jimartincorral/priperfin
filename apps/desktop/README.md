@@ -5,6 +5,8 @@ It bundles the NestJS API, the built Lit frontend and a private SQLite database,
 so an end user needs no Node.js, no pnpm and no terminal.
 
 End-user install instructions live in the [root README](../../README.md#desktop-app).
+Release testing is covered by [TESTING.md](./TESTING.md) — work through it
+before tagging a release that touches this package, `apps/api` or the packaging.
 
 ## How it works
 

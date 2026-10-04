@@ -20,14 +20,22 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  smoke:
-    name: Package Smoke Build (${{ matrix.runner }})
+  installer:
+    name: Installer (${{ matrix.label }})
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 40
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
-        runner: [windows-latest, macos-latest]
+        include:
+          - label: windows-x64
+            runner: windows-latest
+            builder_args: --win --x64
+            artifact_glob: apps/desktop/release/*.exe
+          - label: macos-arm64
+            runner: macos-latest
+            builder_args: --mac --arm64
+            artifact_glob: apps/desktop/release/*.dmg
 
     steps:
       - name: Checkout Code
@@ -51,9 +59,9 @@ jobs:
             ~/.cache/electron
             ~/Library/Caches/electron
             ~/AppData/Local/electron/Cache
-          key: electron-smoke-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          key: electron-ci-${{ matrix.label }}-${{ hashFiles('pnpm-lock.yaml') }}
           restore-keys: |
-            electron-smoke-${{ runner.os }}-
+            electron-ci-${{ matrix.label }}-
 
       - name: Install Dependencies
         run: pnpm install --frozen-lockfile
@@ -63,10 +71,27 @@ jobs:
           pnpm -F api build
           pnpm -F web build
 
-      # --dir packages an unpacked app: it exercises staging and the native
-      # rebuild without the cost of building an NSIS installer or a DMG.
-      # No signing secrets are referenced here, so this is safe on fork PRs.
-      - name: Smoke Package
+      # A real installer, not --dir: the only way to actually test the app is to
+      # install it, and the alternative (release.yml's desktop job) requires
+      # publishing a GitHub Release, which also pushes an add-on update to Home
+      # Assistant users. pack.mjs passes --publish never.
+      #
+      # This also exercises the native-module rebuild against Electron's ABI,
+      # which the Linux lint/test/build in ci.yml cannot see: a mismatch there
+      # produces an app that builds green and crashes on launch.
+      #
+      # No signing secrets are referenced, so this is safe on fork PRs.
+      - name: Build Installer
         env:
+          EB_ARGS: ${{ matrix.builder_args }}
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-        run: node apps/desktop/scripts/pack.mjs --dir
+        shell: bash
+        run: node apps/desktop/scripts/pack.mjs $EB_ARGS
+
+      - name: Upload Installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: priperfin-${{ matrix.label }}
+          path: ${{ matrix.artifact_glob }}
+          if-no-files-found: error
+          retention-days: 14

@@ -48,3 +48,34 @@ jobs:
 
       - name: Build Packages
         run: pnpm build
+
+  addon-image:
+    name: Add-on Image Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    # The Home Assistant add-on image is the primary product, and almost any
+    # change can break it: apps/api, apps/web, the root package.json, the
+    # lockfile or the Dockerfile itself. Build it on every run rather than
+    # discovering a broken image during a release, after the GitHub Release has
+    # already been published.
+    #
+    # A plain docker build is faithful here: the Dockerfile pins node:20-alpine
+    # directly and takes no ARG BUILD_FROM, so home-assistant/builder does not
+    # change what gets built.
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Add-on Image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: false
+          tags: priperfin:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
