@@ -1,0 +1,25 @@
+{
+  "name": "desktop",
+  "private": true,
+  "version": "0.0.0",
+  "description": "PriPerFin desktop application (Windows / macOS)",
+  "license": "Apache-2.0",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.main.json",
+    "start": "node scripts/link-dev-resources.mjs && node scripts/dev.mjs",
+    "stage": "node scripts/stage-server.mjs",
+    "rebuild:natives": "node scripts/rebuild-natives.mjs",
+    "pack:dir": "node scripts/pack.mjs --dir",
+    "dist:win": "node scripts/pack.mjs --win",
+    "dist:mac": "node scripts/pack.mjs --mac"
+  },
+  "devDependencies": {
+    "@electron/notarize": "^2.5.0",
+    "@electron/rebuild": "^4.0.1",
+    "@types/node": "^22.10.7",
+    "electron": "^38.0.0",
+    "electron-builder": "^25.1.8",
+    "typescript": "^5.9.3"
+  }
+}

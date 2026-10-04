@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PriPerFin</title>
+<style>
+  :root { color-scheme: light dark; --bg:#f6f8f7; --fg:#11161c; --muted:#5d6b66; --accent:#15906a; --track:#dfe6e3; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#11161c; --fg:#e9efec; --muted:#93a39d; --accent:#22b583; --track:#232c33; }
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg); color: var(--fg);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    display: grid; place-items: center; text-align: center; padding: 24px;
+    -webkit-user-select: none; user-select: none;
+  }
+  .mark {
+    width: 72px; height: 72px; border-radius: 18px; margin: 0 auto 20px;
+    background: linear-gradient(135deg, #22b583, #0c5f49);
+    display: grid; place-items: center;
+  }
+  .mark svg { display: block; }
+  h1 { font-size: 18px; font-weight: 600; margin: 0 0 6px; letter-spacing: -0.01em; }
+  p { margin: 0; color: var(--muted); font-size: 13px; min-height: 1.5em; }
+  .bar { width: 220px; height: 4px; border-radius: 2px; background: var(--track); overflow: hidden; margin: 22px auto 0; }
+  .bar::after {
+    content: ""; display: block; width: 40%; height: 100%; border-radius: 2px;
+    background: var(--accent); animation: slide 1.4s ease-in-out infinite;
+  }
+  @keyframes slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(250%); } }
+  @media (prefers-reduced-motion: reduce) {
+    .bar::after { animation: none; width: 100%; opacity: 0.6; }
+  }
+</style>
+</head>
+<body>
+  <main>
+    <div class="mark" aria-hidden="true">
+      <svg width="38" height="38" viewBox="0 0 38 38" fill="#fff">
+        <rect x="4"  y="22" width="6" height="12" rx="2"></rect>
+        <rect x="13" y="17" width="6" height="17" rx="2"></rect>
+        <rect x="22" y="12" width="6" height="22" rx="2"></rect>
+        <rect x="31" y="6"  width="6" height="28" rx="2"></rect>
+      </svg>
+    </div>
+    <h1>Starting PriPerFin…</h1>
+    <p id="status">Getting things ready</p>
+    <div class="bar" role="progressbar" aria-label="Starting"></div>
+  </main>
+  <script>
+    // Called by the main process as startup progresses.
+    window.setStartupStatus = function (text) {
+      document.getElementById('status').textContent = text;
+    };
+  </script>
+</body>
+</html>

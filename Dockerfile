@@ -9,13 +9,19 @@ RUN corepack enable && corepack prepare pnpm@9.0.0 --activate
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
 COPY apps/api/package.json apps/api/
 COPY apps/web/package.json apps/web/
+# The desktop package is not built here, but pnpm needs its manifest for
+# --frozen-lockfile to match the lockfile's workspace projects.
+COPY apps/desktop/package.json apps/desktop/
 
 # Copy Prisma schema (needed for postinstall generate)
 COPY apps/api/prisma ./apps/api/prisma/
 COPY apps/api/prisma.config.ts ./apps/api/
 
 # Install all dependencies (ignoring scripts to prevent prisma generate failure)
-RUN pnpm install --frozen-lockfile --ignore-scripts
+# Only the api and web projects are needed for the add-on image; skipping the
+# desktop project keeps Electron's toolchain out of this build.
+RUN pnpm install --frozen-lockfile --ignore-scripts \
+    --filter ./apps/api --filter ./apps/web
 
 
 # Copy source code
