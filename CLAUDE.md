@@ -97,9 +97,41 @@ Lit web components with Material Design 3 theming:
 
 The add-on runs on port 3000 with Ingress support and is available on aarch64, amd64, and armv7 architectures.
 
+### Desktop App (Windows / macOS)
+
+PriPerFin also ships as a standalone Electron app, built from `apps/desktop`.
+It bundles the NestJS API, the built frontend and a private SQLite database, so
+end users need no Node.js, pnpm or terminal.
+
+**Artifacts** (attached to every GitHub Release by the `desktop` job in
+`release.yml`):
+- `PriPerFin-Setup-X.Y.Z.exe` — Windows x64, NSIS, per-user install
+- `PriPerFin-X.Y.Z-arm64.dmg` — macOS Apple silicon
+
+**How it runs**: the Electron main process runs `prisma db push` (the bundled
+CLI, same as `run.sh` does in the container but without `--accept-data-loss`),
+then spawns `dist/src/main.js` as a child process using Electron's own binary
+with `ELECTRON_RUN_AS_NODE=1`, on a loopback port picked at startup. It waits
+for `GET /health` before loading the window.
+
+**Data** lives under `app.getPath('userData')` (`%APPDATA%/PriPerFin`,
+`~/Library/Application Support/PriPerFin`), in `data/`, `backups/` and `logs/`.
+
+**Local builds**: `pnpm desktop:win` / `pnpm desktop:mac`. A `.dmg` can only be
+produced on macOS and an `.exe` only on Windows, because the native modules
+(`better-sqlite3`, `bcrypt`) are compiled for the host at package time.
+
+Builds are currently unsigned. The signing and notarization hooks are in place
+and activate automatically once the relevant secrets exist — see
+`apps/desktop/electron-builder.yml` and `apps/desktop/scripts/notarize.cjs`.
+
 ### Releasing New Versions
 
 **IMPORTANT RULE**: Every time you push a new version to GitHub, you MUST ensure it is released as a GitHub Release. This is critical because Home Assistant only detects updates via GitHub Releases. Simply pushing to `main` is NOT sufficient for deployment.
+
+**VERSION RULE**: `apps/desktop/package.json` is committed as `"version": "0.0.0"` and is stamped from `config.yaml` at package time (`--config.extraMetadata.version`). Never hand-edit it. `config.yaml` stays the only source of truth. (`apps/api/package.json` and `apps/web/package.json` carry a stale, unused `1.2.3` — do not follow that example.)
+
+**PUBLISHING RULE**: the desktop build must always run electron-builder with `--publish never` (handled by `apps/desktop/scripts/pack.mjs`). electron-builder's own GitHub publisher creates a *draft* release, which Home Assistant cannot see; the repository already accumulated a dozen stray drafts that way. Installers are attached to the published release with `gh release upload` instead.
 
 ### Release Process
 
@@ -110,6 +142,11 @@ The add-on runs on port 3000 with Ingress support and is available on aarch64, a
    - **Tag**: `vX.Y.Z` (must match `config.yaml` version)
    - **Title**: `vX.Y.Z`
    - **Description**: Detailed summary of changes.
+5. **Verify installers**: the same workflow run builds the Windows and macOS
+   installers and attaches them to the release. If the `Verify Release Assets`
+   job is red, re-run the failed `Desktop Installer` jobs from the Actions tab.
+   Do **not** delete and re-cut the tag — the Home Assistant image is already
+   published against it.
 
 ### Quick Release Command
 ```bash
@@ -128,6 +165,6 @@ gh release create vX.Y.Z --title "vX.Y.Z" --generate-notes
 ## Development Notes
 
 - API serves static files from `apps/web/dist` in dev, `/app/client` in Docker
-- Frontend connects to API at `http://{hostname}:3000/api`
+- Frontend derives the API base URL from `window.location.origin` at runtime (`getApiBaseUrl()` in `apps/web/src/api/client.ts`), so any port works without a rebuild
 - Theme system supports light/dark/auto modes via `data-theme` attribute
 - Tests use Jest with ts-jest transform; test files match `*.spec.ts`

@@ -6,6 +6,8 @@ dist/
 apps/*/dist/
 release/
 apps/*/release/
+apps/desktop/build/server/
+apps/desktop/build/dev-resources/
 
 # Database (local dev only)
 *.db

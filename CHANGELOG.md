@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.25.0 - 2026-10-04
+
+Adds standalone desktop installers for Windows and macOS, so PriPerFin can run on a laptop without Home Assistant.
+
+- **Windows**: an installer (`PriPerFin-Setup-1.25.0.exe`) is now attached to every release. It installs per-user, so there is no administrator prompt.
+- **macOS (Apple silicon)**: a disk image (`PriPerFin-1.25.0-arm64.dmg`). Intel Macs are not covered by this release.
+- The desktop app keeps its database and backups in the standard per-user application data folder, and the app menu has shortcuts to open the data, backups and logs folders.
+- The installers are not yet code-signed, so the first launch needs a one-time bypass on both systems — see the **Desktop App** section of the README for the exact steps.
+- **The Home Assistant add-on is unchanged.** If that is how you run PriPerFin, this release brings no functional changes and nothing needs to be done.
+
 ## v1.24.1 - 2026-09-14
 
 Makes the desktop Goals cards more compact so more goals fit on screen at once.

@@ -1,0 +1,72 @@
+name: Desktop CI
+
+# Packaging failures are invisible to the Linux lint/test/build in ci.yml: the
+# native modules (better-sqlite3, bcrypt) are rebuilt against Electron's ABI
+# only at package time, and a mismatch produces an app that builds green and
+# then crashes on launch. This catches that before a release depends on it.
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'apps/desktop/**'
+      - 'apps/api/package.json'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/desktop-ci.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: desktop-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: Package Smoke Build (${{ matrix.runner }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [windows-latest, macos-latest]
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9.0.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: Cache Electron downloads
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/electron
+            ~/Library/Caches/electron
+            ~/AppData/Local/electron/Cache
+          key: electron-smoke-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            electron-smoke-${{ runner.os }}-
+
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build API and Web
+        run: |
+          pnpm -F api build
+          pnpm -F web build
+
+      # --dir packages an unpacked app: it exercises staging and the native
+      # rebuild without the cost of building an NSIS installer or a DMG.
+      # No signing secrets are referenced here, so this is safe on fork PRs.
+      - name: Smoke Package
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: node apps/desktop/scripts/pack.mjs --dir

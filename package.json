@@ -7,7 +7,13 @@
     "test": "pnpm -r test",
     "lint": "pnpm -r lint",
     "dev": "pnpm -r --parallel run dev",
-    "db:push": "pnpm -C apps/api exec prisma db push"
+    "db:push": "pnpm -C apps/api exec prisma db push",
+    "desktop:dev": "pnpm -F desktop start",
+    "desktop:win": "pnpm -F api build && pnpm -F web build && pnpm -F desktop dist:win",
+    "desktop:mac": "pnpm -F api build && pnpm -F web build && pnpm -F desktop dist:mac"
   },
-  "packageManager": "pnpm@9.0.0"
+  "packageManager": "pnpm@9.0.0",
+  "engines": {
+    "node": ">=20"
+  }
 }

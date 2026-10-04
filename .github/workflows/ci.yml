@@ -33,6 +33,11 @@ jobs:
           cache: 'pnpm'
 
       - name: Install Dependencies
+        # pnpm build type-checks apps/desktop, which only needs Electron's type
+        # definitions from the npm package, not the ~100MB prebuilt binary.
+        # The desktop packaging workflows deliberately do not set this.
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
         run: pnpm install --frozen-lockfile
 
       - name: Lint Code

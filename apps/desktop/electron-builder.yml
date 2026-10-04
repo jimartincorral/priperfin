@@ -1,0 +1,143 @@
+appId: org.priperfin.desktop
+productName: PriPerFin
+copyright: Copyright © 2026 PriPerFin contributors
+
+directories:
+  output: release
+  buildResources: build/resources
+
+# Only the Electron shell itself goes into the asar. Everything server-side
+# lives in extraResources (see below).
+files:
+  - "dist/**/*"
+  - "static/**/*"
+  - "package.json"
+  - "!**/*.map"
+  - "!**/*.ts"
+
+# The staged server tree and the built frontend are copied OUTSIDE the asar.
+# That means: no asarUnpack globs for native .node files, require() of
+# better-sqlite3 works from the main process, node-gyp-build can find its
+# binary, and the server child process gets a real directory as its cwd.
+extraResources:
+  - from: "build/server"
+    to: "server"
+    filter:
+      - "**/*"
+      # Nothing here is loaded at runtime; together this is ~60MB.
+      - "!**/*.map"
+      - "!**/*.md"
+      - "!**/*.markdown"
+      - "!**/*.d.ts"
+      - "!**/*.d.cts"
+      - "!**/*.d.mts"
+      - "!**/*.flow"
+      - "!**/test/**"
+      - "!**/tests/**"
+      - "!**/__tests__/**"
+      - "!**/.bin/**"
+      - "!**/.github/**"
+      - "!**/LICENSE*"
+      - "!**/AUTHORS*"
+      - "!**/CHANGELOG*"
+      # Native module build leftovers.
+      - "!**/obj.target/**"
+      - "!**/build/Debug/**"
+      - "!**/*.o"
+      - "!**/*.a"
+      - "!**/*.pdb"
+      - "!**/*.obj"
+      - "!**/*.lib"
+      - "!**/*.exp"
+      # better-sqlite3 vendors the full SQLite amalgamation purely to compile
+      # against; the built .node in build/Release is all that ships.
+      - "!**/better-sqlite3/deps/**"
+      - "!**/better-sqlite3/src/**"
+      # node-gyp-build looks in build/Release before prebuilds, so the compiled
+      # Electron-ABI binary wins. Dropping prebuilds removes several platforms'
+      # worth of stock-Node binaries and the risk of ever loading one.
+      # scripts/rebuild-natives.mjs asserts build/Release/*.node exists.
+      - "!**/prebuilds/**"
+      # The bundled Prisma CLI drags in Prisma Studio. `db push` only ever
+      # loads @prisma/studio-core/data/*, never the React UI bundle or
+      # esbuild's build metadata; dropping those and Studio's UI-only
+      # dependencies saves ~43MB. Verified by running db push and booting the
+      # server with these paths deleted.
+      - "!**/@prisma/studio-core/dist/ui/**"
+      - "!**/@prisma/studio-core/dist/metafile-*.json"
+      - "!**/elkjs/**"
+      - "!**/@visx/**"
+      - "!**/@radix-ui/**"
+      - "!**/d3-array/**"
+      - "!**/d3-shape/**"
+  - from: "../web/dist"
+    to: "client"
+
+asar: true
+compression: maximum
+
+# We rebuild build/server ourselves with @electron/rebuild (see
+# scripts/rebuild-natives.mjs). electron-builder's own rebuild only covers this
+# package's node_modules and would silently leave the staged tree built for the
+# wrong ABI.
+npmRebuild: false
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  icon: build/resources/icon.png
+  # Code signing is off today. electron-builder reads CSC_LINK (base64 .pfx) and
+  # CSC_KEY_PASSWORD straight from the environment, so providing those secrets
+  # in CI turns signing on with no change to this file.
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowElevation: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: PriPerFin
+  menuCategory: false
+  # NEVER remove the user's database and backups on uninstall.
+  deleteAppDataOnUninstall: false
+  include: build/installer.nsh
+  artifactName: "${productName}-Setup-${version}.${ext}"
+
+mac:
+  target:
+    - target: dmg
+      arch: [arm64]
+  icon: build/resources/icon.png
+  category: public.app-category.finance
+  darkModeSupport: true
+  # identity: null skips Developer ID signing but still ad-hoc signs, which
+  # Apple Silicon REQUIRES for the binary to launch at all. Do not change this
+  # to `false` — that disables signing entirely and the app will be killed.
+  identity: null
+  # Flip to true at the same time as real signing; notarization requires it,
+  # and hardened runtime plus an ad-hoc signature breaks V8's JIT.
+  hardenedRuntime: false
+  gatekeeperAssess: false
+  entitlements: build/resources/entitlements.mac.plist
+  entitlementsInherit: build/resources/entitlements.mac.plist
+  extendInfo:
+    LSMinimumSystemVersion: "11.0"
+    NSHumanReadableCopyright: "Copyright © 2026 PriPerFin contributors"
+
+dmg:
+  artifactName: "${productName}-${version}-arm64.${ext}"
+  title: "${productName} ${version}"
+  contents:
+    - x: 140
+      y: 180
+      type: file
+    - x: 400
+      y: 180
+      type: link
+      path: /Applications
+
+# Enabled automatically once APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD /
+# APPLE_TEAM_ID are present; a no-op without them.
+afterSign: scripts/notarize.cjs

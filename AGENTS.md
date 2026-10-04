@@ -8,7 +8,8 @@ This file provides coding guidelines for AI agents working in the PriPerFin code
 priperfin/
 ├── apps/
 │   ├── api/          # NestJS backend (TypeScript, Prisma, SQLite)
-│   └── web/          # Lit frontend (TypeScript, Vite)
+│   ├── web/          # Lit frontend (TypeScript, Vite)
+│   └── desktop/      # Electron shell + Windows/macOS installers (electron-builder)
 ├── config.yaml       # Home Assistant add-on config (VERSION SOURCE OF TRUTH)
 └── CLAUDE.md         # Project-specific context for Claude
 ```
@@ -203,6 +204,8 @@ describe('RulesService', () => {
 - ALWAYS increment the `version` field in `config.yaml` when making changes that need to be deployed.
 - ALWAYS update `CHANGELOG.md` with release notes so users can see changes in Home Assistant's add-on update dialog.
 - Home Assistant ONLY detects updates via GitHub Releases matching the `config.yaml` version.
+- NEVER hand-edit the `version` in `apps/desktop/package.json`. It stays `0.0.0` in git and is stamped from `config.yaml` at package time. (`apps/api` and `apps/web` carry a stale, unused `1.2.3` — do not copy that.)
+- The desktop build must always pass `--publish never` to electron-builder. Its built-in GitHub publisher creates *draft* releases, which Home Assistant cannot see.
 
 **Release Process**: 
 1. Bump version in `config.yaml`

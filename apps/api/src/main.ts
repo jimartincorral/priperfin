@@ -1,4 +1,5 @@
 import { NestFactory } from '@nestjs/core';
+import { Logger } from '@nestjs/common';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './all-exceptions.filter';
 import { json, urlencoded } from 'express'; // Import express body parsers
@@ -47,6 +48,18 @@ async function bootstrap() {
   // or allow for custom configuration if needed globally.
   // For FileInterceptor to work, `app.use(multer().any())` is sometimes used, but not necessary with FileInterceptor.
 
-  await app.listen(process.env.PORT ?? 3000, '::');
+  // HOST defaults to '::' (all interfaces) for the Home Assistant add-on and
+  // Docker. The desktop app sets HOST=127.0.0.1 so the server is reachable only
+  // from the local machine: that keeps it on IngressSecurityMiddleware's
+  // loopback allow-list and avoids a Windows Firewall prompt on first launch.
+  const host = process.env.HOST ?? '::';
+  await app.listen(process.env.PORT ?? 3000, host);
+  Logger.log(`Listening on ${await app.getUrl()}`, 'Bootstrap');
 }
-bootstrap();
+
+// Surface a boot failure as a non-zero exit code rather than an unhandled
+// rejection, so a supervising process (the desktop app) can report it.
+bootstrap().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});
