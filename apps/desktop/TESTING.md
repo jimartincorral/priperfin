@@ -34,6 +34,14 @@ Download the two artifacts from the PR run — that is what you install below.
 
 1. Run `PriPerFin-Setup-<version>.exe`. SmartScreen shows *"Windows protected
    your PC"* → **More info** → **Run anyway**.
+
+   If **Smart App Control** blocks it instead, there is no bypass: it rejects
+   any app without a valid signature, per-app exceptions do not exist, and
+   clearing the mark-of-the-web does not help. Test on a machine or VM with it
+   off. Turning it off is permanent before Windows 11 24H2 build 26100.8116 /
+   25H2 build 26200.8116. Until the installer is code-signed, every user with
+   Smart App Control on is blocked the same way — so treat signing as a release
+   blocker for Windows, not a polish item.
 2. A wizard appears (not a one-click install), the install directory can be
    changed, and **no UAC prompt appears** — it is a per-user install.
 3. The window shows the splash, then "Preparing database…", then

@@ -55,6 +55,27 @@ past it once.
 **Windows.** SmartScreen shows *"Windows protected your PC"*. Click
 **More info**, then **Run anyway**.
 
+If instead you see *"Smart App Control has blocked this app"*, that is a
+different and stricter feature, and there is **no "Run anyway" button** — Smart
+App Control blocks any app that is not validly signed, with no per-app
+exception. It is on by default on some clean installs of Windows 11 (upgrades
+generally have it off). Your options are:
+
+- Install on a machine or virtual machine where Smart App Control is off.
+- Turn Smart App Control off, under **Windows Security → App & browser control
+  → Smart App Control**. **Check your Windows build first** (run `winver`): on
+  Windows 11 24H2 build 26100.8116, 25H2 build 26200.8116 and later you can
+  turn it back on afterwards, but on earlier builds turning it off is permanent
+  until you reset or reinstall Windows. Do not do this casually on a machine
+  you rely on.
+
+Clearing the file's mark-of-the-web (`Unblock-File` in PowerShell) does **not**
+help here — Smart App Control judges the signature, not where the file came
+from.
+
+The real fix is for these builds to be code-signed, which is tracked as a
+follow-up. Until then, Smart App Control will block the installer.
+
 **macOS.** Drag PriPerFin to your Applications folder, then:
 
 1. Open **Applications** in Finder, right-click (or Control-click) **PriPerFin**
