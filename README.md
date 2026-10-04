@@ -18,10 +18,14 @@ A comprehensive personal finance management system for Home Assistant.
 
 ## Installation
 
-PriPerFin can run two ways: as a Home Assistant add-on, or as a standalone
-desktop app on Windows or macOS. Both run the same application against your own
-local database — pick whichever suits you. See [Desktop App](#desktop-app) for
-the second option.
+PriPerFin runs three ways, all the same application against your own local
+database:
+
+| | Best for |
+| --- | --- |
+| [Home Assistant add-on](#home-assistant-add-on) | You already run Home Assistant |
+| [Local server via Docker](#run-as-a-local-server-docker) | Windows or macOS, no Home Assistant, nothing to code-sign |
+| [Desktop app](#desktop-app) | A real app window; macOS works today, Windows needs Smart App Control off until the installer is signed |
 
 ### Home Assistant add-on
 
@@ -31,7 +35,43 @@ the second option.
 4. Start the add-on
 5. Access the web interface at `http://homeassistant.local:3000`
 
+## Run as a local server (Docker)
+
+If you just want PriPerFin running on your own machine, this is the most
+reliable option on Windows and macOS. Everything inside the container is Linux,
+so **Windows Smart App Control and macOS Gatekeeper are not involved** — there
+are no unsigned Windows or macOS binaries for them to object to.
+
+You need [Docker Desktop](https://www.docker.com/products/docker-desktop/)
+(free for personal use). Then, from a copy of this repository:
+
+```bash
+docker compose up -d
+```
+
+Open <http://localhost:3000>.
+
+On Apple silicon, point it at the arm64 image first:
+
+```bash
+PRIPERFIN_IMAGE=ghcr.io/jimartincorral/priperfin-aarch64:1.25.0 docker compose up -d
+```
+
+Your database and backups live in the `priperfin-data` Docker volume, so they
+survive upgrades. To update, `docker compose pull && docker compose up -d`. To
+stop it, `docker compose down` (this keeps the volume; `docker compose down -v`
+would delete your data).
+
+Trade-off: it runs in a browser tab rather than an app window, and it needs
+Docker Desktop installed. In exchange there is nothing to code-sign and nothing
+for Windows to block.
+
 ## Desktop App
+
+> **Windows note:** the installer is not code-signed yet, so machines with
+> **Smart App Control** enabled will block it outright, with no way to allow it.
+> If that affects you, use the Docker option above instead. macOS is fine —
+> Gatekeeper does have a bypass, documented below.
 
 Download the latest installer from the
 [Releases page](https://github.com/jimartincorral/priperfin/releases/latest).

@@ -1,24 +1,49 @@
-version: '3.8'
+# Run PriPerFin as a local server, without Home Assistant.
+#
+# This is the way to run PriPerFin on Windows or macOS without installing the
+# desktop app. Everything inside the container is Linux, so Windows Smart App
+# Control and macOS Gatekeeper are not involved at all.
+#
+#   docker compose up -d
+#
+# Then open http://localhost:3000
+#
+# On Apple silicon, or any other arm64 machine, set the image to the aarch64
+# build first (the add-on images are published per architecture):
+#
+#   PRIPERFIN_IMAGE=ghcr.io/jimartincorral/priperfin-aarch64:1.25.0 docker compose up -d
+#
+# To build from this checkout instead of pulling a published image, comment out
+# `image:` and uncomment `build: .` below. That works on any architecture.
 
 services:
-  postgres:
-    image: postgres:15-alpine
+  priperfin:
+    image: ${PRIPERFIN_IMAGE:-ghcr.io/jimartincorral/priperfin-amd64:1.25.0}
+    # build: .
+    container_name: priperfin
+    restart: unless-stopped
+    ports:
+      # Change the left-hand side to use a different port on your machine,
+      # e.g. "8080:3000" if something already uses 3000.
+      - "3000:3000"
     environment:
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: priperfin
-    ports:
-      - "5432:5432"
+      # Defaults shown; the entrypoint applies these when no Home Assistant
+      # options file is present.
+      DATABASE_URL: "file:/data/priperfin.db"
+      BACKUP_DIR: "/data/backups"
+      # Optional, and must be EXACTLY 32 characters if set, or the app will
+      # refuse to start. Leave unset for unencrypted backups.
+      # BACKUP_ENCRYPTION_KEY: ""
     volumes:
-      - postgres_data:/var/lib/postgresql/data
-
-  valkey:
-    image: valkey/valkey:7.2-alpine
-    ports:
-      - "6379:6379"
-    volumes:
-      - valkey_data:/data
+      # Your database and backups. Keep this volume and your data survives
+      # upgrades; remove it and your financial records are gone.
+      - priperfin-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
 
 volumes:
-  postgres_data:
-  valkey_data:
+  priperfin-data:
