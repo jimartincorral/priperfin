@@ -136,7 +136,16 @@ jobs:
       matrix:
         include:
           - label: windows-x64
-            runner: windows-latest
+            # Pinned, not windows-latest. That image is now Windows Server
+            # 2025 and ships Visual Studio 18, which the node-gyp bundled with
+            # pnpm 9.0.0 (v10.1.0) cannot detect -- it reports
+            # 'unknown version "undefined"' and fails to configure, so
+            # better-sqlite3 cannot compile during the root install.
+            # windows-2022 ships Visual Studio 2022, which that node-gyp
+            # handles. The durable fix is to bump pnpm so it bundles
+            # node-gyp >= 11; that touches the add-on image build too, so it is
+            # deliberately kept out of this change.
+            runner: windows-2022
             builder_args: --win --x64
           - label: macos-arm64
             runner: macos-latest
