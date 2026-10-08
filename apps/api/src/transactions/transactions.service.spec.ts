@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { TransactionsService } from './transactions.service';
+import { DateFilterMode } from './get-transactions.dto';
 import { RulesService } from '../rules/rules.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotFoundException, BadRequestException } from '@nestjs/common';
@@ -483,13 +484,39 @@ describe('TransactionsService', () => {
 
       await service.findAll({ month: 1, year: 2025 }, 'profile-1');
 
+      // Boundaries are UTC midnight so a transaction stored as
+      // 2025-01-01T00:00:00Z is January in every server time zone.
       expect(prismaMock.transaction.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({
-            date: expect.objectContaining({
-              gte: expect.any(Date),
-              lt: expect.any(Date),
-            }),
+            date: {
+              gte: new Date('2025-01-01T00:00:00.000Z'),
+              lt: new Date('2025-02-01T00:00:00.000Z'),
+            },
+          }),
+        }),
+      );
+    });
+
+    it('should treat a custom range as inclusive UTC calendar days', async () => {
+      prismaMock.transaction.findMany.mockResolvedValue([]);
+
+      await service.findAll(
+        {
+          filterMode: DateFilterMode.CUSTOM,
+          startDate: '2025-03-01',
+          endDate: '2025-03-31',
+        },
+        'profile-1',
+      );
+
+      expect(prismaMock.transaction.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            date: {
+              gte: new Date('2025-03-01T00:00:00.000Z'),
+              lt: new Date('2025-04-01T00:00:00.000Z'),
+            },
           }),
         }),
       );

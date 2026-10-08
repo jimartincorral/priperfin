@@ -11,21 +11,23 @@
 # On Apple silicon, or any other arm64 machine, set the image to the aarch64
 # build first (the add-on images are published per architecture):
 #
-#   PRIPERFIN_IMAGE=ghcr.io/jimartincorral/priperfin-aarch64:1.25.0 docker compose up -d
+#   PRIPERFIN_IMAGE=ghcr.io/jimartincorral/priperfin-aarch64:1.26.1 docker compose up -d
 #
 # To build from this checkout instead of pulling a published image, comment out
 # `image:` and uncomment `build: .` below. That works on any architecture.
 
 services:
   priperfin:
-    image: ${PRIPERFIN_IMAGE:-ghcr.io/jimartincorral/priperfin-amd64:1.25.0}
+    image: ${PRIPERFIN_IMAGE:-ghcr.io/jimartincorral/priperfin-amd64:1.26.1}
     # build: .
     container_name: priperfin
     restart: unless-stopped
     ports:
-      # Change the left-hand side to use a different port on your machine,
-      # e.g. "8080:3000" if something already uses 3000.
-      - "3000:3000"
+      # Bound to this machine only. Change the middle number to use a different
+      # port, e.g. "127.0.0.1:8080:3000" if something already uses 3000. To
+      # reach PriPerFin from other devices on your network, drop the
+      # "127.0.0.1:" prefix; the PIN login is then the only protection.
+      - "127.0.0.1:3000:3000"
     environment:
       # Defaults shown; the entrypoint applies these when no Home Assistant
       # options file is present.

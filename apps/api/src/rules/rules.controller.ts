@@ -54,8 +54,14 @@ export class RulesController {
   }
 
   @Get('suggestions/for-transaction/:transactionId')
-  suggestRuleForTransaction(@Param('transactionId') transactionId: string) {
-    return this.rulesService.suggestRuleForTransaction(transactionId);
+  suggestRuleForTransaction(
+    @Param('transactionId') transactionId: string,
+    @CurrentProfile() profile: Profile,
+  ) {
+    return this.rulesService.suggestRuleForTransaction(
+      transactionId,
+      profile.id,
+    );
   }
 
   @Post('suggestions/reject-prompt')
@@ -71,31 +77,44 @@ export class RulesController {
   }
 
   @Post('suggestions/:id/accept')
-  acceptSuggestion(@Param('id') id: string) {
-    return this.rulesService.acceptSuggestion(id);
+  acceptSuggestion(
+    @Param('id') id: string,
+    @CurrentProfile() profile: Profile,
+  ) {
+    return this.rulesService.acceptSuggestion(id, profile.id);
   }
 
   @Post('suggestions/:id/reject')
-  rejectSuggestion(@Param('id') id: string) {
-    return this.rulesService.rejectSuggestion(id);
+  rejectSuggestion(
+    @Param('id') id: string,
+    @CurrentProfile() profile: Profile,
+  ) {
+    return this.rulesService.rejectSuggestion(id, profile.id);
   }
 
   @Post('test')
-  testRule(@Body() testRuleDto: TestRuleDto) {
+  testRule(
+    @Body() testRuleDto: TestRuleDto,
+    @CurrentProfile() profile: Profile,
+  ) {
     return this.rulesService.testRule(
       testRuleDto.conditionsJson,
+      profile.id,
       testRuleDto.limit,
     );
   }
 
   @Post('reorder')
-  reorderPriorities(@Body() body: { ruleIds: string[] }) {
-    return this.rulesService.reorder(body.ruleIds);
+  reorderPriorities(
+    @Body() body: { ruleIds: string[] },
+    @CurrentProfile() profile: Profile,
+  ) {
+    return this.rulesService.reorder(body.ruleIds, profile.id);
   }
 
   @Post(':id/apply')
-  applyToExisting(@Param('id') id: string) {
-    return this.rulesService.applyToExisting(id);
+  applyToExisting(@Param('id') id: string, @CurrentProfile() profile: Profile) {
+    return this.rulesService.applyToExisting(id, profile.id);
   }
 
   @Get(':id')

@@ -28,7 +28,9 @@ export function parseOfxDate(raw: string): Date | null {
   if (!match) return null;
 
   const [, year, month, day] = match;
-  const date = new Date(`${year}-${month}-${day}T00:00:00`);
+  // UTC midnight, matching the CSV importer and the stored date convention.
+  // A local-midnight parse stored every row one day early east of UTC.
+  const date = new Date(`${year}-${month}-${day}T00:00:00Z`);
   return isNaN(date.getTime()) ? null : date;
 }
 

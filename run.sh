@@ -32,6 +32,12 @@ else
     log_error() { echo "[ERROR] $*" >&2; }
 
     log_info "No Home Assistant options found; starting in standalone mode."
+
+    # Without Ingress, requests reach the container from the Docker bridge
+    # gateway rather than from loopback, which IngressSecurityMiddleware would
+    # otherwise reject with 403. docker-compose.yml binds the published port to
+    # the host's loopback address, so this does not expose the app to the LAN.
+    export PRIPERFIN_ALLOW_DIRECT_ACCESS=true
 fi
 
 export DATABASE_URL="${DATABASE_PATH}"

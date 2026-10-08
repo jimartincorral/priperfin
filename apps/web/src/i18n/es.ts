@@ -66,6 +66,9 @@ export const es = {
         },
     },
     common: {
+        saved: 'Guardado',
+        close: 'Cerrar',
+        account: 'Cuenta',
         save: 'Guardar',
         cancel: 'Cancelar',
         delete: 'Eliminar',
@@ -372,6 +375,7 @@ export const es = {
         settings: 'Configuración',
     },
     expenses: {
+        validation_amount: 'Introduce un importe válido',
         add_transaction: 'Agregar Transacción',
         import_pdf: 'Importar PDF Banco',
         filter_all: 'Todos',
@@ -511,6 +515,8 @@ export const es = {
         transactions: 'transacciones',
     },
     settings: {
+        delete_category: 'Eliminar categoría',
+        delete_category_warning: 'Las transacciones de esta categoría quedarán sin categoría. Esta acción no se puede deshacer.',
         title: 'Configuración',
         general: 'General',
         language: 'Idioma',

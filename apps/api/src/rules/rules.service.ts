@@ -111,14 +111,16 @@ export class RulesService {
     return { success: true };
   }
 
-  async reorder(ruleIds: string[]) {
+  async reorder(ruleIds: string[], profileId: string) {
     // Determine max priority and count down
     // Or simpler: Assign priority = list length - index
     const total = ruleIds.length;
 
+    // updateMany so the profile filter applies: ids from other profiles are
+    // silently ignored instead of being reprioritised.
     const updates = ruleIds.map((id, index) =>
-      this.prisma.categorizationRule.update({
-        where: { id },
+      this.prisma.categorizationRule.updateMany({
+        where: { id, profileId },
         data: { priority: total - index },
       }),
     );
@@ -193,9 +195,10 @@ export class RulesService {
     return null;
   }
 
-  async testRule(conditionsJson: string, limit = 100) {
-    // Fetch recent transactions
+  async testRule(conditionsJson: string, profileId: string, limit = 100) {
+    // Fetch recent transactions of this profile only
     const transactions = await this.prisma.transaction.findMany({
+      where: { profileId },
       take: 1000,
       orderBy: { date: 'desc' },
       include: { category: true },
@@ -335,9 +338,9 @@ export class RulesService {
     });
   }
 
-  async acceptSuggestion(id: string) {
-    const suggestion = await this.prisma.ruleSuggestion.findUnique({
-      where: { id },
+  async acceptSuggestion(id: string, profileId: string) {
+    const suggestion = await this.prisma.ruleSuggestion.findFirst({
+      where: { id, profileId },
     });
     if (!suggestion) throw new NotFoundException('Suggestion not found');
 
@@ -362,7 +365,12 @@ export class RulesService {
     return rule;
   }
 
-  async rejectSuggestion(id: string) {
+  async rejectSuggestion(id: string, profileId: string) {
+    const suggestion = await this.prisma.ruleSuggestion.findFirst({
+      where: { id, profileId },
+    });
+    if (!suggestion) throw new NotFoundException('Suggestion not found');
+
     return this.prisma.ruleSuggestion.update({
       where: { id },
       data: { status: SuggestionStatus.REJECTED },
@@ -394,15 +402,15 @@ export class RulesService {
     });
   }
 
-  async applyToExisting(id: string) {
-    const rule = await this.prisma.categorizationRule.findUnique({
-      where: { id },
+  async applyToExisting(id: string, profileId: string) {
+    const rule = await this.prisma.categorizationRule.findFirst({
+      where: { id, profileId },
     });
     if (!rule) throw new NotFoundException('Rule not found');
 
-    // Get all uncategorized transactions
+    // Get all uncategorized transactions of this profile
     const transactions = await this.prisma.transaction.findMany({
-      where: { categoryId: null },
+      where: { profileId, categoryId: null },
       include: { account: true },
     });
 
@@ -437,12 +445,12 @@ export class RulesService {
     };
   }
 
-  async suggestRuleForTransaction(transactionId: string) {
+  async suggestRuleForTransaction(transactionId: string, profileId: string) {
     this.logger.log(
       `[suggestRuleForTransaction] Called for transaction ${transactionId}`,
     );
-    const transaction = await this.prisma.transaction.findUnique({
-      where: { id: transactionId },
+    const transaction = await this.prisma.transaction.findFirst({
+      where: { id: transactionId, profileId },
       include: { category: true, account: true },
     });
 
@@ -688,7 +696,7 @@ export class RulesService {
 
     // Check if a similar rule already exists
     const existingRules = await this.prisma.categorizationRule.findMany({
-      where: { categoryId: transaction.categoryId },
+      where: { profileId, categoryId: transaction.categoryId },
       select: { conditionsJson: true },
     });
 

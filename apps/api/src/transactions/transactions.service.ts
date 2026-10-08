@@ -159,19 +159,18 @@ export class TransactionsService {
     const where: Prisma.TransactionWhereInput = { profileId };
 
     switch (filterMode) {
+      // Transaction dates are stored as UTC midnight, so every range boundary
+      // is built in UTC too. Using the server's local time zone here shifted
+      // transactions dated the 1st into the previous month west of UTC.
       case DateFilterMode.MONTH:
         if (month && year) {
-          const start = new Date(year, month - 1, 1);
-          const end = new Date(year, month, 1);
-          where.date = { gte: start, lt: end };
+          where.date = utcMonthRange(year, month);
         }
         break;
 
       case DateFilterMode.YEAR:
         if (year) {
-          const start = new Date(year, 0, 1);
-          const end = new Date(year + 1, 0, 1);
-          where.date = { gte: start, lt: end };
+          where.date = utcYearRange(year);
         }
         break;
 
@@ -179,12 +178,11 @@ export class TransactionsService {
         if (startDate || endDate) {
           where.date = {};
           if (startDate) {
-            where.date.gte = new Date(startDate);
+            where.date.gte = utcDayStart(startDate);
           }
           if (endDate) {
-            const endDateObj = new Date(endDate);
-            endDateObj.setHours(23, 59, 59, 999);
-            where.date.lte = endDateObj;
+            // Inclusive end date: everything before the next UTC midnight.
+            where.date.lt = utcNextDay(endDate);
           }
         }
         break;
@@ -194,13 +192,9 @@ export class TransactionsService {
 
       default:
         if (month && year) {
-          const start = new Date(year, month - 1, 1);
-          const end = new Date(year, month, 1);
-          where.date = { gte: start, lt: end };
+          where.date = utcMonthRange(year, month);
         } else if (year) {
-          const start = new Date(year, 0, 1);
-          const end = new Date(year + 1, 0, 1);
-          where.date = { gte: start, lt: end };
+          where.date = utcYearRange(year);
         }
     }
 
@@ -253,9 +247,20 @@ export class TransactionsService {
         throw new NotFoundException('Transaction not found or access denied');
       }
 
+      // Never let a client move a transaction to another profile or rewrite
+      // its primary key through the update body.
+      const {
+        profileId: _ignoredProfileId,
+        id: _ignoredId,
+        ...safeDto
+      } = dto as Prisma.TransactionUpdateInput & {
+        profileId?: unknown;
+        id?: unknown;
+      };
+
       const updated = await this.prisma.transaction.update({
         where: { id },
-        data: dto,
+        data: safeDto,
         include: {
           category: true,
           account: true,
@@ -1368,8 +1373,10 @@ export class TransactionsService {
 
       if (!importedDto || processedIndices.has(importedIndex)) continue;
 
-      const manual = await this.prisma.transaction.findUnique({
-        where: { id: manualId },
+      // Scoped by profile: a merge instruction must not be able to delete
+      // another profile's transaction.
+      const manual = await this.prisma.transaction.findFirst({
+        where: { id: manualId, profileId },
       });
 
       if (!manual) {
@@ -1407,4 +1414,30 @@ export class TransactionsService {
     if (!importedNotes) return manualNotes;
     return `Manual: ${manualNotes} | Imported: ${importedNotes}`;
   }
+}
+
+/** Start of the given UTC calendar day for a YYYY-MM-DD (or ISO) string. */
+function utcDayStart(value: string): Date {
+  const [y, m, d] = value.slice(0, 10).split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d));
+}
+
+/** Midnight UTC of the day after the given YYYY-MM-DD (or ISO) string. */
+function utcNextDay(value: string): Date {
+  const [y, m, d] = value.slice(0, 10).split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d + 1));
+}
+
+function utcMonthRange(year: number, month: number) {
+  return {
+    gte: new Date(Date.UTC(year, month - 1, 1)),
+    lt: new Date(Date.UTC(year, month, 1)),
+  };
+}
+
+function utcYearRange(year: number) {
+  return {
+    gte: new Date(Date.UTC(year, 0, 1)),
+    lt: new Date(Date.UTC(year + 1, 0, 1)),
+  };
 }

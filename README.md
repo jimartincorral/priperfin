@@ -33,7 +33,8 @@ database:
 2. Install the "Personal Finance Tracker" add-on
 3. Configure the add-on options (optional)
 4. Start the add-on
-5. Access the web interface at `http://homeassistant.local:3000`
+5. Open it from the **Finance** entry in the Home Assistant sidebar (the add-on
+   is only reachable through Ingress, not on a port of its own)
 
 ## Run as a local server (Docker)
 
@@ -54,7 +55,7 @@ Open <http://localhost:3000>.
 On Apple silicon, point it at the arm64 image first:
 
 ```bash
-PRIPERFIN_IMAGE=ghcr.io/jimartincorral/priperfin-aarch64:1.25.0 docker compose up -d
+PRIPERFIN_IMAGE=ghcr.io/jimartincorral/priperfin-aarch64:1.26.1 docker compose up -d
 ```
 
 Your database and backups live in the `priperfin-data` Docker volume, so they

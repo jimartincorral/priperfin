@@ -734,8 +734,8 @@ export class CsvWizard extends LitElement {
                             <div style="flex: 1;">
                                 <strong>${match.importedDescription}</strong>
                                 <div style="font-size: 0.85rem; color: #64748b;">
-                                    Manual: ${new Date(match.manualDate).toLocaleDateString()} • $${match.manualAmount.toFixed(2)} |
-                                    Imported: ${new Date(match.importedDate).toLocaleDateString()} • $${match.importedAmount.toFixed(2)}
+                                    Manual: ${new Date(match.manualDate).toLocaleDateString(undefined, { timeZone: 'UTC' })} • $${match.manualAmount.toFixed(2)} |
+                                    Imported: ${new Date(match.importedDate).toLocaleDateString(undefined, { timeZone: 'UTC' })} • $${match.importedAmount.toFixed(2)}
                                 </div>
                                 <div style="font-size: 0.75rem; color: #94a3b8; margin-top: 0.25rem;">
                                     Match confidence: ${match.matchScore}%
@@ -755,8 +755,8 @@ export class CsvWizard extends LitElement {
                                     <tbody>
                                         <tr>
                                             <td>Date</td>
-                                            <td>${new Date(match.manualDate).toLocaleDateString()}</td>
-                                            <td style="background: var(--md-sys-color-tertiary-container); color: var(--md-sys-color-on-tertiary-container);">${new Date(match.importedDate).toLocaleDateString()}</td>
+                                            <td>${new Date(match.manualDate).toLocaleDateString(undefined, { timeZone: 'UTC' })}</td>
+                                            <td style="background: var(--md-sys-color-tertiary-container); color: var(--md-sys-color-on-tertiary-container);">${new Date(match.importedDate).toLocaleDateString(undefined, { timeZone: 'UTC' })}</td>
                                             <td><strong>Use Imported</strong></td>
                                         </tr>
                                         <tr>

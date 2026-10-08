@@ -11,7 +11,23 @@ export class IngressSecurityMiddleware implements NestMiddleware {
   private readonly logger = new Logger(IngressSecurityMiddleware.name);
   private readonly INGRESS_IP = '172.30.32.2';
 
+  /**
+   * Standalone container mode (docker compose, no Home Assistant). The
+   * browser's connection then arrives from the Docker bridge gateway, never
+   * from loopback or the Ingress gateway, so the allow-list below would reject
+   * every request. run.sh sets this when no Supervisor options file exists;
+   * docker-compose.yml keeps the published port bound to the host's loopback
+   * so the app still is not reachable from the network by default.
+   */
+  private readonly allowDirectAccess =
+    process.env.PRIPERFIN_ALLOW_DIRECT_ACCESS === 'true';
+
   use(req: Request, res: Response, next: NextFunction) {
+    if (this.allowDirectAccess) {
+      next();
+      return;
+    }
+
     // Get the real client IP (considering potential proxies)
     const clientIp = this.getClientIp(req);
 
