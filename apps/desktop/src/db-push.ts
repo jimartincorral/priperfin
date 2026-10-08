@@ -38,16 +38,47 @@ export async function pushSchema(paths: AppPaths): Promise<void> {
 
   log(`Synchronising database schema at ${paths.dbPath}`);
 
-  const output = await run(paths);
+  let output: string;
+  try {
+    output = await run(paths, false);
+  } catch (error) {
+    if (!(error instanceof SchemaSyncError) || !isAdditiveConstraintOnly(error.output)) {
+      throw error;
+    }
+    // Prisma files "a unique constraint will be added" under its data-loss
+    // warnings even though no data is dropped: the push simply fails if the
+    // constraint is already violated. Accepting that one kind of warning
+    // keeps the no-data-loss guarantee while letting such migrations through.
+    log('Schema push only adds unique constraints; retrying with --accept-data-loss');
+    output = await run(paths, true);
+  }
   log('Database schema is up to date');
   if (output.trim()) log(output.trim());
 }
 
-function run(paths: AppPaths): Promise<string> {
+/**
+ * True when every bullet in Prisma's data-loss warning block describes a
+ * unique constraint being added. Anything else (dropped columns or tables,
+ * narrowed types) keeps the strict behaviour.
+ */
+export function isAdditiveConstraintOnly(output: string): boolean {
+  const bullets = output
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith('•'));
+  if (bullets.length === 0) return false;
+  return bullets.every((line) =>
+    /^• A unique constraint covering the columns .* will be added\./.test(line),
+  );
+}
+
+function run(paths: AppPaths, acceptDataLoss: boolean): Promise<string> {
   return new Promise((resolve, reject) => {
+    const args = [paths.prismaCli, 'db', 'push', `--schema=${paths.schemaPath}`];
+    if (acceptDataLoss) args.push('--accept-data-loss');
     const child = spawn(
       process.execPath,
-      [paths.prismaCli, 'db', 'push', `--schema=${paths.schemaPath}`],
+      args,
       {
         cwd: paths.serverRoot,
         env: {

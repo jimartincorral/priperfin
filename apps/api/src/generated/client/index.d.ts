@@ -19973,7 +19973,7 @@ export namespace Prisma {
 
   export type TransactionWhereUniqueInput = Prisma.AtLeast<{
     id?: string
-    externalId?: string
+    profileId_externalId?: TransactionProfileIdExternalIdCompoundUniqueInput
     AND?: TransactionWhereInput | TransactionWhereInput[]
     OR?: TransactionWhereInput[]
     NOT?: TransactionWhereInput | TransactionWhereInput[]
@@ -19991,6 +19991,7 @@ export namespace Prisma {
     isTransfer?: BoolFilter<"Transaction"> | boolean
     transferId?: StringNullableFilter<"Transaction"> | string | null
     transferAccountId?: StringNullableFilter<"Transaction"> | string | null
+    externalId?: StringNullableFilter<"Transaction"> | string | null
     createdAt?: DateTimeFilter<"Transaction"> | Date | string
     updatedAt?: DateTimeFilter<"Transaction"> | Date | string
     category?: XOR<CategoryNullableScalarRelationFilter, CategoryWhereInput> | null
@@ -20000,7 +20001,7 @@ export namespace Prisma {
     suggestedRule?: XOR<CategorizationRuleNullableScalarRelationFilter, CategorizationRuleWhereInput> | null
     transferAccount?: XOR<AccountNullableScalarRelationFilter, AccountWhereInput> | null
     splits?: TransactionSplitListRelationFilter
-  }, "id" | "externalId">
+  }, "id" | "profileId_externalId">
 
   export type TransactionOrderByWithAggregationInput = {
     id?: SortOrder
@@ -22551,6 +22552,11 @@ export namespace Prisma {
   export type CategorizationRuleNullableScalarRelationFilter = {
     is?: CategorizationRuleWhereInput | null
     isNot?: CategorizationRuleWhereInput | null
+  }
+
+  export type TransactionProfileIdExternalIdCompoundUniqueInput = {
+    profileId: string
+    externalId: string
   }
 
   export type TransactionCountOrderByAggregateInput = {

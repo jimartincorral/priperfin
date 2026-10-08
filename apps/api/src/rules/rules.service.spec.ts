@@ -12,7 +12,6 @@ import {
 
 describe('RulesService', () => {
   let service: RulesService;
-  let prismaService: PrismaService;
 
   const mockPrismaService = {
     transaction: {
@@ -58,7 +57,6 @@ describe('RulesService', () => {
     }).compile();
 
     service = module.get<RulesService>(RulesService);
-    prismaService = module.get<PrismaService>(PrismaService);
 
     // Reset all mocks before each test
     jest.clearAllMocks();

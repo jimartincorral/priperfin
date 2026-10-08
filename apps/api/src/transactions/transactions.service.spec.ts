@@ -728,6 +728,111 @@ describe('TransactionsService', () => {
       expect(result.transferId).toBeDefined();
       expect(prismaMock.transaction.update).toHaveBeenCalledTimes(2);
     });
+
+    it('should reject legs whose amounts are not equal and opposite', async () => {
+      prismaMock.transaction.findFirst
+        .mockResolvedValueOnce(
+          createMockTransaction({
+            id: 'tx-a',
+            accountId: 'acc-1',
+            amount: new Decimal(-100),
+          }),
+        )
+        .mockResolvedValueOnce(
+          createMockTransaction({
+            id: 'tx-b',
+            accountId: 'acc-2',
+            amount: new Decimal(50),
+          }),
+        );
+
+      await expect(
+        service.linkAsTransfer(
+          { transactionAId: 'tx-a', transactionBId: 'tx-b' },
+          'profile-1',
+        ),
+      ).rejects.toThrow(BadRequestException);
+      expect(prismaMock.transaction.update).not.toHaveBeenCalled();
+    });
+
+    it('should reject a leg that is already part of a transfer', async () => {
+      prismaMock.transaction.findFirst
+        .mockResolvedValueOnce(
+          createMockTransaction({
+            id: 'tx-a',
+            accountId: 'acc-1',
+            amount: new Decimal(-100),
+            isTransfer: true,
+            transferId: 'old-transfer',
+          }),
+        )
+        .mockResolvedValueOnce(
+          createMockTransaction({
+            id: 'tx-b',
+            accountId: 'acc-2',
+            amount: new Decimal(100),
+          }),
+        );
+
+      await expect(
+        service.linkAsTransfer(
+          { transactionAId: 'tx-a', transactionBId: 'tx-b' },
+          'profile-1',
+        ),
+      ).rejects.toThrow(BadRequestException);
+      expect(prismaMock.transaction.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('update on a transfer leg', () => {
+    const leg = createMockTransaction({
+      id: 'tx-a',
+      accountId: 'acc-1',
+      amount: new Decimal(-100),
+      isTransfer: true,
+      transferId: 'transfer-1',
+      transferAccountId: 'acc-2',
+    });
+    const partner = createMockTransaction({
+      id: 'tx-b',
+      accountId: 'acc-2',
+      amount: new Decimal(100),
+      isTransfer: true,
+      transferId: 'transfer-1',
+      transferAccountId: 'acc-1',
+    });
+
+    it('should reject moving a leg onto its partner account', async () => {
+      prismaMock.transaction.findFirst
+        .mockResolvedValueOnce(leg)
+        .mockResolvedValueOnce(partner);
+
+      await expect(
+        service.update('tx-a', 'profile-1', { accountId: 'acc-2' } as any),
+      ).rejects.toThrow(BadRequestException);
+      expect(prismaMock.transaction.update).not.toHaveBeenCalled();
+    });
+
+    it('should point the partner at the new account when a leg moves', async () => {
+      prismaMock.transaction.findFirst
+        .mockResolvedValueOnce(leg)
+        .mockResolvedValueOnce(partner);
+      prismaMock.transaction.update
+        .mockResolvedValueOnce({ ...leg, accountId: 'acc-3' })
+        .mockResolvedValueOnce({ ...partner, transferAccountId: 'acc-3' });
+
+      await service.update('tx-a', 'profile-1', { accountId: 'acc-3' } as any);
+
+      expect(prismaMock.transaction.update).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({
+          where: { id: 'tx-b' },
+          data: expect.objectContaining({
+            transferAccount: { connect: { id: 'acc-3' } },
+          }),
+        }),
+      );
+    });
   });
 
   describe('findTransferMatches', () => {

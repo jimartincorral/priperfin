@@ -187,7 +187,7 @@ export class RuleEvaluatorService {
             caseSensitive ? '' : 'i',
           );
           return regex.test(toString(actual));
-        } catch (e) {
+        } catch {
           return false;
         }
 
@@ -197,23 +197,26 @@ export class RuleEvaluatorService {
       case 'lessThan':
         return toNumber(actual) < toNumber(expected);
 
-      case 'between':
+      case 'between': {
         const val = toNumber(actual);
         const min = toNumber(expected.min);
         const max = toNumber(expected.max);
         return val >= min && val <= max;
+      }
 
-      case 'in':
+      case 'in': {
         if (!Array.isArray(expected)) return false;
         const normalizedActualIn = normalizeString(actual);
         return expected.some((e) => normalizeString(e) === normalizedActualIn);
+      }
 
-      case 'notIn':
+      case 'notIn': {
         if (!Array.isArray(expected)) return true;
         const normalizedActualNotIn = normalizeString(actual);
         return !expected.some(
           (e) => normalizeString(e) === normalizedActualNotIn,
         );
+      }
 
       default:
         return false;

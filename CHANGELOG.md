@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.27.0 - 2026-10-08
+
+Structural fixes from the pre-release review: data model, transfers, performance and housekeeping.
+
+- **Import dedup key is now per profile.** Two profiles importing the same joint-account statement used to fail with "Internal server error" on the second import, because the key that detects re-imported rows was unique across the whole database. It is now unique within each profile. This is a schema change: the add-on applies it on start as usual; the desktop app, which refuses schema changes that could lose data, now recognises that adding a unique constraint drops nothing and applies it too. Any other kind of change still stops with an error as before.
+- **Transfer linking is validated.** Linking two transactions as a transfer now requires equal and opposite amounts, and refuses a transaction that is already part of a transfer (which would have orphaned its old partner). Moving one leg of a transfer to another account updates the partner's counterpart account, and moving it onto the partner's own account is refused.
+- **Faster on large ledgers.** On a 30,000-transaction ledger the all-time category and cash-flow reports went from about 1.2 to 1.5 seconds to 0.3 seconds, the yearly report from 0.27 to 0.07 seconds, and the all-time transaction list from 35 MB to 1.1 MB on the wire (responses are now compressed) and 30 percent faster to produce. A new index covers per-profile date ranges.
+- **Housekeeping.** All API lint warnings are fixed, two broken developer scripts and an unused web component are removed, and the docs no longer list armv7 (the add-on builds for amd64 and aarch64).
+
 ## v1.26.2 - 2026-10-08
 
 Polish from the pre-release review. No new features.

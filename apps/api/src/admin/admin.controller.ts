@@ -1,11 +1,4 @@
-import {
-  Controller,
-  Delete,
-  Get,
-  UseGuards,
-  Logger,
-  ForbiddenException,
-} from '@nestjs/common';
+import { Controller, Delete, Get, UseGuards, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { SessionAuthGuard } from '../auth/guards/session-auth.guard';
 import { CurrentProfile } from '../auth/decorators/current-profile.decorator';

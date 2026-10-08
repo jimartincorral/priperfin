@@ -157,5 +157,5 @@ For issues, questions, or feature requests:
 When reporting issues, please include:
 - Add-on version (check the Info tab)
 - Home Assistant version
-- Architecture (amd64, armv7, aarch64)
+- Architecture (amd64, aarch64)
 - Relevant log entries (check the Log tab)

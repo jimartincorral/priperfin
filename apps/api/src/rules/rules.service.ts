@@ -9,12 +9,7 @@ import { CreateRuleDto } from './dto/create-rule.dto';
 import { UpdateRuleDto } from './dto/update-rule.dto';
 import { RuleEvaluatorService } from './rule-evaluator.service';
 import { PatternDetectionService } from './pattern-detection.service';
-import {
-  Transaction,
-  CategorizationRule,
-  RuleMode,
-  SuggestionStatus,
-} from '../generated/client';
+import { Transaction, RuleMode, SuggestionStatus } from '../generated/client';
 
 @Injectable()
 export class RulesService {
@@ -254,7 +249,7 @@ export class RulesService {
             this.normalizeConditionsForComparison(suggestionConditions);
 
           return ruleStr === suggestionStr;
-        } catch (e) {
+        } catch {
           return false;
         }
       });
@@ -276,7 +271,7 @@ export class RulesService {
             this.normalizeConditionsForComparison(suggestionConditions);
 
           return rejectedStr === suggestionStr;
-        } catch (e) {
+        } catch {
           return false;
         }
       });

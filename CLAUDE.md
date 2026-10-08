@@ -95,7 +95,7 @@ Lit web components with Material Design 3 theming:
 - `backup_dir`: Backup storage directory (default: `/backup/priperfin`)
 - `backup_encryption_key`: Optional encryption key for backups
 
-The add-on runs on port 3000 with Ingress support and is available on aarch64, amd64, and armv7 architectures.
+The add-on runs on port 3000 with Ingress support and is available on aarch64 and amd64 architectures.
 
 ### Desktop App (Windows / macOS)
 

@@ -303,7 +303,7 @@ export class BackupService {
           // And we want to preserve IDs.
           // So we create transactions first, then splits.
           const txs = data.transactions.map((t: any) => {
-            const { splits, ...txData } = t;
+            const { splits: _splits, ...txData } = t;
             return {
               ...txData,
               profileId: targetProfileId,
