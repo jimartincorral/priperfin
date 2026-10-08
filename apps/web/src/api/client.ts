@@ -112,8 +112,19 @@ export class ApiClient {
         window.dispatchEvent(new CustomEvent('session-expired'));
     }
 
+    /**
+     * Endpoints where a 401 means "wrong PIN", not "your session is gone".
+     * For these the server's own message is surfaced and the session is left
+     * alone; treating them as expiry cleared storage and reloaded the login
+     * page on every mistyped PIN.
+     */
+    private isCredentialCheck(response: Response): boolean {
+        const path = new URL(response.url, window.location.origin).pathname;
+        return /\/api\/auth\/(login|setup|change-pin|profile)$/.test(path);
+    }
+
     private async parseResponse(response: Response) {
-        if (response.status === 401) {
+        if (response.status === 401 && !this.isCredentialCheck(response)) {
             this.handleUnauthorized();
             throw new Error('Session expired. Please log in again.');
         }

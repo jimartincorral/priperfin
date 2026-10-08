@@ -134,7 +134,9 @@ export function createPrismaMock() {
   };
 
   prismaMock.$transaction.mockImplementation(
-    (input: ((tx: typeof prismaMock) => Promise<unknown>) | Promise<unknown>[]) => {
+    (
+      input: ((tx: typeof prismaMock) => Promise<unknown>) | Promise<unknown>[],
+    ) => {
       if (Array.isArray(input)) {
         return Promise.all(input);
       }

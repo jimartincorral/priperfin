@@ -599,19 +599,18 @@ export class ReportsService {
     switch (filterMode) {
       case 'year':
         // Full year filter
+        // Dates are stored as UTC midnight, so ranges are built in UTC.
         const y = year || now.getFullYear();
         return {
-          startDate: new Date(y, 0, 1),
-          endDate: new Date(y + 1, 0, 1),
+          startDate: new Date(Date.UTC(y, 0, 1)),
+          endDate: new Date(Date.UTC(y + 1, 0, 1)),
         };
 
       case 'custom':
         // Custom date range
         return {
-          startDate: customStart ? new Date(customStart) : undefined,
-          endDate: customEnd
-            ? new Date(new Date(customEnd).getTime() + 24 * 60 * 60 * 1000)
-            : undefined,
+          startDate: customStart ? utcDate(customStart, 0) : undefined,
+          endDate: customEnd ? utcDate(customEnd, 1) : undefined,
         };
 
       case 'all_time':
@@ -624,9 +623,15 @@ export class ReportsService {
         const targetYear = year || now.getFullYear();
         const targetMonth = month || now.getMonth() + 1;
         return {
-          startDate: new Date(targetYear, targetMonth - 1, 1),
-          endDate: new Date(targetYear, targetMonth, 1),
+          startDate: new Date(Date.UTC(targetYear, targetMonth - 1, 1)),
+          endDate: new Date(Date.UTC(targetYear, targetMonth, 1)),
         };
     }
   }
+}
+
+/** UTC midnight of a YYYY-MM-DD (or ISO) string, offset by `plusDays`. */
+function utcDate(value: string, plusDays: number): Date {
+  const [y, m, d] = value.slice(0, 10).split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d + plusDays));
 }

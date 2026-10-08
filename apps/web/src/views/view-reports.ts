@@ -967,8 +967,8 @@ export class ViewReports extends LitElement {
         return { ...base, year: this.year - 1 };
       case 'custom': {
         if (!this.customStartDate || !this.customEndDate) return null;
-        const start = new Date(`${this.customStartDate}T00:00:00`);
-        const end = new Date(`${this.customEndDate}T00:00:00`);
+        const start = new Date(`${this.customStartDate}T00:00:00Z`);
+        const end = new Date(`${this.customEndDate}T00:00:00Z`);
         const span = end.getTime() - start.getTime();
         if (!Number.isFinite(span) || span < 0) return null;
         const prevEnd = new Date(start.getTime() - 86400000);
@@ -1024,8 +1024,8 @@ export class ViewReports extends LitElement {
       this.year += direction;
     } else if (this.dateFilterMode === 'custom') {
       if (!this.customStartDate || !this.customEndDate) return;
-      const start = new Date(`${this.customStartDate}T00:00:00`);
-      const end = new Date(`${this.customEndDate}T00:00:00`);
+      const start = new Date(`${this.customStartDate}T00:00:00Z`);
+      const end = new Date(`${this.customEndDate}T00:00:00Z`);
       const span = end.getTime() - start.getTime() + 86400000;
       this.customStartDate = new Date(start.getTime() + direction * span).toISOString().split('T')[0];
       this.customEndDate = new Date(end.getTime() + direction * span).toISOString().split('T')[0];

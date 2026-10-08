@@ -51,17 +51,11 @@ export class TransactionsController {
     @Body() linkTransferDto: LinkTransferDto,
     @CurrentProfile() profile: Profile,
   ) {
-    return this.transactionsService.linkAsTransfer(
-      linkTransferDto,
-      profile.id,
-    );
+    return this.transactionsService.linkAsTransfer(linkTransferDto, profile.id);
   }
 
   @Post(':id/unlink-transfer')
-  unlinkTransfer(
-    @Param('id') id: string,
-    @CurrentProfile() profile: Profile,
-  ) {
+  unlinkTransfer(@Param('id') id: string, @CurrentProfile() profile: Profile) {
     return this.transactionsService.unlinkTransfer(id, profile.id);
   }
 
@@ -80,7 +74,7 @@ export class TransactionsController {
   }
 
   @Post('import')
-  @Throttle({ import: { limit: 20, ttl: 3600000 } })
+  @Throttle({ default: { limit: 20, ttl: 3600000 } })
   @UseInterceptors(FileInterceptor('file'))
   uploadFile(
     @UploadedFile(
@@ -97,7 +91,7 @@ export class TransactionsController {
   }
 
   @Post('bulk')
-  @Throttle({ import: { limit: 20, ttl: 3600000 } })
+  @Throttle({ default: { limit: 20, ttl: 3600000 } })
   async createBulk(
     @Body()
     body: {

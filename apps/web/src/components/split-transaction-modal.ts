@@ -418,7 +418,7 @@ export class SplitTransactionModal extends LitElement {
           <div class="transaction-summary">
             <div class="summary-row">
               <span class="summary-label">Date:</span>
-              <span>${new Date(this.transaction.date).toLocaleDateString()}</span>
+              <span>${new Date(this.transaction.date).toLocaleDateString(undefined, { timeZone: 'UTC' })}</span>
             </div>
             <div class="summary-row">
               <span class="summary-label">Description:</span>

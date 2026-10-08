@@ -50,23 +50,35 @@ describe('ReportsService', () => {
     it('should return correct date range for month and year', () => {
       const result = (service as any).getDateRange({ month: 1, year: 2025 });
 
-      expect(result.startDate).toEqual(new Date(2025, 0, 1));
-      expect(result.endDate).toEqual(new Date(2025, 1, 1));
+      // Ranges are UTC: stored dates are UTC midnight, whatever the server TZ.
+      expect(result.startDate).toEqual(new Date(Date.UTC(2025, 0, 1)));
+      expect(result.endDate).toEqual(new Date(Date.UTC(2025, 1, 1)));
     });
 
     it('should handle December correctly (year rollover)', () => {
       const result = (service as any).getDateRange({ month: 12, year: 2025 });
 
-      expect(result.startDate).toEqual(new Date(2025, 11, 1));
-      expect(result.endDate).toEqual(new Date(2026, 0, 1)); // Jan 2026
+      expect(result.startDate).toEqual(new Date(Date.UTC(2025, 11, 1)));
+      expect(result.endDate).toEqual(new Date(Date.UTC(2026, 0, 1))); // Jan 2026
     });
 
     it('should use current date when no month/year provided', () => {
       const result = (service as any).getDateRange({});
 
       // Frozen "now" is June 15, 2025 -> default month filter is June 2025
-      expect(result.startDate).toEqual(new Date(2025, 5, 1));
-      expect(result.endDate).toEqual(new Date(2025, 6, 1));
+      expect(result.startDate).toEqual(new Date(Date.UTC(2025, 5, 1)));
+      expect(result.endDate).toEqual(new Date(Date.UTC(2025, 6, 1)));
+    });
+
+    it('should treat a custom range as inclusive UTC calendar days', () => {
+      const result = (service as any).getDateRange({
+        filterMode: 'custom',
+        startDate: '2025-03-01',
+        endDate: '2025-03-31',
+      });
+
+      expect(result.startDate).toEqual(new Date('2025-03-01T00:00:00.000Z'));
+      expect(result.endDate).toEqual(new Date('2025-04-01T00:00:00.000Z'));
     });
   });
 

@@ -689,8 +689,10 @@ export class ViewExpenses extends LitElement {
   }
 
   getMonthKey(dateValue: string) {
+    // Transaction dates are stored as UTC midnight; read them back in UTC so
+    // the 1st of a month never lands in the previous month west of UTC.
     const date = new Date(dateValue);
-    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`;
   }
 
   async setStartingBalanceFromTransaction(tx: any) {
@@ -798,7 +800,9 @@ export class ViewExpenses extends LitElement {
 
   isValidIsoDate(value: string) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
-    const parsed = new Date(`${value}T00:00:00`);
+    // Parse as UTC: comparing a local-midnight parse against the UTC date
+    // string rejected every date in time zones east of UTC.
+    const parsed = new Date(`${value}T00:00:00Z`);
     if (Number.isNaN(parsed.getTime())) return false;
     return parsed.toISOString().slice(0, 10) === value;
   }
@@ -1684,7 +1688,7 @@ export class ViewExpenses extends LitElement {
         ? this.transactions
           .filter((t: any) => {
             const txDate = new Date(t.date);
-            return txDate.getFullYear() === balanceYear && txDate.getMonth() + 1 === balanceMonth;
+            return txDate.getUTCFullYear() === balanceYear && txDate.getUTCMonth() + 1 === balanceMonth;
           })
           .reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0)
         : this.transactions.reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
@@ -2212,8 +2216,8 @@ Tables: ${result.tables?.join(', ')}`;
       this.year += direction;
     } else if (this.dateFilterMode === 'custom') {
       if (!this.customStartDate || !this.customEndDate) return;
-      const start = new Date(`${this.customStartDate}T00:00:00`);
-      const end = new Date(`${this.customEndDate}T00:00:00`);
+      const start = new Date(`${this.customStartDate}T00:00:00Z`);
+      const end = new Date(`${this.customEndDate}T00:00:00Z`);
       const span = end.getTime() - start.getTime() + 86400000;
       this.customStartDate = new Date(start.getTime() + direction * span).toISOString().split('T')[0];
       this.customEndDate = new Date(end.getTime() + direction * span).toISOString().split('T')[0];
@@ -2291,6 +2295,7 @@ Tables: ${result.tables?.join(', ')}`;
             weekday: 'short',
             day: 'numeric',
             month: 'long',
+            timeZone: 'UTC',
           }),
           rows: [],
         };
@@ -2732,7 +2737,7 @@ Tables: ${result.tables?.join(', ')}`;
               <div class="x-sheet-desc">${tx.description}</div>
               <div class="x-sheet-meta">
                 ${new Date(tx.date).toLocaleDateString(i18n.getLocale(), {
-                  weekday: 'short', day: 'numeric', month: 'long', year: 'numeric',
+                  weekday: 'short', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC',
                 })}
                 ${account ? html` · ${account.type === 'CREDIT' ? '💳' : '🏦'} ${account.name}` : nothing}
               </div>
@@ -2795,7 +2800,7 @@ Tables: ${result.tables?.join(', ')}`;
             <div class="x-sheet-desc">${tx.description}</div>
             <div class="x-sheet-meta">
               ${new Date(tx.date).toLocaleDateString(i18n.getLocale(), {
-                weekday: 'short', day: 'numeric', month: 'long', year: 'numeric',
+                weekday: 'short', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC',
               })}
               ${account ? html` · ${account.type === 'CREDIT' ? '💳' : '🏦'} ${account.name}` : nothing}
             </div>
@@ -2910,7 +2915,7 @@ Tables: ${result.tables?.join(', ')}`;
                   <div class="x-row-desc">${tx.description}</div>
                   <div class="x-row-cat">
                     ${new Date(tx.date).toLocaleDateString(i18n.getLocale(), {
-                      weekday: 'short', day: 'numeric', month: 'short',
+                      weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC',
                     })}
                     ${category ? ` · ${category.name}` : ''}
                   </div>

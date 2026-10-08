@@ -199,7 +199,7 @@ export class ViewLogin extends LitElement {
     } catch (e: any) {
       console.error('[Login] Login failed:', e);
       this.loading = false;
-      if (e.message.includes('429') || e.message.includes('Rate limit')) {
+      if (/429|rate limit|too many requests/i.test(e.message)) {
         this.rateLimited = true;
         this.retryAfter = 60;
         this.startCountdown();

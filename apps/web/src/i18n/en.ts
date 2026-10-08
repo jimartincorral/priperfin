@@ -66,6 +66,9 @@ export const en = {
         },
     },
     common: {
+        saved: 'Saved',
+        close: 'Close',
+        account: 'Account',
         save: 'Save',
         cancel: 'Cancel',
         delete: 'Delete',
@@ -372,6 +375,7 @@ export const en = {
         settings: 'Settings',
     },
     expenses: {
+        validation_amount: 'Enter a valid amount',
         add_transaction: 'Add Manual Transaction',
         import_pdf: 'Import Bank PDF',
         filter_all: 'All',
@@ -511,6 +515,8 @@ export const en = {
         transactions: 'transactions',
     },
     settings: {
+        delete_category: 'Delete category',
+        delete_category_warning: 'Transactions in this category will be left uncategorized. This cannot be undone.',
         title: 'Settings',
         general: 'General',
         language: 'Language',

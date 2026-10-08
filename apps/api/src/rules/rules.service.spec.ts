@@ -17,6 +17,7 @@ describe('RulesService', () => {
   const mockPrismaService = {
     transaction: {
       findUnique: jest.fn(),
+      findFirst: jest.fn(),
       findMany: jest.fn(),
       update: jest.fn(),
     },
@@ -24,6 +25,7 @@ describe('RulesService', () => {
       create: jest.fn(),
       findMany: jest.fn(),
       findUnique: jest.fn(),
+      findFirst: jest.fn(),
       update: jest.fn(),
       delete: jest.fn(),
     },
@@ -105,7 +107,7 @@ describe('RulesService', () => {
         },
       ];
 
-      mockPrismaService.categorizationRule.findUnique.mockResolvedValue(
+      mockPrismaService.categorizationRule.findFirst.mockResolvedValue(
         mockRule,
       );
       mockPrismaService.transaction.findMany.mockResolvedValue(
@@ -115,9 +117,17 @@ describe('RulesService', () => {
       mockPrismaService.categorizationRule.update.mockResolvedValue({});
       mockRuleEvaluator.matches.mockReturnValue(true);
 
-      const result = await service.applyToExisting(ruleId);
+      const result = await service.applyToExisting(ruleId, 'profile-1');
 
       expect(result.matchCount).toBe(2);
+      expect(
+        mockPrismaService.categorizationRule.findFirst,
+      ).toHaveBeenCalledWith({ where: { id: ruleId, profileId: 'profile-1' } });
+      expect(mockPrismaService.transaction.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { profileId: 'profile-1', categoryId: null },
+        }),
+      );
       expect(mockPrismaService.transaction.update).toHaveBeenCalledTimes(2);
       expect(mockPrismaService.transaction.update).toHaveBeenCalledWith({
         where: { id: 'tx-1' },
@@ -131,9 +141,12 @@ describe('RulesService', () => {
 
   describe('suggestRuleForTransaction', () => {
     it('should return null if transaction not found', async () => {
-      mockPrismaService.transaction.findUnique.mockResolvedValue(null);
+      mockPrismaService.transaction.findFirst.mockResolvedValue(null);
 
-      const result = await service.suggestRuleForTransaction('non-existent-id');
+      const result = await service.suggestRuleForTransaction(
+        'non-existent-id',
+        'profile-1',
+      );
 
       expect(result).toBeNull();
     });
@@ -146,11 +159,14 @@ describe('RulesService', () => {
         amount: 100 as any,
       };
 
-      mockPrismaService.transaction.findUnique.mockResolvedValue(
+      mockPrismaService.transaction.findFirst.mockResolvedValue(
         mockTransaction,
       );
 
-      const result = await service.suggestRuleForTransaction('tx-1');
+      const result = await service.suggestRuleForTransaction(
+        'tx-1',
+        'profile-1',
+      );
 
       expect(result).toBeNull();
     });
@@ -172,7 +188,7 @@ describe('RulesService', () => {
         category: mockCategory as Category,
       };
 
-      mockPrismaService.transaction.findUnique.mockResolvedValue(
+      mockPrismaService.transaction.findFirst.mockResolvedValue(
         mockTransaction,
       );
       mockPrismaService.transaction.findMany.mockResolvedValue([
@@ -184,7 +200,10 @@ describe('RulesService', () => {
         },
       ]); // Only 1 similar transaction (< 3)
 
-      const result = await service.suggestRuleForTransaction('tx-1');
+      const result = await service.suggestRuleForTransaction(
+        'tx-1',
+        'profile-1',
+      );
 
       expect(result).toBeNull();
     });
@@ -216,14 +235,17 @@ describe('RulesService', () => {
         notes: null,
       }));
 
-      mockPrismaService.transaction.findUnique.mockResolvedValue(
+      mockPrismaService.transaction.findFirst.mockResolvedValue(
         mockTransaction,
       );
       mockPrismaService.transaction.findMany.mockResolvedValue(
         similarTransactions,
       );
 
-      const result = await service.suggestRuleForTransaction('tx-1');
+      const result = await service.suggestRuleForTransaction(
+        'tx-1',
+        'profile-1',
+      );
 
       expect(result).toBeNull();
     });
@@ -255,14 +277,17 @@ describe('RulesService', () => {
         notes: i < 7 ? 'Morning coffee' : 'Afternoon coffee',
       }));
 
-      mockPrismaService.transaction.findUnique.mockResolvedValue(
+      mockPrismaService.transaction.findFirst.mockResolvedValue(
         mockTransaction,
       );
       mockPrismaService.transaction.findMany.mockResolvedValue(
         similarTransactions,
       );
 
-      const result = await service.suggestRuleForTransaction('tx-1');
+      const result = await service.suggestRuleForTransaction(
+        'tx-1',
+        'profile-1',
+      );
 
       expect(result).not.toBeNull();
       expect(result?.confidence).toBeGreaterThanOrEqual(90);
@@ -308,14 +333,17 @@ describe('RulesService', () => {
         notes: 'Entertainment subscription',
       }));
 
-      mockPrismaService.transaction.findUnique.mockResolvedValue(
+      mockPrismaService.transaction.findFirst.mockResolvedValue(
         mockTransaction,
       );
       mockPrismaService.transaction.findMany.mockResolvedValue(
         similarTransactions,
       );
 
-      const result = await service.suggestRuleForTransaction('tx-1');
+      const result = await service.suggestRuleForTransaction(
+        'tx-1',
+        'profile-1',
+      );
 
       expect(result).not.toBeNull();
 
@@ -354,14 +382,17 @@ describe('RulesService', () => {
         notes: 'Weekly shopping trip',
       }));
 
-      mockPrismaService.transaction.findUnique.mockResolvedValue(
+      mockPrismaService.transaction.findFirst.mockResolvedValue(
         mockTransaction,
       );
       mockPrismaService.transaction.findMany.mockResolvedValue(
         similarTransactions,
       );
 
-      const result = await service.suggestRuleForTransaction('tx-1');
+      const result = await service.suggestRuleForTransaction(
+        'tx-1',
+        'profile-1',
+      );
 
       expect(result).not.toBeNull();
       expect(result?.confidence).toBeGreaterThanOrEqual(90);
@@ -387,11 +418,14 @@ describe('RulesService', () => {
         category: null, // Category is null even though categoryId exists
       };
 
-      mockPrismaService.transaction.findUnique.mockResolvedValue(
+      mockPrismaService.transaction.findFirst.mockResolvedValue(
         mockTransaction,
       );
 
-      const result = await service.suggestRuleForTransaction('tx-1');
+      const result = await service.suggestRuleForTransaction(
+        'tx-1',
+        'profile-1',
+      );
 
       // Should return null because category is null
       expect(result).toBeNull();

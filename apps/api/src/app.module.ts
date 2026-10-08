@@ -30,26 +30,16 @@ import { ScheduleModule } from '@nestjs/schedule';
   imports: [
     ConfigModule.forRoot({ isGlobal: true }), // Load .env files and make ConfigService available globally
     ScheduleModule.forRoot(),
+    // A single throttler. With several named throttlers every one of them
+    // applies to every route, so a 5/min "login" limiter would have throttled
+    // the whole API; that is why the guard used to be disabled, which left the
+    // PIN login with no brute-force protection at all. Routes that need a
+    // tighter limit override this one with @Throttle({ default: {...} }).
     ThrottlerModule.forRoot([
       {
         name: 'default',
         ttl: 60000, // 1 minute
-        limit: 100000, // 100000 requests per minute
-      },
-      {
-        name: 'login',
-        ttl: 60000, // 1 minute
-        limit: 5, // 5 login attempts per minute
-      },
-      {
-        name: 'backup',
-        ttl: 3600000, // 1 hour
-        limit: 25, // 25 requests per hour
-      },
-      {
-        name: 'import',
-        ttl: 3600000, // 1 hour
-        limit: 20, // 20 requests per hour
+        limit: 100000, // effectively unlimited for normal use
       },
     ]),
     // Note: ServeStaticModule disabled - static files are now served via AppController
@@ -98,12 +88,10 @@ import { ScheduleModule } from '@nestjs/schedule';
 
   providers: [
     AppService,
-    // Throttler guard disabled to prevent rate limiting issues
-    // Specific endpoints (login, backup, import) still have their own throttle limits
-    // {
-    //   provide: APP_GUARD,
-    //   useClass: ThrottlerGuard,
-    // },
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
   ],
 })
 export class AppModule implements NestModule {

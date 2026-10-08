@@ -56,7 +56,7 @@ export class AuthController {
 
   @Post('login')
   @Public()
-  @Throttle({ login: { limit: 5, ttl: 60000 } })
+  @Throttle({ default: { limit: 5, ttl: 60000 } }) // 5 attempts per minute
   async login(
     @Body() dto: LoginDto,
     @Ip() ipAddress: string,

@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { TransactionsService } from './transactions.service';
+import { DateFilterMode } from './get-transactions.dto';
 import { RulesService } from '../rules/rules.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotFoundException, BadRequestException } from '@nestjs/common';
@@ -425,6 +426,10 @@ describe('TransactionsService', () => {
   // createMany() Tests
   // ============================================
   describe('createMany', () => {
+    beforeEach(() => {
+      prismaMock.account.findMany.mockResolvedValue([]);
+    });
+
     it('should create transactions', async () => {
       prismaMock.transaction.findMany.mockResolvedValue([]); // No existing
       prismaMock.transaction.createMany.mockResolvedValue({ count: 1 });
@@ -472,6 +477,54 @@ describe('TransactionsService', () => {
       expect(result.duplicateCount).toBe(1);
       expect(result.duplicates).toHaveLength(1);
     });
+
+    it('should give in-batch repeats distinct externalIds when forced', async () => {
+      prismaMock.transaction.findMany.mockResolvedValue([]);
+      prismaMock.transaction.createMany.mockResolvedValue({ count: 2 });
+      rulesServiceMock.evaluateTransaction.mockResolvedValue(null);
+
+      // Two legitimate identical rows: same day, amount and description.
+      const row = { date: '2025-01-15', amount: -2.5, description: 'Coffee' };
+      const result = await service.createMany(
+        [{ ...row }, { ...row }] as any,
+        true,
+        [],
+        'profile-1',
+      );
+
+      expect(result.newCount).toBe(2);
+      const inserted = prismaMock.transaction.createMany.mock.calls[0][0].data;
+      expect(inserted).toHaveLength(2);
+      expect(inserted[0].externalId).toBeTruthy();
+      expect(inserted[1].externalId).toBe(`${inserted[0].externalId}#2`);
+    });
+
+    it('should let account-based rules see the account during import', async () => {
+      const account = { id: 'acc-1', name: 'Main', profileId: 'profile-1' };
+      prismaMock.account.findMany.mockResolvedValue([account]);
+      prismaMock.transaction.findMany.mockResolvedValue([]);
+      prismaMock.transaction.createMany.mockResolvedValue({ count: 1 });
+      rulesServiceMock.evaluateTransaction.mockResolvedValue(null);
+
+      await service.createMany(
+        [
+          {
+            date: '2025-01-15',
+            amount: -50,
+            description: 'Test',
+            accountId: 'acc-1',
+          },
+        ] as any,
+        true,
+        [],
+        'profile-1',
+      );
+
+      expect(rulesServiceMock.evaluateTransaction).toHaveBeenCalledWith(
+        expect.objectContaining({ accountId: 'acc-1', account }),
+        'profile-1',
+      );
+    });
   });
 
   // ============================================
@@ -483,13 +536,39 @@ describe('TransactionsService', () => {
 
       await service.findAll({ month: 1, year: 2025 }, 'profile-1');
 
+      // Boundaries are UTC midnight so a transaction stored as
+      // 2025-01-01T00:00:00Z is January in every server time zone.
       expect(prismaMock.transaction.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({
-            date: expect.objectContaining({
-              gte: expect.any(Date),
-              lt: expect.any(Date),
-            }),
+            date: {
+              gte: new Date('2025-01-01T00:00:00.000Z'),
+              lt: new Date('2025-02-01T00:00:00.000Z'),
+            },
+          }),
+        }),
+      );
+    });
+
+    it('should treat a custom range as inclusive UTC calendar days', async () => {
+      prismaMock.transaction.findMany.mockResolvedValue([]);
+
+      await service.findAll(
+        {
+          filterMode: DateFilterMode.CUSTOM,
+          startDate: '2025-03-01',
+          endDate: '2025-03-31',
+        },
+        'profile-1',
+      );
+
+      expect(prismaMock.transaction.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            date: {
+              gte: new Date('2025-03-01T00:00:00.000Z'),
+              lt: new Date('2025-04-01T00:00:00.000Z'),
+            },
           }),
         }),
       );
@@ -629,8 +708,16 @@ describe('TransactionsService', () => {
         .mockResolvedValueOnce(txB);
 
       prismaMock.transaction.update
-        .mockResolvedValueOnce({ ...txA, isTransfer: true, transferAccountId: 'acc-2' })
-        .mockResolvedValueOnce({ ...txB, isTransfer: true, transferAccountId: 'acc-1' });
+        .mockResolvedValueOnce({
+          ...txA,
+          isTransfer: true,
+          transferAccountId: 'acc-2',
+        })
+        .mockResolvedValueOnce({
+          ...txB,
+          isTransfer: true,
+          transferAccountId: 'acc-1',
+        });
 
       const result = await service.linkAsTransfer(
         { transactionAId: 'tx-a', transactionBId: 'tx-b' },
