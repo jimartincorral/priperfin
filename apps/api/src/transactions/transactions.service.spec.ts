@@ -629,8 +629,16 @@ describe('TransactionsService', () => {
         .mockResolvedValueOnce(txB);
 
       prismaMock.transaction.update
-        .mockResolvedValueOnce({ ...txA, isTransfer: true, transferAccountId: 'acc-2' })
-        .mockResolvedValueOnce({ ...txB, isTransfer: true, transferAccountId: 'acc-1' });
+        .mockResolvedValueOnce({
+          ...txA,
+          isTransfer: true,
+          transferAccountId: 'acc-2',
+        })
+        .mockResolvedValueOnce({
+          ...txB,
+          isTransfer: true,
+          transferAccountId: 'acc-1',
+        });
 
       const result = await service.linkAsTransfer(
         { transactionAId: 'tx-a', transactionBId: 'tx-b' },

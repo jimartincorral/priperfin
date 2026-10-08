@@ -806,10 +806,8 @@ export class TransactionsService {
     const absAmount = Math.abs(dto.amount);
     const date = new Date(dto.date);
 
-    const descFrom =
-      dto.description || `Transfer to ${toAccount.name}`;
-    const descTo =
-      dto.description || `Transfer from ${fromAccount.name}`;
+    const descFrom = dto.description || `Transfer to ${toAccount.name}`;
+    const descTo = dto.description || `Transfer from ${fromAccount.name}`;
 
     const [fromTransaction, toTransaction] = await this.prisma.$transaction([
       this.prisma.transaction.create({
