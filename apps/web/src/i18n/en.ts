@@ -161,6 +161,7 @@ export const en = {
         // Goals
         saved_so_far: 'Saved so far',
         unassigned: 'Unassigned',
+        left_to_reach_goals: 'Left to reach goals',
         assign: 'Assign',
         on_track: 'On track',
         behind_by: 'Behind {amount}',
@@ -264,6 +265,7 @@ export const en = {
         savings_pot: 'Savings pot',
         assigned_to_goals: 'Assigned to goals',
         needed_per_month: 'Needed per month',
+        left_to_reach_goals: 'Left to reach goals',
         on_track_count: '{count} on track',
         behind_count: '{count} behind',
         per_month: 'Per month',
