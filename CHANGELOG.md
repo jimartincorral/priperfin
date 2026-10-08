@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.26.2 - 2026-10-08
+
+Polish from the pre-release review. No new features.
+
+- **No more pop-up dialogs on desktop.** Saves, errors and sync results used to open the browser's native alert box. They now appear as a toast in the bottom-right corner, with an action button where one applies, the same way the mobile layout already did.
+- **Currency symbol follows your setting.** GBP, JPY, CAD and AUD showed `$` everywhere; the duplicate-merge step of the CSV import and the split dialog showed `$` even for EUR. Every amount now uses the symbol of the currency chosen in Settings.
+- **Light theme renders native controls in light.** The page forced dark `color-scheme`, so date pickers, drop-downs and scrollbars stayed dark in the light theme. The CSV import wizard, the rules list and the split dialog also used fixed light colours that read badly in dark mode; they use the theme palette now.
+- **Spanish login and setup.** The login and setup screens, the profile picker's filter box and the wrong-PIN and rate-limit messages are translated. The session token is no longer written to the browser console.
+- **Reports agree on what counts as spending.** A negative amount on an income category (a clawback) and an outflow to a savings goal are no longer counted as "Uncategorized" spending in the category breakdown; the cash-flow diagram treats them the same way, reducing the income source and leaving goal contributions in the Savings remainder.
+
 ## v1.26.1 - 2026-10-08
 
 Fixes found in a pre-release review. No new features.

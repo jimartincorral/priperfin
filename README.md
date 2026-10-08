@@ -55,7 +55,7 @@ Open <http://localhost:3000>.
 On Apple silicon, point it at the arm64 image first:
 
 ```bash
-PRIPERFIN_IMAGE=ghcr.io/jimartincorral/priperfin-aarch64:1.26.1 docker compose up -d
+PRIPERFIN_IMAGE=ghcr.io/jimartincorral/priperfin-aarch64:1.26.2 docker compose up -d
 ```
 
 Your database and backups live in the `priperfin-data` Docker volume, so they
