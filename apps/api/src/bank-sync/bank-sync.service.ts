@@ -367,7 +367,7 @@ export class BankSyncService {
               ? oldDetails.find((d: any) => d.uid === linkedAcc.bankAccountUid)
               : null;
             oldIban = oldItem?.account_id?.iban || oldItem?.iban || null;
-          } catch (_err) {
+          } catch {
             // ignore
           }
 
@@ -678,7 +678,7 @@ export class BankSyncService {
                 });
               }
             }
-          } catch (_e) {
+          } catch {
             this.logger.debug('Failed to parse bankConnection accountsJson');
           }
         }

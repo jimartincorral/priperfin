@@ -9,7 +9,6 @@ import {
   Query,
   UsePipes,
   ValidationPipe,
-  ParseUUIDPipe,
   UseGuards,
 } from '@nestjs/common';
 import { CategoriesService } from './categories.service';

@@ -1,4 +1,4 @@
-import { Controller, Get, Req, Res, Logger, All, Next } from '@nestjs/common';
+import { Controller, Get, Req, Res, Logger, Next } from '@nestjs/common';
 import { AppService } from './app.service';
 import { Request, Response, NextFunction } from 'express';
 import { readFileSync, existsSync, statSync } from 'fs';

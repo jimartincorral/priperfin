@@ -1,4 +1,4 @@
-import { Module, Logger, NestModule, MiddlewareConsumer } from '@nestjs/common';
+import { Module, NestModule, MiddlewareConsumer } from '@nestjs/common';
 import { APP_GUARD, RouterModule } from '@nestjs/core';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { IngressPathMiddleware } from './ingress-path.middleware';

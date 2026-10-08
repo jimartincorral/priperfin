@@ -258,6 +258,33 @@ export class TransactionsService {
         id?: unknown;
       };
 
+      // The other leg of a transfer, if any. Looked up before writing so an
+      // invalid account move is rejected instead of half-applied.
+      const paired =
+        transaction.isTransfer && transaction.transferId
+          ? await this.prisma.transaction.findFirst({
+              where: {
+                transferId: transaction.transferId,
+                id: { not: id },
+                profileId,
+              },
+            })
+          : null;
+
+      const newAccountId = (safeDto as { accountId?: string | null }).accountId;
+      if (paired && newAccountId !== undefined) {
+        if (!newAccountId) {
+          throw new BadRequestException(
+            'A transfer leg must stay on an account',
+          );
+        }
+        if (newAccountId === paired.accountId) {
+          throw new BadRequestException(
+            'A transfer cannot have both legs on the same account',
+          );
+        }
+      }
+
       const updated = await this.prisma.transaction.update({
         where: { id },
         data: safeDto,
@@ -268,38 +295,32 @@ export class TransactionsService {
         },
       });
 
-      // If it's a transfer, synchronize paired leg for amount and date
-      if (transaction.isTransfer && transaction.transferId) {
-        const paired = await this.prisma.transaction.findFirst({
-          where: {
-            transferId: transaction.transferId,
-            id: { not: id },
-            profileId,
-          },
-        });
-
-        if (paired) {
-          const pairedData: Prisma.TransactionUpdateInput = {};
-          if (dto.date !== undefined) {
-            pairedData.date = dto.date;
+      // If it's a transfer, synchronize the paired leg: same date, mirrored
+      // amount, and its transferAccountId follows this leg's account.
+      if (paired) {
+        const pairedData: Prisma.TransactionUpdateInput = {};
+        if (dto.date !== undefined) {
+          pairedData.date = dto.date;
+        }
+        if (newAccountId !== undefined && newAccountId) {
+          pairedData.transferAccount = { connect: { id: newAccountId } };
+        }
+        if (dto.amount !== undefined) {
+          const rawAmount =
+            typeof dto.amount === 'number'
+              ? dto.amount
+              : typeof (dto.amount as any)?.toNumber === 'function'
+                ? (dto.amount as any).toNumber()
+                : Number(dto.amount);
+          if (!isNaN(rawAmount)) {
+            pairedData.amount = new Prisma.Decimal(-rawAmount);
           }
-          if (dto.amount !== undefined) {
-            const rawAmount =
-              typeof dto.amount === 'number'
-                ? dto.amount
-                : typeof (dto.amount as any)?.toNumber === 'function'
-                  ? (dto.amount as any).toNumber()
-                  : Number(dto.amount);
-            if (!isNaN(rawAmount)) {
-              pairedData.amount = new Prisma.Decimal(-rawAmount);
-            }
-          }
-          if (Object.keys(pairedData).length > 0) {
-            await this.prisma.transaction.update({
-              where: { id: paired.id },
-              data: pairedData,
-            });
-          }
+        }
+        if (Object.keys(pairedData).length > 0) {
+          await this.prisma.transaction.update({
+            where: { id: paired.id },
+            data: pairedData,
+          });
         }
       }
 
@@ -917,6 +938,25 @@ export class TransactionsService {
     if (!txA.accountId || !txB.accountId || txA.accountId === txB.accountId) {
       throw new BadRequestException(
         'Transfer transactions must belong to two different accounts',
+      );
+    }
+
+    // A leg that is already part of a transfer would leave its old partner
+    // orphaned (still flagged as a transfer, pointing at a dead transferId).
+    if (txA.isTransfer || txB.isTransfer) {
+      throw new BadRequestException(
+        'One of the transactions is already part of a transfer. Unlink it first.',
+      );
+    }
+
+    // Both legs must describe the same movement of money: equal amounts with
+    // opposite signs. Anything else silently removes money from every report,
+    // because transfers are excluded from income and expenses.
+    const amountA = txA.amount.toNumber();
+    const amountB = txB.amount.toNumber();
+    if (amountA === 0 || Math.abs(amountA + amountB) > 0.005) {
+      throw new BadRequestException(
+        'Transfer legs must have equal and opposite amounts',
       );
     }
 

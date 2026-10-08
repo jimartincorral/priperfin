@@ -105,12 +105,14 @@ model Transaction {
   transferAccountId    String?
   transferAccount      Account?           @relation("AccountTransferTarget", fields: [transferAccountId], references: [id], onDelete: SetNull)
 
-  externalId   String?            @unique
+  externalId   String?            // Import dedup key, unique within a profile
   splits       TransactionSplit[] @relation("TransactionSplits")
   createdAt    DateTime           @default(now())
   updatedAt    DateTime           @updatedAt
 
+  @@unique([profileId, externalId])
   @@index([profileId])
+  @@index([profileId, date]) // Month/year/custom ranges are always per profile
   @@index([merchant])
   @@index([categoryId, date]) // For pattern detection
   @@index([isTransfer])

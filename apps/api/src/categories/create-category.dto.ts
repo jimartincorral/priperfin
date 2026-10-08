@@ -3,7 +3,6 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
-  IsUUID,
   IsNumber,
 } from 'class-validator';
 import { CategoryType } from '../generated/client';

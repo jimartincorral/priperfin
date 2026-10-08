@@ -3,9 +3,8 @@ import { Logger } from '@nestjs/common';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './all-exceptions.filter';
 import { json, urlencoded } from 'express'; // Import express body parsers
-import { join } from 'path';
-import * as multer from 'multer'; // Import multer
 import helmet from 'helmet';
+import compression from 'compression';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -38,6 +37,11 @@ async function bootstrap() {
   });
 
   app.useGlobalFilters(new AllExceptionsFilter());
+
+  // The transactions list is unpaginated by design (the UI filters
+  // client-side), so a multi-year ledger is tens of megabytes of JSON. gzip
+  // brings that down roughly tenfold on the wire for Ingress and Docker users.
+  app.use(compression());
 
   // Configure express to handle JSON and URL-encoded bodies (reduced from 50mb for security)
   app.use(json({ limit: '10mb' }));
