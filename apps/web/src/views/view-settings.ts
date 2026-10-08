@@ -24,6 +24,8 @@ import {
 } from '../styles/desktop-ui';
 
 import 'emoji-picker-element';
+import { currencySymbol } from '../utils/currency';
+import { NOTIFY_EVENT } from '../components/app-toast';
 
 /** The sub-screens the mobile settings list drills into. */
 type SettingsSection =
@@ -891,7 +893,8 @@ export class ViewSettings extends LitElement {
     /** Inline snackbar above the nav; replaces alert() on the mobile path. */
     private notify(message: string) {
         if (!this.isMobile) {
-            alert(message);
+            // Desktop: the app-level <app-toast> shows it; no blocking alert().
+            window.dispatchEvent(new CustomEvent(NOTIFY_EVENT, { detail: { message } }));
             return;
         }
         if (this.snackTimer) window.clearTimeout(this.snackTimer);
@@ -1611,7 +1614,7 @@ export class ViewSettings extends LitElement {
     }
 
     renderCategoryTable(categories: any[], showParentChild = false, showBudget = true) {
-        const symbol = this.currency === 'EUR' ? '€' : '$';
+        const symbol = currencySymbol(this.currency);
 
         let rows = categories;
         if (showParentChild) {
@@ -2481,7 +2484,7 @@ export class ViewSettings extends LitElement {
                                                       </span>
                                                   </td>
                                                   <td>
-                                                      ${this.currency === 'EUR' ? '€' : '$'}${Number(
+                                                      ${currencySymbol(this.currency)}${Number(
                                                           acc.initialBalance,
                                                       ).toFixed(2)}
                                                   </td>
@@ -3251,7 +3254,7 @@ export class ViewSettings extends LitElement {
     }
 
     private get symbol() {
-        return this.currency === 'EUR' ? '€' : '$';
+        return currencySymbol(this.currency);
     }
 
     private money(value: number, decimals = 2): string {

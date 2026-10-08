@@ -11,14 +11,14 @@
 # On Apple silicon, or any other arm64 machine, set the image to the aarch64
 # build first (the add-on images are published per architecture):
 #
-#   PRIPERFIN_IMAGE=ghcr.io/jimartincorral/priperfin-aarch64:1.26.1 docker compose up -d
+#   PRIPERFIN_IMAGE=ghcr.io/jimartincorral/priperfin-aarch64:1.26.2 docker compose up -d
 #
 # To build from this checkout instead of pulling a published image, comment out
 # `image:` and uncomment `build: .` below. That works on any architecture.
 
 services:
   priperfin:
-    image: ${PRIPERFIN_IMAGE:-ghcr.io/jimartincorral/priperfin-amd64:1.26.1}
+    image: ${PRIPERFIN_IMAGE:-ghcr.io/jimartincorral/priperfin-amd64:1.26.2}
     # build: .
     container_name: priperfin
     restart: unless-stopped

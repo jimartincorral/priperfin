@@ -11,6 +11,9 @@ export const es = {
             createPin: 'Crear tu PIN',
             confirmPin: 'Confirmar tu PIN',
             pinMismatch: 'Los PINs no coinciden',
+            profileNameLengthError: 'El nombre del perfil debe tener al menos 3 caracteres',
+            pinLengthError: 'El PIN debe tener {length} dígitos',
+            failed: 'La configuración ha fallado',
             creating: 'Creando Perfil...',
             submit: 'Completar Configuración',
             weakPin: 'PIN muy débil. Evita secuencias (1234) y dígitos repetidos (1111).',
@@ -25,6 +28,8 @@ export const es = {
             submit: 'Iniciar Sesión',
             rateLimited: 'Demasiados intentos. Inténtalo de nuevo en {seconds} segundos.',
             invalidPin: 'Nombre de perfil o PIN inválido',
+            loadProfilesFailed: 'No se pudieron cargar los perfiles',
+            selectProfileAndPin: 'Selecciona un perfil e introduce tu PIN',
         },
         settings: {
             title: 'Autenticación',
@@ -66,6 +71,8 @@ export const es = {
         },
     },
     common: {
+        type_to_filter: 'Escribe para filtrar...',
+        no_results: 'Sin resultados',
         saved: 'Guardado',
         close: 'Cerrar',
         account: 'Cuenta',

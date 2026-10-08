@@ -1,4 +1,5 @@
 import { LitElement, html, css } from 'lit';
+import { i18n } from '../i18n/i18n';
 import { customElement, property, state } from 'lit/decorators.js';
 
 export interface SelectOption {
@@ -348,14 +349,14 @@ export class FilterableSelect extends LitElement {
             <input
               class="filter-input"
               type="text"
-              placeholder="Type to filter..."
+              placeholder="${i18n.t('common.type_to_filter')}"
               .value=${this.filterText}
               @input=${this.handleFilterInput}
               @keydown=${this.handleKeyDown}
             />
             <div class="options-list" role="listbox">
               ${filtered.length === 0 ? html`
-                <div class="no-results">No results found</div>
+                <div class="no-results">${i18n.t('common.no_results')}</div>
               ` : filtered.map((option, index) => {
                 const isSelected = option.value === this.value;
                 const isFocused = index === this.focusedIndex;

@@ -4,6 +4,7 @@ import { Router } from '@vaadin/router';
 import { i18n } from './i18n/i18n';
 import { api } from './api/client';
 import { getAppBasePath, getAppPath, getCanonicalAppUrl } from './utils/router-paths';
+import './components/app-toast';
 
 @customElement('priperfin-app')
 export class PriPerFinApp extends LitElement {
@@ -97,11 +98,15 @@ export class PriPerFinApp extends LitElement {
       font-family: 'Roboto', sans-serif;
       background-color: var(--md-sys-color-surface);
       color: var(--md-sys-color-on-surface);
+      /* Native controls (selects, date pickers, scrollbars) follow the theme;
+         color-scheme inherits into every view's shadow tree from here. */
+      color-scheme: light;
       overflow: hidden;
     }
 
     /* Dark Mode (System Preferred OR Manual Override) */
     :host([data-theme="dark"]) {
+        color-scheme: dark;
         --md-sys-color-primary: #9ecaff;
         --md-sys-color-on-primary: #003258;
         --md-sys-color-primary-container: #00497d;
@@ -151,6 +156,7 @@ export class PriPerFinApp extends LitElement {
 
     @media (prefers-color-scheme: dark) {
       :host(:not([data-theme="light"])) {
+        color-scheme: dark;
         --md-sys-color-primary: #9ecaff;
         --md-sys-color-on-primary: #003258;
         --md-sys-color-primary-container: #00497d;
@@ -437,7 +443,7 @@ export class PriPerFinApp extends LitElement {
   // Auth guard helper
   private authGuard(_context: any, commands: any) {
     const hasSession = api.hasSession();
-    console.log('[AuthGuard] Checking session. hasSession =', hasSession, 'token =', localStorage.getItem('session_token'));
+    console.log('[AuthGuard] Checking session. hasSession =', hasSession);
     if (!hasSession) {
       console.log('[AuthGuard] Redirecting to /login');
       return commands.redirect('/login');
@@ -582,6 +588,7 @@ export class PriPerFinApp extends LitElement {
         </nav>
       ` : ''}
       <main id="outlet"></main>
+      <app-toast></app-toast>
     `;
   }
 }

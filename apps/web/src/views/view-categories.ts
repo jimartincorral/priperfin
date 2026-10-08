@@ -28,6 +28,8 @@ import {
 
 // Load emoji picker  
 import 'emoji-picker-element';
+import { currencySymbol } from '../utils/currency';
+import { NOTIFY_EVENT } from '../components/app-toast';
 
 @customElement('view-categories')
 export class ViewCategories extends LitElement {
@@ -508,7 +510,8 @@ export class ViewCategories extends LitElement {
   /** Inline snackbar above the nav; replaces alert() on the mobile path. */
   private notify(message: string) {
     if (!this.isMobile) {
-      alert(message);
+      // Desktop: the app-level <app-toast> shows it; no blocking alert().
+      window.dispatchEvent(new CustomEvent(NOTIFY_EVENT, { detail: { message } }));
       return;
     }
     if (this.snackTimer) window.clearTimeout(this.snackTimer);
@@ -697,7 +700,7 @@ export class ViewCategories extends LitElement {
   }
 
   private renderCategoryRow(cat: any, isChild: boolean, hasChildren: boolean) {
-    const symbol = this.currency === 'EUR' ? '€' : '$';
+    const symbol = currencySymbol(this.currency);
     const collapsed = this.collapsedParents.has(cat.id);
     const showBudget = this.activeTab === 'EXPENSE';
 
@@ -975,7 +978,7 @@ export class ViewCategories extends LitElement {
   }
 
   private get symbol() {
-    return this.currency === 'EUR' ? '€' : '$';
+    return currencySymbol(this.currency);
   }
 
   private money(value: number, decimals = 2): string {

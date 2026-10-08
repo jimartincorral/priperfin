@@ -3,6 +3,7 @@ import { customElement, state } from 'lit/decorators.js';
 import { api } from '../api/client';
 import { i18n } from '../i18n/i18n';
 import '../components/rule-editor';
+import { NOTIFY_EVENT } from '../components/app-toast';
 import {
   bottomSheet,
   icon,
@@ -421,7 +422,8 @@ export class ViewRules extends LitElement {
   /** Inline snackbar above the nav; replaces alert() on the mobile path. */
   private notify(message: string) {
     if (!this.isMobile) {
-      alert(message);
+      // Desktop: the app-level <app-toast> shows it; no blocking alert().
+      window.dispatchEvent(new CustomEvent(NOTIFY_EVENT, { detail: { message } }));
       return;
     }
     if (this.snackTimer) window.clearTimeout(this.snackTimer);

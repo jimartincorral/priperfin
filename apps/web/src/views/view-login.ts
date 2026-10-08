@@ -154,7 +154,7 @@ export class ViewLogin extends LitElement {
         this.pinLength = this.getProfilePinLength(this.selectedProfile);
       }
     } catch (e: any) {
-      this.error = 'Failed to load profiles';
+      this.error = i18n.t('auth.login.loadProfilesFailed');
     }
   }
 
@@ -180,7 +180,7 @@ export class ViewLogin extends LitElement {
 
   async handleLogin() {
     if (!this.selectedProfile || this.pin.length < 4) {
-      this.error = 'Please select a profile and enter your PIN';
+      this.error = i18n.t('auth.login.selectProfileAndPin');
       return;
     }
 
@@ -188,14 +188,11 @@ export class ViewLogin extends LitElement {
     this.error = '';
 
     try {
-      console.log('[Login] Attempting login for:', this.selectedProfile);
-      const res = await authApi.login(this.selectedProfile, this.pin);
-      console.log('[Login] Login successful. Response:', res);
-      
+      // Never log the response: it carries the session token.
+      await authApi.login(this.selectedProfile, this.pin);
+
       const basePath = getAppBasePath(document.baseURI);
-      const redirectUrl = new URL(basePath, window.location.origin).href;
-      console.log('[Login] Redirecting to:', redirectUrl);
-      window.location.href = redirectUrl;
+      window.location.href = new URL(basePath, window.location.origin).href;
     } catch (e: any) {
       console.error('[Login] Login failed:', e);
       this.loading = false;
@@ -203,7 +200,10 @@ export class ViewLogin extends LitElement {
         this.rateLimited = true;
         this.retryAfter = 60;
         this.startCountdown();
-        this.error = `Too many attempts. Try again in ${this.retryAfter} seconds.`;
+        this.error = i18n.t('auth.login.rateLimited', { seconds: this.retryAfter });
+      } else if (/invalid profile name or pin/i.test(e.message || '')) {
+        // The API's message is English; show the translated equivalent.
+        this.error = i18n.t('auth.login.invalidPin');
       } else {
         this.error = e.message || i18n.t('auth.login.invalidPin');
       }
@@ -218,7 +218,7 @@ export class ViewLogin extends LitElement {
         this.rateLimited = false;
         clearInterval(interval);
       } else {
-        this.error = `Too many attempts. Try again in ${this.retryAfter} seconds.`;
+        this.error = i18n.t('auth.login.rateLimited', { seconds: this.retryAfter });
       }
     }, 1000);
   }

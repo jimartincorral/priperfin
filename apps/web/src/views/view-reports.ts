@@ -30,6 +30,8 @@ import {
 import { i18n } from '../i18n/i18n';
 import { getAppBasePath } from '../utils/router-paths';
 import { calculateMonthlyStats } from '../utils/expense-utils';
+import { currencySymbol, getStoredCurrency } from '../utils/currency';
+import { NOTIFY_EVENT } from '../components/app-toast';
 
 Chart.register(...registerables);
 
@@ -840,7 +842,8 @@ export class ViewReports extends LitElement {
   /** Inline snackbar above the nav; replaces alert() on the mobile path. */
   private notify(message: string, action?: { label: string; run: () => void }) {
     if (!this.isMobile) {
-      alert(message);
+      // Desktop: the app-level <app-toast> shows it; no blocking alert().
+      window.dispatchEvent(new CustomEvent(NOTIFY_EVENT, { detail: { message, action } }));
       return;
     }
     if (this.snackTimer) window.clearTimeout(this.snackTimer);
@@ -1333,7 +1336,7 @@ export class ViewReports extends LitElement {
   // ------------------------------------------------------------------
 
   private currencySymbol(): string {
-    return localStorage.getItem('priperfin_currency') === 'EUR' ? '€' : '$';
+    return currencySymbol(getStoredCurrency());
   }
 
   private money(value: number, decimals = 2): string {
