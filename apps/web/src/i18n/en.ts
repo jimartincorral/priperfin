@@ -11,6 +11,9 @@ export const en = {
             createPin: 'Create Your PIN',
             confirmPin: 'Confirm Your PIN',
             pinMismatch: 'PINs do not match',
+            profileNameLengthError: 'Profile name must be at least 3 characters',
+            pinLengthError: 'PIN must be {length} digits',
+            failed: 'Setup failed',
             creating: 'Creating Profile...',
             submit: 'Complete Setup',
             weakPin: 'PIN is too weak. Avoid sequences (1234) and repeating digits (1111).',
@@ -25,6 +28,8 @@ export const en = {
             submit: 'Sign In',
             rateLimited: 'Too many attempts. Try again in {seconds} seconds.',
             invalidPin: 'Invalid profile name or PIN',
+            loadProfilesFailed: 'Could not load profiles',
+            selectProfileAndPin: 'Select a profile and enter your PIN',
         },
         settings: {
             title: 'Authentication',
@@ -66,6 +71,8 @@ export const en = {
         },
     },
     common: {
+        type_to_filter: 'Type to filter...',
+        no_results: 'No results found',
         saved: 'Saved',
         close: 'Close',
         account: 'Account',

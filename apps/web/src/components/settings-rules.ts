@@ -2,6 +2,12 @@ import { LitElement, html, css } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import { api } from '../api/client';
 import './rule-editor';
+import { NOTIFY_EVENT } from './app-toast';
+
+/** Desktop and mobile alike: show it in the app toast instead of a blocking alert(). */
+function notifyToast(message: string) {
+  window.dispatchEvent(new CustomEvent(NOTIFY_EVENT, { detail: { message } }));
+}
 
 @customElement('settings-rules')
 export class SettingsRules extends LitElement {
@@ -69,7 +75,7 @@ export class SettingsRules extends LitElement {
 
     .confidence-meter {
         height: 4px;
-        background: #eee;
+        background: var(--md-sys-color-surface-container-high);
         width: 100px;
         border-radius: 2px;
         overflow: hidden;
@@ -173,7 +179,7 @@ export class SettingsRules extends LitElement {
         await this.loadRules();
     } catch (e) {
         console.error(e);
-        alert('Failed to delete rule');
+        notifyToast('Failed to delete rule');
     }
   }
 
@@ -188,7 +194,7 @@ export class SettingsRules extends LitElement {
         await this.loadRules();
     } catch (e: any) {
         console.error(e);
-        alert('Failed to save rule: ' + e.message);
+        notifyToast('Failed to save rule: ' + e.message);
     }
   }
 
@@ -233,7 +239,7 @@ export class SettingsRules extends LitElement {
           this.showSuggestions = true;
       } catch (e: any) {
           console.error(e);
-          alert('Failed to detect patterns');
+          notifyToast('Failed to detect patterns');
       } finally {
           this.detecting = false;
       }
@@ -246,7 +252,7 @@ export class SettingsRules extends LitElement {
           await this.loadRules();
       } catch (e: any) {
           console.error(e);
-          alert('Failed to accept suggestion');
+          notifyToast('Failed to accept suggestion');
       }
   }
 
@@ -289,7 +295,7 @@ export class SettingsRules extends LitElement {
                         <div class="suggestion-item">
                             <div>
                                 <div style="font-weight: 500;">${s.name}</div>
-                                <div style="font-size: 0.8rem; color: #666;">
+                                <div style="font-size: 0.8rem; color: var(--md-sys-color-on-surface-variant);">
                                     Matches ${s.matchCount} transactions • Confidence: ${Number(s.confidence).toFixed(0)}%
                                     <div class="confidence-meter">
                                         <div class="confidence-fill" style="width: ${s.confidence}%"></div>
@@ -322,7 +328,7 @@ export class SettingsRules extends LitElement {
                     <div class="rule-content">
                         <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
                             <span class="rule-name">${rule.name}</span>
-                            ${!rule.enabled ? html`<span style="font-size: 0.7rem; background: #eee; padding: 2px 4px; border-radius: 4px;">DISABLED</span>` : ''}
+                            ${!rule.enabled ? html`<span style="font-size: 0.7rem; background: var(--md-sys-color-surface-container-high); padding: 2px 4px; border-radius: 4px;">DISABLED</span>` : ''}
                             ${rule.mode === 'AUTO_APPLY' ? html`⚡` : html`💡`}
                         </div>
                         <div class="rule-desc">

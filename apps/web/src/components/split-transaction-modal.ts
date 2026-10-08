@@ -3,6 +3,7 @@ import { customElement, property, state } from 'lit/decorators.js';
 import { api } from '../api/client';
 import './filterable-select';
 import type { SelectOption } from './filterable-select';
+import { currencySymbol, getStoredCurrency } from '../utils/currency';
 
 interface SplitItem {
   amount: number;
@@ -169,13 +170,13 @@ export class SplitTransactionModal extends LitElement {
     }
 
     .remaining-amount.valid {
-      background: #d1fae5;
-      color: #065f46;
+      background: var(--md-sys-color-tertiary-container);
+      color: var(--md-sys-color-on-tertiary-container);
     }
 
     .remaining-amount.invalid {
-      background: #fee2e2;
-      color: #991b1b;
+      background: var(--md-sys-color-error-container);
+      color: var(--md-sys-color-on-error-container);
     }
 
     .error-message {
@@ -426,7 +427,7 @@ export class SplitTransactionModal extends LitElement {
             </div>
             <div class="summary-row">
               <span class="summary-label">Total Amount:</span>
-              <span style="font-weight: 700;">${this.transaction.amount < 0 ? '-' : '+'}$${Math.abs(this.transaction.amount).toFixed(2)}</span>
+              <span style="font-weight: 700;">${this.transaction.amount < 0 ? '-' : '+'}${currencySymbol(getStoredCurrency())}${Math.abs(this.transaction.amount).toFixed(2)}</span>
             </div>
           </div>
 
@@ -497,7 +498,7 @@ export class SplitTransactionModal extends LitElement {
 
           <div class="remaining-amount ${isValid ? 'valid' : 'invalid'}">
             <span>Remaining Amount:</span>
-            <span>$${Math.abs(remaining).toFixed(2)}</span>
+            <span>${currencySymbol(getStoredCurrency())}${Math.abs(remaining).toFixed(2)}</span>
           </div>
 
           <div class="actions">

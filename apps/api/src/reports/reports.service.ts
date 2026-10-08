@@ -185,11 +185,20 @@ export class ReportsService {
 
     // Aggregate. Outgoing amounts add to what was spent; incoming amounts that
     // land on an expense category are refunds and net against it.
-    const applyLine = (amount: number, categoryId?: string | null) => {
+    const applyLine = (
+      amount: number,
+      category?: { id: string; type: string } | null,
+    ) => {
+      // Lines on INCOME or GOAL categories are never spending: a negative
+      // amount on an income category is an income reversal, and an outflow to
+      // a goal category is a savings contribution. The Sankey report applies
+      // the same rule, so both reports agree on what counts as an expense.
+      if (category && category.type !== 'EXPENSE') return;
+
       // `categoryMap` only holds this profile's expense categories (plus the
       // uncategorized bucket), so a hit here means "this is an expense category"
       const known =
-        categoryId && categoryMap.has(categoryId) ? categoryId : null;
+        category && categoryMap.has(category.id) ? category.id : null;
 
       if (amount > 0) {
         // Only refunds inside an expense category belong in an expense report.
@@ -209,11 +218,11 @@ export class ReportsService {
       // If transaction has splits, aggregate each split separately
       if (t.splits && t.splits.length > 0) {
         t.splits.forEach((split) =>
-          applyLine(split.amount.toNumber(), split.category?.id),
+          applyLine(split.amount.toNumber(), split.category),
         );
       } else {
         // No splits, use parent transaction category
-        applyLine(t.amount.toNumber(), t.category?.id);
+        applyLine(t.amount.toNumber(), t.category);
       }
     });
 
@@ -292,6 +301,23 @@ export class ReportsService {
     const incomeSources = new Map<string, number>();
 
     const applyLine = (amount: number, category?: SankeyCategory) => {
+      // An outflow to a goal category is a savings contribution, not an
+      // expense. Leaving it out of the expense flows means it stays in the
+      // "Savings" remainder, which is where the category breakdown puts it too.
+      if (amount < 0 && category?.type === 'GOAL') return;
+
+      // A negative amount on an income category is an income reversal (a
+      // clawback, a bounced payment): it shrinks that income source rather
+      // than creating an expense flow named after it.
+      if (amount < 0 && category?.type === 'INCOME') {
+        totalIncome += amount;
+        incomeSources.set(
+          category.name,
+          (incomeSources.get(category.name) || 0) + amount,
+        );
+        return;
+      }
+
       // Money flowing back into an expense category is a refund, not income: it
       // shrinks that category's outflow instead of adding a new source.
       if (amount > 0 && category?.type !== 'EXPENSE') {
@@ -333,6 +359,10 @@ export class ReportsService {
     // so drop it before it becomes an orphan node.
     expenseByCategory.forEach((val, target) => {
       if (val <= 0) expenseByCategory.delete(target);
+    });
+    // Likewise an income source reversed in full has nothing left to draw.
+    incomeSources.forEach((val, source) => {
+      if (val <= 0) incomeSources.delete(source);
     });
 
     const nodes = [

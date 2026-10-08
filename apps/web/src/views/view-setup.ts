@@ -141,7 +141,7 @@ export class ViewSetup extends LitElement {
   async handleSetup() {
     // Validate
     if (!this.profileName || this.profileName.length < 3) {
-      this.error = 'Profile name must be at least 3 characters';
+      this.error = i18n.t('auth.setup.profileNameLengthError');
       return;
     }
 
@@ -154,7 +154,7 @@ export class ViewSetup extends LitElement {
       .join('');
 
     if (pinDigits.length !== this.pinLength) {
-      this.error = `PIN must be ${this.pinLength} digits`;
+      this.error = i18n.t('auth.setup.pinLengthError', { length: this.pinLength });
       return;
     }
 
@@ -174,7 +174,7 @@ export class ViewSetup extends LitElement {
       window.location.href = new URL(basePath, window.location.origin).href;
     } catch (e: any) {
       this.loading = false;
-      this.error = e.message || 'Setup failed';
+      this.error = e.message || i18n.t('auth.setup.failed');
     }
   }
 

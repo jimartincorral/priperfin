@@ -4,6 +4,7 @@ import { api } from '../api/client';
 import './filterable-select';
 import type { SelectOption } from './filterable-select';
 import { i18n } from '../i18n/i18n';
+import { NOTIFY_EVENT } from './app-toast';
 
 @customElement('rule-editor')
 export class RuleEditor extends LitElement {
@@ -258,15 +259,15 @@ export class RuleEditor extends LitElement {
           this.testResults = results;
       } catch (e) {
           console.error(e);
-          alert(i18n.t('rules.test_failed'));
+          this.toast(i18n.t('rules.test_failed'));
       } finally {
           this.testing = false;
       }
   }
 
   async save() {
-      if (!this.name) return alert(i18n.t('rules.name_required'));
-      if (this.conditions.length === 0) return alert(i18n.t('rules.condition_required'));
+      if (!this.name) return this.toast(i18n.t('rules.name_required'));
+      if (this.conditions.length === 0) return this.toast(i18n.t('rules.condition_required'));
 
       const conditionsJson = JSON.stringify({
           operator: 'AND',
@@ -293,6 +294,11 @@ export class RuleEditor extends LitElement {
               conditionsJson
           }
       }));
+  }
+
+  /** Show a message in the app toast instead of a blocking alert(). */
+  private toast(message: string) {
+    window.dispatchEvent(new CustomEvent(NOTIFY_EVENT, { detail: { message } }));
   }
 
   render() {

@@ -25,6 +25,8 @@ import {
 } from '../styles/desktop-ui';
 
 import { i18n } from '../i18n/i18n';
+import { currencySymbol } from '../utils/currency';
+import { NOTIFY_EVENT } from '../components/app-toast';
 
 interface Filter {
   id: string;
@@ -924,7 +926,8 @@ export class ViewGoals extends LitElement {
   /** Inline snackbar above the nav; replaces alert() on the mobile path. */
   private notify(message: string, action?: { label: string; run: () => void }) {
     if (!this.isMobile) {
-      alert(message);
+      // Desktop: the app-level <app-toast> shows it; no blocking alert().
+      window.dispatchEvent(new CustomEvent(NOTIFY_EVENT, { detail: { message, action } }));
       return;
     }
     if (this.snackTimer) window.clearTimeout(this.snackTimer);
@@ -1451,7 +1454,7 @@ export class ViewGoals extends LitElement {
   // ------------------------------------------------------------------
 
   private get symbol() {
-    return this.currency === 'EUR' ? '€' : '$';
+    return currencySymbol(this.currency);
   }
 
   private money(value: number, decimals = 0): string {

@@ -32,6 +32,8 @@ import {
 import { i18n } from '../i18n/i18n';
 import { calculateMonthlyStats } from '../utils/expense-utils';
 import { getAppBasePath } from '../utils/router-paths';
+import { currencySymbol } from '../utils/currency';
+import { NOTIFY_EVENT } from '../components/app-toast';
 
 
 type DateFilterMode = 'month' | 'year' | 'custom' | 'all_time';
@@ -419,7 +421,8 @@ export class ViewExpenses extends LitElement {
   /** Inline snackbar above the nav; replaces alert() on the mobile path. */
   private notify(message: string, action?: { label: string; run: () => void }) {
     if (!this.isMobile) {
-      alert(message);
+      // Desktop: the app-level <app-toast> shows it; no blocking alert().
+      window.dispatchEvent(new CustomEvent(NOTIFY_EVENT, { detail: { message, action } }));
       return;
     }
     if (this.snackTimer) window.clearTimeout(this.snackTimer);
@@ -886,7 +889,7 @@ export class ViewExpenses extends LitElement {
   }
 
   static styles = [css`
-    :host { display: block; color-scheme: dark; }
+    :host { display: block; }
 
     .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
     h1 { font: var(--md-sys-typescale-headline-medium); color: var(--md-sys-color-on-surface); margin: 0; }
@@ -916,11 +919,6 @@ export class ViewExpenses extends LitElement {
     .form-group { margin-bottom: 16px; }
     label { display: block; margin-bottom: 8px; font: var(--md-sys-typescale-label-medium); color: var(--md-sys-color-on-surface-variant); }
 
-    /* Force dark mode for select dropdowns */
-    select {
-        color-scheme: dark;
-    }
-    
     select option {
         background-color: var(--md-sys-color-surface-container) !important;
         color: var(--md-sys-color-on-surface) !important;
@@ -2174,7 +2172,7 @@ Tables: ${result.tables?.join(', ')}`;
   // ==================================================================
 
   private get symbol() {
-    return this.currency === 'EUR' ? '€' : '$';
+    return currencySymbol(this.currency);
   }
 
   private money(value: number, decimals = 2): string {

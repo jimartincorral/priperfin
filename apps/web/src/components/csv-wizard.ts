@@ -4,6 +4,7 @@ import Papa from 'papaparse';
 import { i18n } from '../i18n/i18n';
 import { api } from '../api/client';
 import { isOfxFilename, readOfxFile, parseOfxTransactions, extractOfxAccountId } from '../utils/ofx-utils';
+import { currencySymbol, getStoredCurrency } from '../utils/currency';
 
 // localStorage keys for persisting user preferences
 const STORAGE_KEYS = {
@@ -124,9 +125,9 @@ export class CsvWizard extends LitElement {
 
     .mapping-row { display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; }
     .mapping-label { flex: 1; font-weight: 500; }
-    .mapping-select { flex: 2; padding: 0.5rem; border: 1px solid #cbd5e1; border-radius: 4px; }
+    .mapping-select { flex: 2; padding: 0.5rem; border: 1px solid var(--md-sys-color-outline); border-radius: 4px; }
     
-    .error { color: #dc2626; background: #fee2e2; padding: 0.5rem; border-radius: 4px; margin-bottom: 1rem; }
+    .error { color: var(--md-sys-color-on-error-container); background: var(--md-sys-color-error-container); padding: 0.5rem; border-radius: 4px; margin-bottom: 1rem; }
   `;
 
     handleFile(e: Event) {
@@ -533,7 +534,7 @@ export class CsvWizard extends LitElement {
     renderStep() {
         if (this.step === 1) {
             return html`
-        <div style="text-align: center; padding: 2rem; border: 2px dashed #e2e8f0; border-radius: 8px;">
+        <div style="text-align: center; padding: 2rem; border: 2px dashed var(--md-sys-color-outline-variant); border-radius: 8px;">
             ${this.accounts.length > 0 ? html`
               <div style="margin-bottom: 1rem; text-align: left;">
                 <label style="font-weight: 500; display: block; margin-bottom: 0.5rem;">${i18n.t('csv_wizard.import_to_account')}:</label>
@@ -694,7 +695,7 @@ export class CsvWizard extends LitElement {
             </tbody>
         </table>
         
-        <div style="margin-top: 1rem; color: #666; font-size: 0.9em;">
+        <div style="margin-top: 1rem; color: var(--md-sys-color-on-surface-variant); font-size: 0.9em;">
             * ${i18n.t('csv_wizard.duplicates_note')}
         </div>
 
@@ -725,7 +726,7 @@ export class CsvWizard extends LitElement {
                 const showDetails = this.showMergeDetails.get(mergeKey) || false;
 
                 return html`
-                    <div style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 1rem; margin-bottom: 1rem; background: ${isSelected ? '#f0f9ff' : 'white'};">
+                    <div style="border: 1px solid var(--md-sys-color-outline-variant); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; background: ${isSelected ? 'var(--md-sys-color-primary-container)' : 'var(--md-sys-color-surface-container)'}; color: ${isSelected ? 'var(--md-sys-color-on-primary-container)' : 'var(--md-sys-color-on-surface)'};">
                         <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 0.5rem;">
                             <input type="checkbox"
                                 .checked="${isSelected}"
@@ -733,11 +734,11 @@ export class CsvWizard extends LitElement {
                             />
                             <div style="flex: 1;">
                                 <strong>${match.importedDescription}</strong>
-                                <div style="font-size: 0.85rem; color: #64748b;">
-                                    Manual: ${new Date(match.manualDate).toLocaleDateString(undefined, { timeZone: 'UTC' })} • $${match.manualAmount.toFixed(2)} |
-                                    Imported: ${new Date(match.importedDate).toLocaleDateString(undefined, { timeZone: 'UTC' })} • $${match.importedAmount.toFixed(2)}
+                                <div style="font-size: 0.85rem; color: var(--md-sys-color-on-surface-variant);">
+                                    Manual: ${new Date(match.manualDate).toLocaleDateString(undefined, { timeZone: 'UTC' })} • ${currencySymbol(getStoredCurrency())}${match.manualAmount.toFixed(2)} |
+                                    Imported: ${new Date(match.importedDate).toLocaleDateString(undefined, { timeZone: 'UTC' })} • ${currencySymbol(getStoredCurrency())}${match.importedAmount.toFixed(2)}
                                 </div>
-                                <div style="font-size: 0.75rem; color: #94a3b8; margin-top: 0.25rem;">
+                                <div style="font-size: 0.75rem; color: var(--md-sys-color-on-surface-variant); margin-top: 0.25rem;">
                                     Match confidence: ${match.matchScore}%
                                 </div>
                             </div>
@@ -747,7 +748,7 @@ export class CsvWizard extends LitElement {
                         </div>
 
                         ${showDetails ? html`
-                            <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #e2e8f0;">
+                            <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--md-sys-color-outline-variant);">
                                 <table style="width: 100%; font-size: 0.85rem;">
                                     <thead>
                                         <tr><th style="text-align: left;">Field</th><th style="text-align: left;">Manual</th><th style="text-align: left;">Imported</th><th style="text-align: left;">Result</th></tr>
@@ -761,8 +762,8 @@ export class CsvWizard extends LitElement {
                                         </tr>
                                         <tr>
                                             <td>Amount</td>
-                                            <td>$${match.manualAmount.toFixed(2)}</td>
-                                            <td style="background: var(--md-sys-color-tertiary-container); color: var(--md-sys-color-on-tertiary-container);">$${match.importedAmount.toFixed(2)}</td>
+                                            <td>${currencySymbol(getStoredCurrency())}${match.manualAmount.toFixed(2)}</td>
+                                            <td style="background: var(--md-sys-color-tertiary-container); color: var(--md-sys-color-on-tertiary-container);">${currencySymbol(getStoredCurrency())}${match.importedAmount.toFixed(2)}</td>
                                             <td><strong>Use Imported</strong></td>
                                         </tr>
                                         <tr>
@@ -779,7 +780,7 @@ export class CsvWizard extends LitElement {
                                         </tr>
                                     </tbody>
                                 </table>
-                                <div style="margin-top: 0.5rem; font-size: 0.8rem; color: #64748b;">
+                                <div style="margin-top: 0.5rem; font-size: 0.8rem; color: var(--md-sys-color-on-surface-variant);">
                                     <strong>What happens:</strong> Manual transaction deleted, imported transaction enriched with manual categorization.
                                 </div>
                             </div>
@@ -789,7 +790,7 @@ export class CsvWizard extends LitElement {
             })}
         </div>
 
-        <div style="margin-top: 1rem; color: #666; font-size: 0.9em;">
+        <div style="margin-top: 1rem; color: var(--md-sys-color-on-surface-variant); font-size: 0.9em;">
             * ${i18n.t('csv_wizard.merge_note')}
         </div>
 

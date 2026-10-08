@@ -421,6 +421,62 @@ describe('ReportsService', () => {
       expect(result[0].spent).toBe(80);
     });
 
+    it('should not count an income reversal or a goal contribution as spending', async () => {
+      const expenseCategory = createMockCategory({
+        id: 'cat-groceries',
+        name: 'Groceries',
+        type: 'EXPENSE',
+        budget: null,
+      });
+      const incomeCategory = createMockCategory({
+        id: 'cat-salary',
+        name: 'Salary',
+        type: 'INCOME',
+        budget: null,
+      });
+      const goalCategory = createMockCategory({
+        id: 'cat-holiday',
+        name: 'Holiday fund',
+        type: 'GOAL',
+        budget: null,
+      });
+
+      prismaMock.transaction.findMany.mockResolvedValue([
+        createMockTransaction({
+          id: 'tx-groceries',
+          amount: new Decimal(-80),
+          category: expenseCategory,
+          categoryId: 'cat-groceries',
+          splits: [],
+        }),
+        createMockTransaction({
+          id: 'tx-salary-clawback',
+          amount: new Decimal(-300),
+          category: incomeCategory,
+          categoryId: 'cat-salary',
+          splits: [],
+        }),
+        createMockTransaction({
+          id: 'tx-goal-contribution',
+          amount: new Decimal(-200),
+          category: goalCategory,
+          categoryId: 'cat-holiday',
+          splits: [],
+        }),
+      ]);
+      prismaMock.category.findMany.mockResolvedValue([expenseCategory]);
+
+      const result = await service.getCategoryBreakdown(
+        { month: 1, year: 2025 },
+        'profile-1',
+      );
+
+      // Neither line is spending, so neither lands in "Uncategorized"
+      expect(result).toHaveLength(1);
+      expect(result[0].name).toBe('Groceries');
+      expect(result[0].spent).toBe(80);
+    });
+
     it('should clamp a category refunded more than it was charged to zero', async () => {
       const category = createMockCategory({
         id: 'cat-1',
@@ -747,6 +803,87 @@ describe('ReportsService', () => {
 
       const food = result.links.find((l) => l.target === 'Food');
       expect(food?.value).toBe(300);
+    });
+
+    it('should reduce an income source by a reversal instead of drawing an expense flow', async () => {
+      const incomeCategory = createMockCategory({
+        id: 'cat-salary',
+        name: 'Salary',
+        type: 'INCOME',
+      });
+      const expenseCategory = createMockCategory({
+        id: 'cat-rent',
+        name: 'Rent',
+        type: 'EXPENSE',
+      });
+
+      prismaMock.transaction.findMany.mockResolvedValue([
+        createMockTransaction({
+          amount: new Decimal(3000),
+          category: incomeCategory,
+          splits: [],
+        }),
+        createMockTransaction({
+          amount: new Decimal(-300),
+          category: incomeCategory,
+          splits: [],
+        }),
+        createMockTransaction({
+          amount: new Decimal(-1000),
+          category: expenseCategory,
+          splits: [],
+        }),
+      ]);
+
+      const result = await service.getSankeyData(
+        { month: 1, year: 2025 },
+        'profile-1',
+      );
+
+      const salaryLink = result.links.find((l: any) => l.source === 'Salary');
+      expect(salaryLink?.value).toBe(2700);
+      expect(
+        result.links.find((l: any) => l.target === 'Salary'),
+      ).toBeUndefined();
+      const savingsLink = result.links.find((l: any) => l.target === 'Savings');
+      expect(savingsLink?.value).toBe(1700);
+    });
+
+    it('should leave goal contributions in the savings remainder', async () => {
+      const incomeCategory = createMockCategory({
+        id: 'cat-salary',
+        name: 'Salary',
+        type: 'INCOME',
+      });
+      const goalCategory = createMockCategory({
+        id: 'cat-holiday',
+        name: 'Holiday fund',
+        type: 'GOAL',
+      });
+
+      prismaMock.transaction.findMany.mockResolvedValue([
+        createMockTransaction({
+          amount: new Decimal(2000),
+          category: incomeCategory,
+          splits: [],
+        }),
+        createMockTransaction({
+          amount: new Decimal(-500),
+          category: goalCategory,
+          splits: [],
+        }),
+      ]);
+
+      const result = await service.getSankeyData(
+        { month: 1, year: 2025 },
+        'profile-1',
+      );
+
+      expect(
+        result.nodes.find((n: any) => n.id === 'Holiday fund'),
+      ).toBeUndefined();
+      const savingsLink = result.links.find((l: any) => l.target === 'Savings');
+      expect(savingsLink?.value).toBe(2000);
     });
 
     it('should handle split transactions correctly', async () => {
