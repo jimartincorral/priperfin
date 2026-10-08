@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.26.0 - 2026-10-08
+
+Shows how much money is still missing to reach all your savings goals.
+
+- The Goals screen now has a **Left to reach goals** total: in the summary strip on desktop, and as a tile on mobile.
+- It adds up what each goal still needs (target minus saved). A goal that is already over its target counts as zero, so its surplus never hides a gap on another goal.
+
 ## v1.25.0 - 2026-10-04
 
 Adds standalone desktop installers for Windows and macOS, so PriPerFin can run on a laptop without Home Assistant.
