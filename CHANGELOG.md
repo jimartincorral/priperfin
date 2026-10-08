@@ -10,6 +10,12 @@ Fixes found in a pre-release review. No new features.
 - **Missing translations.** Six labels showed their raw key instead of text: the "Saved" notice after unlinking a transfer, the Close button on the mobile transaction sheet, the delete-category dialog title and warning, the amount validation message and the account fallback in the delete-transfer dialog.
 - **Profile isolation on the API.** The rule test, apply-rule, reorder, suggestion accept/reject and suggestion-for-transaction endpoints, and the bulk-import merge step, were not restricted to the logged-in profile. A transaction can also no longer be moved to another profile through an edit request.
 - **Bank credentials no longer reach the browser.** The generic settings endpoint returned the Enable Banking application id and private key verbatim; those keys are now excluded.
+- **Login attempts are rate limited again.** The limiter was configured but its guard was never registered, so the PIN could be tried without limit. The guard is now active with a single limiter, so the five-attempts-per-minute rule applies to login only and nothing else is throttled in normal use.
+- **Identical same-day transactions import.** Two legitimate rows with the same date, amount and description (two coffees) used to fail the whole CSV or bulk import on a unique-key error that the UI reported as "Internal server error". Repeats within one import now get a distinct key, and re-importing the same file still skips every row as a duplicate.
+- **Account-based rules fire during import.** Rules with an "account" condition never matched on CSV import because the account was stripped before evaluation.
+- **Server start on IPv4-only hosts.** The server bound explicitly to `::` since v1.25.0, which fails where IPv6 is disabled; it now lets Node pick the address and fall back to IPv4.
+- **Backup restore uploads go to the system temp folder** instead of the server's working directory, which in the desktop app is inside the application bundle.
+- **Developer setup:** `pnpm dev` and the `start-local` scripts failed on a fresh checkout with "Cannot find module @prisma/client-runtime-utils"; it is now a direct dependency.
 - README: the add-on is reachable through Ingress only, not on port 3000.
 
 ## v1.26.0 - 2026-10-08

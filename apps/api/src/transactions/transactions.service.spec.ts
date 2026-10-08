@@ -426,6 +426,10 @@ describe('TransactionsService', () => {
   // createMany() Tests
   // ============================================
   describe('createMany', () => {
+    beforeEach(() => {
+      prismaMock.account.findMany.mockResolvedValue([]);
+    });
+
     it('should create transactions', async () => {
       prismaMock.transaction.findMany.mockResolvedValue([]); // No existing
       prismaMock.transaction.createMany.mockResolvedValue({ count: 1 });
@@ -472,6 +476,54 @@ describe('TransactionsService', () => {
 
       expect(result.duplicateCount).toBe(1);
       expect(result.duplicates).toHaveLength(1);
+    });
+
+    it('should give in-batch repeats distinct externalIds when forced', async () => {
+      prismaMock.transaction.findMany.mockResolvedValue([]);
+      prismaMock.transaction.createMany.mockResolvedValue({ count: 2 });
+      rulesServiceMock.evaluateTransaction.mockResolvedValue(null);
+
+      // Two legitimate identical rows: same day, amount and description.
+      const row = { date: '2025-01-15', amount: -2.5, description: 'Coffee' };
+      const result = await service.createMany(
+        [{ ...row }, { ...row }] as any,
+        true,
+        [],
+        'profile-1',
+      );
+
+      expect(result.newCount).toBe(2);
+      const inserted = prismaMock.transaction.createMany.mock.calls[0][0].data;
+      expect(inserted).toHaveLength(2);
+      expect(inserted[0].externalId).toBeTruthy();
+      expect(inserted[1].externalId).toBe(`${inserted[0].externalId}#2`);
+    });
+
+    it('should let account-based rules see the account during import', async () => {
+      const account = { id: 'acc-1', name: 'Main', profileId: 'profile-1' };
+      prismaMock.account.findMany.mockResolvedValue([account]);
+      prismaMock.transaction.findMany.mockResolvedValue([]);
+      prismaMock.transaction.createMany.mockResolvedValue({ count: 1 });
+      rulesServiceMock.evaluateTransaction.mockResolvedValue(null);
+
+      await service.createMany(
+        [
+          {
+            date: '2025-01-15',
+            amount: -50,
+            description: 'Test',
+            accountId: 'acc-1',
+          },
+        ] as any,
+        true,
+        [],
+        'profile-1',
+      );
+
+      expect(rulesServiceMock.evaluateTransaction).toHaveBeenCalledWith(
+        expect.objectContaining({ accountId: 'acc-1', account }),
+        'profile-1',
+      );
     });
   });
 

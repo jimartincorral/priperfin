@@ -17,6 +17,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { promises as fs } from 'fs';
 import * as path from 'path';
+import * as os from 'os';
 import { SessionAuthGuard } from '../auth/guards/session-auth.guard';
 import { CurrentProfile } from '../auth/decorators/current-profile.decorator';
 import { Profile } from '../generated/client';
@@ -29,7 +30,7 @@ export class BackupController {
   constructor(private readonly backupService: BackupService) {}
 
   @Post('create')
-  @Throttle({ backup: { limit: 25, ttl: 3600000 } })
+  @Throttle({ default: { limit: 25, ttl: 3600000 } })
   async createBackup(
     @Body('encryptionKey') encryptionKey: string | undefined,
     @Res() res: Response,
@@ -76,12 +77,15 @@ export class BackupController {
   }
 
   @Post('restore')
-  @Throttle({ backup: { limit: 25, ttl: 3600000 } })
+  @Throttle({ default: { limit: 25, ttl: 3600000 } })
   @UseInterceptors(
     FileInterceptor('file', {
       storage: diskStorage({
         destination: async (req, file, cb) => {
-          const uploadPath = path.join(process.cwd(), 'temp_uploads');
+          // The OS temp dir, not process.cwd(): in the desktop app the cwd is
+          // the server tree inside the application bundle, which must stay
+          // read-only (and, on macOS, matches its code signature).
+          const uploadPath = path.join(os.tmpdir(), 'priperfin-uploads');
           await fs.mkdir(uploadPath, { recursive: true });
           cb(null, uploadPath);
         },

@@ -74,7 +74,7 @@ export class TransactionsController {
   }
 
   @Post('import')
-  @Throttle({ import: { limit: 20, ttl: 3600000 } })
+  @Throttle({ default: { limit: 20, ttl: 3600000 } })
   @UseInterceptors(FileInterceptor('file'))
   uploadFile(
     @UploadedFile(
@@ -91,7 +91,7 @@ export class TransactionsController {
   }
 
   @Post('bulk')
-  @Throttle({ import: { limit: 20, ttl: 3600000 } })
+  @Throttle({ default: { limit: 20, ttl: 3600000 } })
   async createBulk(
     @Body()
     body: {

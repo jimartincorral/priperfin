@@ -425,6 +425,11 @@ export class TransactionsService {
         return { count: 0, message: 'No valid records found' };
       }
 
+      // Two legitimate identical rows (same day, amount and description)
+      // hash to the same externalId; give repeats a distinct id instead of
+      // failing the whole file on the unique constraint.
+      this.disambiguateBatchExternalIds(transactionsToCreate);
+
       const externalIds = transactionsToCreate
         .map((t) => t.externalId)
         .filter((id) => !!id) as string[];
@@ -494,10 +499,23 @@ export class TransactionsService {
       };
     }
 
+    // Rules with an "account" condition compare against the account name, so
+    // the mock transaction below needs the real account attached.
+    const accountsById = new Map(
+      (
+        await this.prisma.account.findMany({
+          where: { profileId },
+        })
+      ).map((account) => [account.id, account]),
+    );
+
     let enhancedDtos = await Promise.all(
       dtos.map(async (dto) => {
         let categoryId = dto.categoryId;
         let suggestedByRuleId = null;
+        const account = dto.accountId
+          ? (accountsById.get(dto.accountId) ?? null)
+          : null;
 
         // Mock transaction for rule evaluation
         const mockTx = {
@@ -507,8 +525,9 @@ export class TransactionsService {
           merchant: null,
           profileId,
           id: 'temp',
-          accountId: null,
-          costObjectId: null,
+          accountId: account?.id ?? null,
+          account,
+          costObjectId: dto.costObjectId ?? null,
           suggestedCategoryId: null,
           suggestedByRuleId: null,
           externalId: null,
@@ -683,20 +702,22 @@ export class TransactionsService {
     }
 
     let transactionsToImport = force
-      ? enhancedDtos.map((d) => {
-          if (d.externalId && existingIds.has(d.externalId)) {
-            return {
-              ...d,
-              externalId:
-                this.generateHash(d) +
-                '_retry_' +
-                Date.now() +
-                '_' +
-                Math.random().toString(36).substring(2, 9),
-            };
-          }
-          return d;
-        })
+      ? this.disambiguateBatchExternalIds(
+          enhancedDtos.map((d) => {
+            if (d.externalId && existingIds.has(d.externalId)) {
+              return {
+                ...d,
+                externalId:
+                  this.generateHash(d) +
+                  '_retry_' +
+                  Date.now() +
+                  '_' +
+                  Math.random().toString(36).substring(2, 9),
+              };
+            }
+            return d;
+          }),
+        )
       : newTransactions;
 
     if (force && mergeInstructions && mergeInstructions.length > 0) {
@@ -730,6 +751,25 @@ export class TransactionsService {
     };
     this.logger.log(`createMany returning: ${JSON.stringify(response)}`);
     return response;
+  }
+
+  /**
+   * Make repeated externalIds within one batch distinct by suffixing the
+   * second and later occurrences with "#2", "#3", ... The suffix is
+   * deterministic, so re-importing the same file still detects every row as
+   * a duplicate of what was stored.
+   */
+  private disambiguateBatchExternalIds<T extends { externalId?: string }>(
+    items: T[],
+  ): T[] {
+    const seen = new Map<string, number>();
+    for (const item of items) {
+      if (!item.externalId) continue;
+      const count = (seen.get(item.externalId) ?? 0) + 1;
+      seen.set(item.externalId, count);
+      if (count > 1) item.externalId = `${item.externalId}#${count}`;
+    }
+    return items;
   }
 
   generateHash(dto: CreateTransactionDto): string {

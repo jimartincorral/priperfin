@@ -52,8 +52,16 @@ async function bootstrap() {
   // Docker. The desktop app sets HOST=127.0.0.1 so the server is reachable only
   // from the local machine: that keeps it on IngressSecurityMiddleware's
   // loopback allow-list and avoids a Windows Firewall prompt on first launch.
-  const host = process.env.HOST ?? '::';
-  await app.listen(process.env.PORT ?? 3000, host);
+  // Without HOST, let Node pick: it binds '::' (all interfaces, dual-stack)
+  // and falls back to '0.0.0.0' when IPv6 is unavailable. An explicit '::'
+  // has no such fallback and fails with EAFNOSUPPORT on hosts that disable
+  // IPv6.
+  const port = process.env.PORT ?? 3000;
+  if (process.env.HOST) {
+    await app.listen(port, process.env.HOST);
+  } else {
+    await app.listen(port);
+  }
   Logger.log(`Listening on ${await app.getUrl()}`, 'Bootstrap');
 }
 
