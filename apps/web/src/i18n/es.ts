@@ -161,6 +161,7 @@ export const es = {
         // Objetivos
         saved_so_far: 'Ahorrado hasta ahora',
         unassigned: 'Sin asignar',
+        left_to_reach_goals: 'Falta para las metas',
         assign: 'Asignar',
         on_track: 'En camino',
         behind_by: 'Faltan {amount}',
@@ -264,6 +265,7 @@ export const es = {
         savings_pot: 'Bote de ahorro',
         assigned_to_goals: 'Asignado a metas',
         needed_per_month: 'Necesario al mes',
+        left_to_reach_goals: 'Falta para las metas',
         on_track_count: '{count} en marcha',
         behind_count: '{count} con retraso',
         per_month: 'Al mes',

@@ -1580,6 +1580,10 @@ export class ViewGoals extends LitElement {
               </button>
             </div>
           </div>
+          <div class="m-tile" style="grid-column: 1 / -1">
+            <div class="m-tile-label">${i18n.t('mobile.left_to_reach_goals')}</div>
+            <span class="m-tile-value">${this.money(this.remainingToGoals)}</span>
+          </div>
         </div>
 
         ${this.loading ? html`
@@ -2450,6 +2454,15 @@ export class ViewGoals extends LitElement {
     `;
   }
 
+  /** Money still missing to hit every goal. Overfunded goals count as zero,
+      so a surplus on one never hides a gap on another. */
+  private get remainingToGoals(): number {
+    return (Array.isArray(this.goals) ? this.goals : []).reduce(
+      (sum, goal) => sum + Math.max(0, Number(goal.targetAmount || 0) - Number(goal.savedAmount || 0)),
+      0,
+    );
+  }
+
   private renderDesktopStrip() {
     const assigned = (Array.isArray(this.goals) ? this.goals : [])
       .reduce((sum, goal) => sum + Number(goal.savedAmount || 0), 0);
@@ -2532,6 +2545,13 @@ export class ViewGoals extends LitElement {
           <div>
             <div class="d-strip-label">${i18n.t('desktop.needed_per_month')}</div>
             <div class="d-strip-value">${this.money(monthlyTotal, 2)}/mo</div>
+          </div>
+        </div>
+
+        <div class="d-strip-cell">
+          <div>
+            <div class="d-strip-label">${i18n.t('desktop.left_to_reach_goals')}</div>
+            <div class="d-strip-value">${this.money(this.remainingToGoals, 2)}</div>
           </div>
         </div>
 
