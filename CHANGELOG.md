@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.26.1 - 2026-10-08
+
+Fixes found in a pre-release review. No new features.
+
+- **Docker local server works.** Running `docker compose up` outside Home Assistant answered every request with a 403 "Direct access not allowed" page, because the browser's connection arrives from the Docker bridge rather than from Ingress or loopback. The container now allows direct access when it starts without Home Assistant, and the published port is bound to the host's loopback address so the app is still not exposed to the network by default.
+- **Wrong PIN no longer reloads the page.** A mistyped PIN on the login screen, in Change PIN or when deleting a profile was treated as an expired session, which cleared the session and reloaded the login page. The error message is now shown in place.
+- **Dates are handled in UTC end to end.** In time zones east of UTC (Spain and the rest of Europe) the From/To date filter was ignored and editing a transaction's date on desktop saved nothing; OFX imports were stored one day early. West of UTC (the Americas) transactions dated the 1st of a month showed up in the previous month in the list and in every report, and the mobile list showed dates a day early. Month, year and custom ranges on the server, the custom-range stepper, and the mobile date labels now all use the same UTC convention as the stored dates.
+- **Missing translations.** Six labels showed their raw key instead of text: the "Saved" notice after unlinking a transfer, the Close button on the mobile transaction sheet, the delete-category dialog title and warning, the amount validation message and the account fallback in the delete-transfer dialog.
+- **Profile isolation on the API.** The rule test, apply-rule, reorder, suggestion accept/reject and suggestion-for-transaction endpoints, and the bulk-import merge step, were not restricted to the logged-in profile. A transaction can also no longer be moved to another profile through an edit request.
+- **Bank credentials no longer reach the browser.** The generic settings endpoint returned the Enable Banking application id and private key verbatim; those keys are now excluded.
+- README: the add-on is reachable through Ingress only, not on port 3000.
+
 ## v1.26.0 - 2026-10-08
 
 Shows how much money is still missing to reach all your savings goals.
