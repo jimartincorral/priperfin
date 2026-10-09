@@ -1,0 +1,63 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to PriPerFin",
+        "description": "Create an API token in PriPerFin under Settings → Home Assistant and enter the address shown there.",
+        "data": {
+          "url": "Server address",
+          "token": "API token"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Update the PriPerFin token",
+        "description": "The token for {url} was rejected. Create a new one in PriPerFin under Settings → Home Assistant.",
+        "data": {
+          "token": "API token"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Could not reach PriPerFin at that address",
+      "invalid_auth": "PriPerFin rejected the token",
+      "wrong_profile": "That token belongs to a different profile"
+    },
+    "abort": {
+      "already_configured": "This PriPerFin profile is already set up",
+      "reauth_successful": "Token updated"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "PriPerFin options",
+        "data": {
+          "scan_interval": "Refresh every (seconds)",
+          "currency": "Currency code override (e.g. EUR)"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "uncategorized_transactions": { "name": "Uncategorized transactions" },
+      "pending_suggestions": { "name": "Pending rule suggestions" },
+      "month_income": { "name": "Income this month" },
+      "month_expenses": { "name": "Expenses this month" },
+      "month_net": { "name": "Net this month" },
+      "total_balance": { "name": "Total balance" },
+      "categories_over_budget": { "name": "Categories over budget" },
+      "budget_remaining": { "name": "Budget remaining" },
+      "goals_saved": { "name": "Goals saved" },
+      "goals_left": { "name": "Left to reach goals" },
+      "goals_behind": { "name": "Goals behind schedule" },
+      "bank_last_sync": { "name": "Last bank sync" },
+      "bank_days_until_expiry": { "name": "Bank consent days left" },
+      "last_import": { "name": "Last import" },
+      "account_balance": { "name": "{account} balance" }
+    },
+    "binary_sensor": {
+      "bank_consent_expired": { "name": "Bank consent expired" }
+    }
+  }
+}

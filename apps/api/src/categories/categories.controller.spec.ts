@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { CategoriesController } from './categories.controller';
 import { CategoriesService } from './categories.service';
 import { AuthService } from '../auth/auth.service';
+import { ApiTokenService } from '../auth/api-token.service';
 
 describe('CategoriesController', () => {
   let controller: CategoriesController;
@@ -22,6 +23,7 @@ describe('CategoriesController', () => {
       providers: [
         { provide: CategoriesService, useValue: mockCategoriesService },
         { provide: AuthService, useValue: mockAuthService },
+        { provide: ApiTokenService, useValue: { validate: jest.fn() } },
       ],
     }).compile();
 

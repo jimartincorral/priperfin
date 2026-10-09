@@ -9,6 +9,12 @@ import { CreateTransactionDto } from './create-transaction.dto';
 import { CreateTransferDto, LinkTransferDto } from './create-transfer.dto';
 import { GetTransactionsDto, DateFilterMode } from './get-transactions.dto';
 import { CreateSplitsDto } from './create-split.dto';
+import {
+  utcDayStart,
+  utcNextDay,
+  utcMonthRange,
+  utcYearRange,
+} from './date-ranges';
 import { RulesService } from '../rules/rules.service';
 import { RuleMode } from '../generated/client';
 import * as crypto from 'crypto';
@@ -480,6 +486,9 @@ export class TransactionsService {
       this.logger.log(
         `[CSV Import] Successfully imported ${result.count} transactions`,
       );
+      if (result.count > 0) {
+        await this.recordImportMarker(profileId, newTransactions);
+      }
       return {
         count: result.count,
         skipped: transactionsToCreate.length - result.count,
@@ -762,6 +771,9 @@ export class TransactionsService {
     const result = await this.prisma.transaction.createMany({
       data: transactionsToImport.map((t) => ({ ...t, profileId })),
     });
+    if (result.count > 0) {
+      await this.recordImportMarker(profileId, transactionsToImport);
+    }
 
     const response = {
       newCount: result.count,
@@ -791,6 +803,33 @@ export class TransactionsService {
       if (count > 1) item.externalId = `${item.externalId}#${count}`;
     }
     return items;
+  }
+
+  /**
+   * Remembers the last bulk import (CSV, wizard or bank sync) per profile so
+   * the Home Assistant integration can fire an event when new transactions
+   * arrive. Stored as a setting; never fatal for the import itself.
+   */
+  private async recordImportMarker(
+    profileId: string,
+    rows: Array<{ categoryId?: string | null; isTransfer?: boolean }>,
+  ) {
+    const marker = {
+      at: new Date().toISOString(),
+      newCount: rows.length,
+      uncategorizedCount: rows.filter((r) => !r.categoryId && !r.isTransfer)
+        .length,
+    };
+    const key = `ha_last_import_profile_${profileId}`;
+    try {
+      await this.prisma.setting.upsert({
+        where: { key },
+        update: { value: JSON.stringify(marker) },
+        create: { key, value: JSON.stringify(marker) },
+      });
+    } catch (err) {
+      this.logger.warn(`Could not record import marker: ${err?.message}`);
+    }
   }
 
   generateHash(dto: CreateTransactionDto): string {
@@ -1494,30 +1533,4 @@ export class TransactionsService {
     if (!importedNotes) return manualNotes;
     return `Manual: ${manualNotes} | Imported: ${importedNotes}`;
   }
-}
-
-/** Start of the given UTC calendar day for a YYYY-MM-DD (or ISO) string. */
-function utcDayStart(value: string): Date {
-  const [y, m, d] = value.slice(0, 10).split('-').map(Number);
-  return new Date(Date.UTC(y, m - 1, d));
-}
-
-/** Midnight UTC of the day after the given YYYY-MM-DD (or ISO) string. */
-function utcNextDay(value: string): Date {
-  const [y, m, d] = value.slice(0, 10).split('-').map(Number);
-  return new Date(Date.UTC(y, m - 1, d + 1));
-}
-
-function utcMonthRange(year: number, month: number) {
-  return {
-    gte: new Date(Date.UTC(year, month - 1, 1)),
-    lt: new Date(Date.UTC(year, month, 1)),
-  };
-}
-
-function utcYearRange(year: number) {
-  return {
-    gte: new Date(Date.UTC(year, 0, 1)),
-    lt: new Date(Date.UTC(year + 1, 0, 1)),
-  };
 }

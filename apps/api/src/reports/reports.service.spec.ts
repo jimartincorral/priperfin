@@ -546,6 +546,62 @@ describe('ReportsService', () => {
   // ============================================
   // getSankeyData() Tests
   // ============================================
+  describe('getCashFlowTotals', () => {
+    it('should apply the Sankey rules and round to cents', async () => {
+      const incomeCategory = createMockCategory({
+        id: 'cat-salary',
+        name: 'Salary',
+        type: 'INCOME',
+      });
+      const expenseCategory = createMockCategory({
+        id: 'cat-rent',
+        name: 'Rent',
+        type: 'EXPENSE',
+      });
+      const goalCategory = createMockCategory({
+        id: 'cat-goal',
+        name: 'Holiday',
+        type: 'GOAL',
+      });
+
+      prismaMock.transaction.findMany.mockResolvedValue([
+        createMockTransaction({
+          amount: new Decimal(3000),
+          category: incomeCategory,
+          splits: [],
+        }),
+        createMockTransaction({
+          amount: new Decimal(-1000.555),
+          category: expenseCategory,
+          splits: [],
+        }),
+        createMockTransaction({
+          amount: new Decimal(20),
+          category: expenseCategory,
+          splits: [],
+        }), // refund
+        createMockTransaction({
+          amount: new Decimal(-500),
+          category: goalCategory,
+          splits: [],
+        }), // savings
+      ]);
+
+      const range = {
+        gte: new Date('2025-01-01T00:00:00.000Z'),
+        lt: new Date('2025-02-01T00:00:00.000Z'),
+      };
+      const totals = await service.getCashFlowTotals('profile-1', range);
+
+      expect(prismaMock.transaction.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { profileId: 'profile-1', isTransfer: false, date: range },
+        }),
+      );
+      expect(totals).toEqual({ income: 3000, expenses: 980.56, net: 2019.44 });
+    });
+  });
+
   describe('getSankeyData', () => {
     it('should create correct nodes for income and expenses', async () => {
       const incomeCategory = createMockCategory({

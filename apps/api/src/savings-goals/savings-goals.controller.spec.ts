@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { SavingsGoalsController } from './savings-goals.controller';
 import { SavingsGoalsService } from './savings-goals.service';
 import { AuthService } from '../auth/auth.service';
+import { ApiTokenService } from '../auth/api-token.service';
 import { Profile } from '../generated/client';
 
 describe('SavingsGoalsController', () => {
@@ -26,6 +27,7 @@ describe('SavingsGoalsController', () => {
       providers: [
         { provide: SavingsGoalsService, useValue: mockSavingsGoalsService },
         { provide: AuthService, useValue: mockAuthService },
+        { provide: ApiTokenService, useValue: { validate: jest.fn() } },
       ],
     }).compile();
 

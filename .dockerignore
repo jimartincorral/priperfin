@@ -17,3 +17,7 @@ coverage
 # server tree is hundreds of MB of build context.
 apps/desktop/build
 apps/desktop/release
+
+# Home Assistant integration: not part of the add-on image
+custom_components/
+tests/

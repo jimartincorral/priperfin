@@ -22,6 +22,11 @@ if [ -f /data/options.json ] && [ -f /usr/lib/bashio/bashio.sh ]; then
 
     log_info() { bashio::log.info "$@"; }
     log_error() { bashio::log.error "$@"; }
+
+    # Shown in Settings so the Home Assistant integration can be pointed at
+    # this add-on, and reported as the device software version.
+    export PRIPERFIN_ADDON_HOSTNAME="$(bashio::addon.hostname)"
+    export PRIPERFIN_VERSION="$(bashio::addon.version)"
 else
     # Standalone container
     DATABASE_PATH="${DATABASE_URL:-file:/data/priperfin.db}"

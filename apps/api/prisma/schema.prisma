@@ -246,8 +246,24 @@ model Profile {
   ruleSuggestions      RuleSuggestion[]
   savingsGoals         SavingsGoal[]
   bankConnections      BankConnection[]
+  apiTokens            ApiToken[]
   
   @@index([name])
+}
+
+/// Long-lived credential for the Home Assistant integration (and other
+/// read-only clients). Only the sha256 of the token is stored; the plain
+/// value is shown once at creation.
+model ApiToken {
+  id         String    @id @default(uuid())
+  profileId  String
+  profile    Profile   @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  name       String
+  tokenHash  String    @unique
+  createdAt  DateTime  @default(now())
+  lastUsedAt DateTime?
+
+  @@index([profileId])
 }
 
 model BankConnection {

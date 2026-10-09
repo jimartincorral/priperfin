@@ -64,6 +64,13 @@ export type Setting = $Result.DefaultSelection<Prisma.$SettingPayload>
  */
 export type Profile = $Result.DefaultSelection<Prisma.$ProfilePayload>
 /**
+ * Model ApiToken
+ * Long-lived credential for the Home Assistant integration (and other
+ * read-only clients). Only the sha256 of the token is stored; the plain
+ * value is shown once at creation.
+ */
+export type ApiToken = $Result.DefaultSelection<Prisma.$ApiTokenPayload>
+/**
  * Model BankConnection
  * 
  */
@@ -355,6 +362,16 @@ export class PrismaClient<
     * ```
     */
   get profile(): Prisma.ProfileDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.apiToken`: Exposes CRUD operations for the **ApiToken** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more ApiTokens
+    * const apiTokens = await prisma.apiToken.findMany()
+    * ```
+    */
+  get apiToken(): Prisma.ApiTokenDelegate<ExtArgs, ClientOptions>;
 
   /**
    * `prisma.bankConnection`: Exposes CRUD operations for the **BankConnection** model.
@@ -839,6 +856,7 @@ export namespace Prisma {
     SavingsGoal: 'SavingsGoal',
     Setting: 'Setting',
     Profile: 'Profile',
+    ApiToken: 'ApiToken',
     BankConnection: 'BankConnection',
     Session: 'Session',
     MonthlyBalance: 'MonthlyBalance',
@@ -858,7 +876,7 @@ export namespace Prisma {
       omit: GlobalOmitOptions
     }
     meta: {
-      modelProps: "category" | "account" | "costObject" | "transaction" | "categorizationRule" | "ruleSuggestion" | "transactionSplit" | "savingsGoal" | "setting" | "profile" | "bankConnection" | "session" | "monthlyBalance" | "accountBalance"
+      modelProps: "category" | "account" | "costObject" | "transaction" | "categorizationRule" | "ruleSuggestion" | "transactionSplit" | "savingsGoal" | "setting" | "profile" | "apiToken" | "bankConnection" | "session" | "monthlyBalance" | "accountBalance"
       txIsolationLevel: Prisma.TransactionIsolationLevel
     }
     model: {
@@ -1602,6 +1620,80 @@ export namespace Prisma {
           }
         }
       }
+      ApiToken: {
+        payload: Prisma.$ApiTokenPayload<ExtArgs>
+        fields: Prisma.ApiTokenFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.ApiTokenFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$ApiTokenPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.ApiTokenFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$ApiTokenPayload>
+          }
+          findFirst: {
+            args: Prisma.ApiTokenFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$ApiTokenPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.ApiTokenFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$ApiTokenPayload>
+          }
+          findMany: {
+            args: Prisma.ApiTokenFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$ApiTokenPayload>[]
+          }
+          create: {
+            args: Prisma.ApiTokenCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$ApiTokenPayload>
+          }
+          createMany: {
+            args: Prisma.ApiTokenCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.ApiTokenCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$ApiTokenPayload>[]
+          }
+          delete: {
+            args: Prisma.ApiTokenDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$ApiTokenPayload>
+          }
+          update: {
+            args: Prisma.ApiTokenUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$ApiTokenPayload>
+          }
+          deleteMany: {
+            args: Prisma.ApiTokenDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.ApiTokenUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.ApiTokenUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$ApiTokenPayload>[]
+          }
+          upsert: {
+            args: Prisma.ApiTokenUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$ApiTokenPayload>
+          }
+          aggregate: {
+            args: Prisma.ApiTokenAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateApiToken>
+          }
+          groupBy: {
+            args: Prisma.ApiTokenGroupByArgs<ExtArgs>
+            result: $Utils.Optional<ApiTokenGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.ApiTokenCountArgs<ExtArgs>
+            result: $Utils.Optional<ApiTokenCountAggregateOutputType> | number
+          }
+        }
+      }
       BankConnection: {
         payload: Prisma.$BankConnectionPayload<ExtArgs>
         fields: Prisma.BankConnectionFieldRefs
@@ -2016,6 +2108,7 @@ export namespace Prisma {
     savingsGoal?: SavingsGoalOmit
     setting?: SettingOmit
     profile?: ProfileOmit
+    apiToken?: ApiTokenOmit
     bankConnection?: BankConnectionOmit
     session?: SessionOmit
     monthlyBalance?: MonthlyBalanceOmit
@@ -2345,6 +2438,7 @@ export namespace Prisma {
     ruleSuggestions: number
     savingsGoals: number
     bankConnections: number
+    apiTokens: number
   }
 
   export type ProfileCountOutputTypeSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
@@ -2357,6 +2451,7 @@ export namespace Prisma {
     ruleSuggestions?: boolean | ProfileCountOutputTypeCountRuleSuggestionsArgs
     savingsGoals?: boolean | ProfileCountOutputTypeCountSavingsGoalsArgs
     bankConnections?: boolean | ProfileCountOutputTypeCountBankConnectionsArgs
+    apiTokens?: boolean | ProfileCountOutputTypeCountApiTokensArgs
   }
 
   // Custom InputTypes
@@ -2431,6 +2526,13 @@ export namespace Prisma {
    */
   export type ProfileCountOutputTypeCountBankConnectionsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     where?: BankConnectionWhereInput
+  }
+
+  /**
+   * ProfileCountOutputType without action
+   */
+  export type ProfileCountOutputTypeCountApiTokensArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: ApiTokenWhereInput
   }
 
 
@@ -13687,6 +13789,7 @@ export namespace Prisma {
     ruleSuggestions?: boolean | Profile$ruleSuggestionsArgs<ExtArgs>
     savingsGoals?: boolean | Profile$savingsGoalsArgs<ExtArgs>
     bankConnections?: boolean | Profile$bankConnectionsArgs<ExtArgs>
+    apiTokens?: boolean | Profile$apiTokensArgs<ExtArgs>
     _count?: boolean | ProfileCountOutputTypeDefaultArgs<ExtArgs>
   }, ExtArgs["result"]["profile"]>
 
@@ -13725,6 +13828,7 @@ export namespace Prisma {
     ruleSuggestions?: boolean | Profile$ruleSuggestionsArgs<ExtArgs>
     savingsGoals?: boolean | Profile$savingsGoalsArgs<ExtArgs>
     bankConnections?: boolean | Profile$bankConnectionsArgs<ExtArgs>
+    apiTokens?: boolean | Profile$apiTokensArgs<ExtArgs>
     _count?: boolean | ProfileCountOutputTypeDefaultArgs<ExtArgs>
   }
   export type ProfileIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {}
@@ -13742,6 +13846,7 @@ export namespace Prisma {
       ruleSuggestions: Prisma.$RuleSuggestionPayload<ExtArgs>[]
       savingsGoals: Prisma.$SavingsGoalPayload<ExtArgs>[]
       bankConnections: Prisma.$BankConnectionPayload<ExtArgs>[]
+      apiTokens: Prisma.$ApiTokenPayload<ExtArgs>[]
     }
     scalars: $Extensions.GetPayloadResult<{
       id: string
@@ -14152,6 +14257,7 @@ export namespace Prisma {
     ruleSuggestions<T extends Profile$ruleSuggestionsArgs<ExtArgs> = {}>(args?: Subset<T, Profile$ruleSuggestionsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$RuleSuggestionPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     savingsGoals<T extends Profile$savingsGoalsArgs<ExtArgs> = {}>(args?: Subset<T, Profile$savingsGoalsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$SavingsGoalPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     bankConnections<T extends Profile$bankConnectionsArgs<ExtArgs> = {}>(args?: Subset<T, Profile$bankConnectionsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$BankConnectionPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+    apiTokens<T extends Profile$apiTokensArgs<ExtArgs> = {}>(args?: Subset<T, Profile$apiTokensArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$ApiTokenPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     /**
      * Attaches callbacks for the resolution and/or rejection of the Promise.
      * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -14788,6 +14894,30 @@ export namespace Prisma {
   }
 
   /**
+   * Profile.apiTokens
+   */
+  export type Profile$apiTokensArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ApiToken
+     */
+    select?: ApiTokenSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the ApiToken
+     */
+    omit?: ApiTokenOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: ApiTokenInclude<ExtArgs> | null
+    where?: ApiTokenWhereInput
+    orderBy?: ApiTokenOrderByWithRelationInput | ApiTokenOrderByWithRelationInput[]
+    cursor?: ApiTokenWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: ApiTokenScalarFieldEnum | ApiTokenScalarFieldEnum[]
+  }
+
+  /**
    * Profile without action
    */
   export type ProfileDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
@@ -14803,6 +14933,1075 @@ export namespace Prisma {
      * Choose, which related nodes to fetch as well
      */
     include?: ProfileInclude<ExtArgs> | null
+  }
+
+
+  /**
+   * Model ApiToken
+   */
+
+  export type AggregateApiToken = {
+    _count: ApiTokenCountAggregateOutputType | null
+    _min: ApiTokenMinAggregateOutputType | null
+    _max: ApiTokenMaxAggregateOutputType | null
+  }
+
+  export type ApiTokenMinAggregateOutputType = {
+    id: string | null
+    profileId: string | null
+    name: string | null
+    tokenHash: string | null
+    createdAt: Date | null
+    lastUsedAt: Date | null
+  }
+
+  export type ApiTokenMaxAggregateOutputType = {
+    id: string | null
+    profileId: string | null
+    name: string | null
+    tokenHash: string | null
+    createdAt: Date | null
+    lastUsedAt: Date | null
+  }
+
+  export type ApiTokenCountAggregateOutputType = {
+    id: number
+    profileId: number
+    name: number
+    tokenHash: number
+    createdAt: number
+    lastUsedAt: number
+    _all: number
+  }
+
+
+  export type ApiTokenMinAggregateInputType = {
+    id?: true
+    profileId?: true
+    name?: true
+    tokenHash?: true
+    createdAt?: true
+    lastUsedAt?: true
+  }
+
+  export type ApiTokenMaxAggregateInputType = {
+    id?: true
+    profileId?: true
+    name?: true
+    tokenHash?: true
+    createdAt?: true
+    lastUsedAt?: true
+  }
+
+  export type ApiTokenCountAggregateInputType = {
+    id?: true
+    profileId?: true
+    name?: true
+    tokenHash?: true
+    createdAt?: true
+    lastUsedAt?: true
+    _all?: true
+  }
+
+  export type ApiTokenAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which ApiToken to aggregate.
+     */
+    where?: ApiTokenWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of ApiTokens to fetch.
+     */
+    orderBy?: ApiTokenOrderByWithRelationInput | ApiTokenOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: ApiTokenWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` ApiTokens from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` ApiTokens.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned ApiTokens
+    **/
+    _count?: true | ApiTokenCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: ApiTokenMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: ApiTokenMaxAggregateInputType
+  }
+
+  export type GetApiTokenAggregateType<T extends ApiTokenAggregateArgs> = {
+        [P in keyof T & keyof AggregateApiToken]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateApiToken[P]>
+      : GetScalarType<T[P], AggregateApiToken[P]>
+  }
+
+
+
+
+  export type ApiTokenGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: ApiTokenWhereInput
+    orderBy?: ApiTokenOrderByWithAggregationInput | ApiTokenOrderByWithAggregationInput[]
+    by: ApiTokenScalarFieldEnum[] | ApiTokenScalarFieldEnum
+    having?: ApiTokenScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: ApiTokenCountAggregateInputType | true
+    _min?: ApiTokenMinAggregateInputType
+    _max?: ApiTokenMaxAggregateInputType
+  }
+
+  export type ApiTokenGroupByOutputType = {
+    id: string
+    profileId: string
+    name: string
+    tokenHash: string
+    createdAt: Date
+    lastUsedAt: Date | null
+    _count: ApiTokenCountAggregateOutputType | null
+    _min: ApiTokenMinAggregateOutputType | null
+    _max: ApiTokenMaxAggregateOutputType | null
+  }
+
+  type GetApiTokenGroupByPayload<T extends ApiTokenGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<ApiTokenGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof ApiTokenGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], ApiTokenGroupByOutputType[P]>
+            : GetScalarType<T[P], ApiTokenGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type ApiTokenSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    profileId?: boolean
+    name?: boolean
+    tokenHash?: boolean
+    createdAt?: boolean
+    lastUsedAt?: boolean
+    profile?: boolean | ProfileDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["apiToken"]>
+
+  export type ApiTokenSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    profileId?: boolean
+    name?: boolean
+    tokenHash?: boolean
+    createdAt?: boolean
+    lastUsedAt?: boolean
+    profile?: boolean | ProfileDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["apiToken"]>
+
+  export type ApiTokenSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    profileId?: boolean
+    name?: boolean
+    tokenHash?: boolean
+    createdAt?: boolean
+    lastUsedAt?: boolean
+    profile?: boolean | ProfileDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["apiToken"]>
+
+  export type ApiTokenSelectScalar = {
+    id?: boolean
+    profileId?: boolean
+    name?: boolean
+    tokenHash?: boolean
+    createdAt?: boolean
+    lastUsedAt?: boolean
+  }
+
+  export type ApiTokenOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "profileId" | "name" | "tokenHash" | "createdAt" | "lastUsedAt", ExtArgs["result"]["apiToken"]>
+  export type ApiTokenInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    profile?: boolean | ProfileDefaultArgs<ExtArgs>
+  }
+  export type ApiTokenIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    profile?: boolean | ProfileDefaultArgs<ExtArgs>
+  }
+  export type ApiTokenIncludeUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    profile?: boolean | ProfileDefaultArgs<ExtArgs>
+  }
+
+  export type $ApiTokenPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "ApiToken"
+    objects: {
+      profile: Prisma.$ProfilePayload<ExtArgs>
+    }
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      profileId: string
+      name: string
+      tokenHash: string
+      createdAt: Date
+      lastUsedAt: Date | null
+    }, ExtArgs["result"]["apiToken"]>
+    composites: {}
+  }
+
+  type ApiTokenGetPayload<S extends boolean | null | undefined | ApiTokenDefaultArgs> = $Result.GetResult<Prisma.$ApiTokenPayload, S>
+
+  type ApiTokenCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<ApiTokenFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: ApiTokenCountAggregateInputType | true
+    }
+
+  export interface ApiTokenDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['ApiToken'], meta: { name: 'ApiToken' } }
+    /**
+     * Find zero or one ApiToken that matches the filter.
+     * @param {ApiTokenFindUniqueArgs} args - Arguments to find a ApiToken
+     * @example
+     * // Get one ApiToken
+     * const apiToken = await prisma.apiToken.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends ApiTokenFindUniqueArgs>(args: SelectSubset<T, ApiTokenFindUniqueArgs<ExtArgs>>): Prisma__ApiTokenClient<$Result.GetResult<Prisma.$ApiTokenPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one ApiToken that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {ApiTokenFindUniqueOrThrowArgs} args - Arguments to find a ApiToken
+     * @example
+     * // Get one ApiToken
+     * const apiToken = await prisma.apiToken.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends ApiTokenFindUniqueOrThrowArgs>(args: SelectSubset<T, ApiTokenFindUniqueOrThrowArgs<ExtArgs>>): Prisma__ApiTokenClient<$Result.GetResult<Prisma.$ApiTokenPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first ApiToken that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {ApiTokenFindFirstArgs} args - Arguments to find a ApiToken
+     * @example
+     * // Get one ApiToken
+     * const apiToken = await prisma.apiToken.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends ApiTokenFindFirstArgs>(args?: SelectSubset<T, ApiTokenFindFirstArgs<ExtArgs>>): Prisma__ApiTokenClient<$Result.GetResult<Prisma.$ApiTokenPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first ApiToken that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {ApiTokenFindFirstOrThrowArgs} args - Arguments to find a ApiToken
+     * @example
+     * // Get one ApiToken
+     * const apiToken = await prisma.apiToken.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends ApiTokenFindFirstOrThrowArgs>(args?: SelectSubset<T, ApiTokenFindFirstOrThrowArgs<ExtArgs>>): Prisma__ApiTokenClient<$Result.GetResult<Prisma.$ApiTokenPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more ApiTokens that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {ApiTokenFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all ApiTokens
+     * const apiTokens = await prisma.apiToken.findMany()
+     * 
+     * // Get first 10 ApiTokens
+     * const apiTokens = await prisma.apiToken.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const apiTokenWithIdOnly = await prisma.apiToken.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends ApiTokenFindManyArgs>(args?: SelectSubset<T, ApiTokenFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$ApiTokenPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a ApiToken.
+     * @param {ApiTokenCreateArgs} args - Arguments to create a ApiToken.
+     * @example
+     * // Create one ApiToken
+     * const ApiToken = await prisma.apiToken.create({
+     *   data: {
+     *     // ... data to create a ApiToken
+     *   }
+     * })
+     * 
+     */
+    create<T extends ApiTokenCreateArgs>(args: SelectSubset<T, ApiTokenCreateArgs<ExtArgs>>): Prisma__ApiTokenClient<$Result.GetResult<Prisma.$ApiTokenPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many ApiTokens.
+     * @param {ApiTokenCreateManyArgs} args - Arguments to create many ApiTokens.
+     * @example
+     * // Create many ApiTokens
+     * const apiToken = await prisma.apiToken.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends ApiTokenCreateManyArgs>(args?: SelectSubset<T, ApiTokenCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many ApiTokens and returns the data saved in the database.
+     * @param {ApiTokenCreateManyAndReturnArgs} args - Arguments to create many ApiTokens.
+     * @example
+     * // Create many ApiTokens
+     * const apiToken = await prisma.apiToken.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many ApiTokens and only return the `id`
+     * const apiTokenWithIdOnly = await prisma.apiToken.createManyAndReturn({
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends ApiTokenCreateManyAndReturnArgs>(args?: SelectSubset<T, ApiTokenCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$ApiTokenPayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Delete a ApiToken.
+     * @param {ApiTokenDeleteArgs} args - Arguments to delete one ApiToken.
+     * @example
+     * // Delete one ApiToken
+     * const ApiToken = await prisma.apiToken.delete({
+     *   where: {
+     *     // ... filter to delete one ApiToken
+     *   }
+     * })
+     * 
+     */
+    delete<T extends ApiTokenDeleteArgs>(args: SelectSubset<T, ApiTokenDeleteArgs<ExtArgs>>): Prisma__ApiTokenClient<$Result.GetResult<Prisma.$ApiTokenPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one ApiToken.
+     * @param {ApiTokenUpdateArgs} args - Arguments to update one ApiToken.
+     * @example
+     * // Update one ApiToken
+     * const apiToken = await prisma.apiToken.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends ApiTokenUpdateArgs>(args: SelectSubset<T, ApiTokenUpdateArgs<ExtArgs>>): Prisma__ApiTokenClient<$Result.GetResult<Prisma.$ApiTokenPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more ApiTokens.
+     * @param {ApiTokenDeleteManyArgs} args - Arguments to filter ApiTokens to delete.
+     * @example
+     * // Delete a few ApiTokens
+     * const { count } = await prisma.apiToken.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends ApiTokenDeleteManyArgs>(args?: SelectSubset<T, ApiTokenDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more ApiTokens.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {ApiTokenUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many ApiTokens
+     * const apiToken = await prisma.apiToken.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends ApiTokenUpdateManyArgs>(args: SelectSubset<T, ApiTokenUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more ApiTokens and returns the data updated in the database.
+     * @param {ApiTokenUpdateManyAndReturnArgs} args - Arguments to update many ApiTokens.
+     * @example
+     * // Update many ApiTokens
+     * const apiToken = await prisma.apiToken.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more ApiTokens and only return the `id`
+     * const apiTokenWithIdOnly = await prisma.apiToken.updateManyAndReturn({
+     *   select: { id: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends ApiTokenUpdateManyAndReturnArgs>(args: SelectSubset<T, ApiTokenUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$ApiTokenPayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Create or update one ApiToken.
+     * @param {ApiTokenUpsertArgs} args - Arguments to update or create a ApiToken.
+     * @example
+     * // Update or create a ApiToken
+     * const apiToken = await prisma.apiToken.upsert({
+     *   create: {
+     *     // ... data to create a ApiToken
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the ApiToken we want to update
+     *   }
+     * })
+     */
+    upsert<T extends ApiTokenUpsertArgs>(args: SelectSubset<T, ApiTokenUpsertArgs<ExtArgs>>): Prisma__ApiTokenClient<$Result.GetResult<Prisma.$ApiTokenPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of ApiTokens.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {ApiTokenCountArgs} args - Arguments to filter ApiTokens to count.
+     * @example
+     * // Count the number of ApiTokens
+     * const count = await prisma.apiToken.count({
+     *   where: {
+     *     // ... the filter for the ApiTokens we want to count
+     *   }
+     * })
+    **/
+    count<T extends ApiTokenCountArgs>(
+      args?: Subset<T, ApiTokenCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], ApiTokenCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a ApiToken.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {ApiTokenAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends ApiTokenAggregateArgs>(args: Subset<T, ApiTokenAggregateArgs>): Prisma.PrismaPromise<GetApiTokenAggregateType<T>>
+
+    /**
+     * Group by ApiToken.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {ApiTokenGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends ApiTokenGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: ApiTokenGroupByArgs['orderBy'] }
+        : { orderBy?: ApiTokenGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, ApiTokenGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetApiTokenGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the ApiToken model
+   */
+  readonly fields: ApiTokenFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for ApiToken.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__ApiTokenClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    profile<T extends ProfileDefaultArgs<ExtArgs> = {}>(args?: Subset<T, ProfileDefaultArgs<ExtArgs>>): Prisma__ProfileClient<$Result.GetResult<Prisma.$ProfilePayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the ApiToken model
+   */
+  interface ApiTokenFieldRefs {
+    readonly id: FieldRef<"ApiToken", 'String'>
+    readonly profileId: FieldRef<"ApiToken", 'String'>
+    readonly name: FieldRef<"ApiToken", 'String'>
+    readonly tokenHash: FieldRef<"ApiToken", 'String'>
+    readonly createdAt: FieldRef<"ApiToken", 'DateTime'>
+    readonly lastUsedAt: FieldRef<"ApiToken", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * ApiToken findUnique
+   */
+  export type ApiTokenFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ApiToken
+     */
+    select?: ApiTokenSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the ApiToken
+     */
+    omit?: ApiTokenOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: ApiTokenInclude<ExtArgs> | null
+    /**
+     * Filter, which ApiToken to fetch.
+     */
+    where: ApiTokenWhereUniqueInput
+  }
+
+  /**
+   * ApiToken findUniqueOrThrow
+   */
+  export type ApiTokenFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ApiToken
+     */
+    select?: ApiTokenSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the ApiToken
+     */
+    omit?: ApiTokenOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: ApiTokenInclude<ExtArgs> | null
+    /**
+     * Filter, which ApiToken to fetch.
+     */
+    where: ApiTokenWhereUniqueInput
+  }
+
+  /**
+   * ApiToken findFirst
+   */
+  export type ApiTokenFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ApiToken
+     */
+    select?: ApiTokenSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the ApiToken
+     */
+    omit?: ApiTokenOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: ApiTokenInclude<ExtArgs> | null
+    /**
+     * Filter, which ApiToken to fetch.
+     */
+    where?: ApiTokenWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of ApiTokens to fetch.
+     */
+    orderBy?: ApiTokenOrderByWithRelationInput | ApiTokenOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for ApiTokens.
+     */
+    cursor?: ApiTokenWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` ApiTokens from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` ApiTokens.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of ApiTokens.
+     */
+    distinct?: ApiTokenScalarFieldEnum | ApiTokenScalarFieldEnum[]
+  }
+
+  /**
+   * ApiToken findFirstOrThrow
+   */
+  export type ApiTokenFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ApiToken
+     */
+    select?: ApiTokenSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the ApiToken
+     */
+    omit?: ApiTokenOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: ApiTokenInclude<ExtArgs> | null
+    /**
+     * Filter, which ApiToken to fetch.
+     */
+    where?: ApiTokenWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of ApiTokens to fetch.
+     */
+    orderBy?: ApiTokenOrderByWithRelationInput | ApiTokenOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for ApiTokens.
+     */
+    cursor?: ApiTokenWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` ApiTokens from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` ApiTokens.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of ApiTokens.
+     */
+    distinct?: ApiTokenScalarFieldEnum | ApiTokenScalarFieldEnum[]
+  }
+
+  /**
+   * ApiToken findMany
+   */
+  export type ApiTokenFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ApiToken
+     */
+    select?: ApiTokenSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the ApiToken
+     */
+    omit?: ApiTokenOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: ApiTokenInclude<ExtArgs> | null
+    /**
+     * Filter, which ApiTokens to fetch.
+     */
+    where?: ApiTokenWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of ApiTokens to fetch.
+     */
+    orderBy?: ApiTokenOrderByWithRelationInput | ApiTokenOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing ApiTokens.
+     */
+    cursor?: ApiTokenWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` ApiTokens from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` ApiTokens.
+     */
+    skip?: number
+    distinct?: ApiTokenScalarFieldEnum | ApiTokenScalarFieldEnum[]
+  }
+
+  /**
+   * ApiToken create
+   */
+  export type ApiTokenCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ApiToken
+     */
+    select?: ApiTokenSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the ApiToken
+     */
+    omit?: ApiTokenOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: ApiTokenInclude<ExtArgs> | null
+    /**
+     * The data needed to create a ApiToken.
+     */
+    data: XOR<ApiTokenCreateInput, ApiTokenUncheckedCreateInput>
+  }
+
+  /**
+   * ApiToken createMany
+   */
+  export type ApiTokenCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many ApiTokens.
+     */
+    data: ApiTokenCreateManyInput | ApiTokenCreateManyInput[]
+  }
+
+  /**
+   * ApiToken createManyAndReturn
+   */
+  export type ApiTokenCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ApiToken
+     */
+    select?: ApiTokenSelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the ApiToken
+     */
+    omit?: ApiTokenOmit<ExtArgs> | null
+    /**
+     * The data used to create many ApiTokens.
+     */
+    data: ApiTokenCreateManyInput | ApiTokenCreateManyInput[]
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: ApiTokenIncludeCreateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * ApiToken update
+   */
+  export type ApiTokenUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ApiToken
+     */
+    select?: ApiTokenSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the ApiToken
+     */
+    omit?: ApiTokenOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: ApiTokenInclude<ExtArgs> | null
+    /**
+     * The data needed to update a ApiToken.
+     */
+    data: XOR<ApiTokenUpdateInput, ApiTokenUncheckedUpdateInput>
+    /**
+     * Choose, which ApiToken to update.
+     */
+    where: ApiTokenWhereUniqueInput
+  }
+
+  /**
+   * ApiToken updateMany
+   */
+  export type ApiTokenUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update ApiTokens.
+     */
+    data: XOR<ApiTokenUpdateManyMutationInput, ApiTokenUncheckedUpdateManyInput>
+    /**
+     * Filter which ApiTokens to update
+     */
+    where?: ApiTokenWhereInput
+    /**
+     * Limit how many ApiTokens to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * ApiToken updateManyAndReturn
+   */
+  export type ApiTokenUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ApiToken
+     */
+    select?: ApiTokenSelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the ApiToken
+     */
+    omit?: ApiTokenOmit<ExtArgs> | null
+    /**
+     * The data used to update ApiTokens.
+     */
+    data: XOR<ApiTokenUpdateManyMutationInput, ApiTokenUncheckedUpdateManyInput>
+    /**
+     * Filter which ApiTokens to update
+     */
+    where?: ApiTokenWhereInput
+    /**
+     * Limit how many ApiTokens to update.
+     */
+    limit?: number
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: ApiTokenIncludeUpdateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * ApiToken upsert
+   */
+  export type ApiTokenUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ApiToken
+     */
+    select?: ApiTokenSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the ApiToken
+     */
+    omit?: ApiTokenOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: ApiTokenInclude<ExtArgs> | null
+    /**
+     * The filter to search for the ApiToken to update in case it exists.
+     */
+    where: ApiTokenWhereUniqueInput
+    /**
+     * In case the ApiToken found by the `where` argument doesn't exist, create a new ApiToken with this data.
+     */
+    create: XOR<ApiTokenCreateInput, ApiTokenUncheckedCreateInput>
+    /**
+     * In case the ApiToken was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<ApiTokenUpdateInput, ApiTokenUncheckedUpdateInput>
+  }
+
+  /**
+   * ApiToken delete
+   */
+  export type ApiTokenDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ApiToken
+     */
+    select?: ApiTokenSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the ApiToken
+     */
+    omit?: ApiTokenOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: ApiTokenInclude<ExtArgs> | null
+    /**
+     * Filter which ApiToken to delete.
+     */
+    where: ApiTokenWhereUniqueInput
+  }
+
+  /**
+   * ApiToken deleteMany
+   */
+  export type ApiTokenDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which ApiTokens to delete
+     */
+    where?: ApiTokenWhereInput
+    /**
+     * Limit how many ApiTokens to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * ApiToken without action
+   */
+  export type ApiTokenDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ApiToken
+     */
+    select?: ApiTokenSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the ApiToken
+     */
+    omit?: ApiTokenOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: ApiTokenInclude<ExtArgs> | null
   }
 
 
@@ -19491,6 +20690,18 @@ export namespace Prisma {
   export type ProfileScalarFieldEnum = (typeof ProfileScalarFieldEnum)[keyof typeof ProfileScalarFieldEnum]
 
 
+  export const ApiTokenScalarFieldEnum: {
+    id: 'id',
+    profileId: 'profileId',
+    name: 'name',
+    tokenHash: 'tokenHash',
+    createdAt: 'createdAt',
+    lastUsedAt: 'lastUsedAt'
+  };
+
+  export type ApiTokenScalarFieldEnum = (typeof ApiTokenScalarFieldEnum)[keyof typeof ApiTokenScalarFieldEnum]
+
+
   export const BankConnectionScalarFieldEnum: {
     id: 'id',
     provider: 'provider',
@@ -20484,6 +21695,7 @@ export namespace Prisma {
     ruleSuggestions?: RuleSuggestionListRelationFilter
     savingsGoals?: SavingsGoalListRelationFilter
     bankConnections?: BankConnectionListRelationFilter
+    apiTokens?: ApiTokenListRelationFilter
   }
 
   export type ProfileOrderByWithRelationInput = {
@@ -20501,6 +21713,7 @@ export namespace Prisma {
     ruleSuggestions?: RuleSuggestionOrderByRelationAggregateInput
     savingsGoals?: SavingsGoalOrderByRelationAggregateInput
     bankConnections?: BankConnectionOrderByRelationAggregateInput
+    apiTokens?: ApiTokenOrderByRelationAggregateInput
   }
 
   export type ProfileWhereUniqueInput = Prisma.AtLeast<{
@@ -20521,6 +21734,7 @@ export namespace Prisma {
     ruleSuggestions?: RuleSuggestionListRelationFilter
     savingsGoals?: SavingsGoalListRelationFilter
     bankConnections?: BankConnectionListRelationFilter
+    apiTokens?: ApiTokenListRelationFilter
   }, "id" | "name">
 
   export type ProfileOrderByWithAggregationInput = {
@@ -20543,6 +21757,66 @@ export namespace Prisma {
     pinHash?: StringWithAggregatesFilter<"Profile"> | string
     createdAt?: DateTimeWithAggregatesFilter<"Profile"> | Date | string
     updatedAt?: DateTimeWithAggregatesFilter<"Profile"> | Date | string
+  }
+
+  export type ApiTokenWhereInput = {
+    AND?: ApiTokenWhereInput | ApiTokenWhereInput[]
+    OR?: ApiTokenWhereInput[]
+    NOT?: ApiTokenWhereInput | ApiTokenWhereInput[]
+    id?: StringFilter<"ApiToken"> | string
+    profileId?: StringFilter<"ApiToken"> | string
+    name?: StringFilter<"ApiToken"> | string
+    tokenHash?: StringFilter<"ApiToken"> | string
+    createdAt?: DateTimeFilter<"ApiToken"> | Date | string
+    lastUsedAt?: DateTimeNullableFilter<"ApiToken"> | Date | string | null
+    profile?: XOR<ProfileScalarRelationFilter, ProfileWhereInput>
+  }
+
+  export type ApiTokenOrderByWithRelationInput = {
+    id?: SortOrder
+    profileId?: SortOrder
+    name?: SortOrder
+    tokenHash?: SortOrder
+    createdAt?: SortOrder
+    lastUsedAt?: SortOrderInput | SortOrder
+    profile?: ProfileOrderByWithRelationInput
+  }
+
+  export type ApiTokenWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    tokenHash?: string
+    AND?: ApiTokenWhereInput | ApiTokenWhereInput[]
+    OR?: ApiTokenWhereInput[]
+    NOT?: ApiTokenWhereInput | ApiTokenWhereInput[]
+    profileId?: StringFilter<"ApiToken"> | string
+    name?: StringFilter<"ApiToken"> | string
+    createdAt?: DateTimeFilter<"ApiToken"> | Date | string
+    lastUsedAt?: DateTimeNullableFilter<"ApiToken"> | Date | string | null
+    profile?: XOR<ProfileScalarRelationFilter, ProfileWhereInput>
+  }, "id" | "tokenHash">
+
+  export type ApiTokenOrderByWithAggregationInput = {
+    id?: SortOrder
+    profileId?: SortOrder
+    name?: SortOrder
+    tokenHash?: SortOrder
+    createdAt?: SortOrder
+    lastUsedAt?: SortOrderInput | SortOrder
+    _count?: ApiTokenCountOrderByAggregateInput
+    _max?: ApiTokenMaxOrderByAggregateInput
+    _min?: ApiTokenMinOrderByAggregateInput
+  }
+
+  export type ApiTokenScalarWhereWithAggregatesInput = {
+    AND?: ApiTokenScalarWhereWithAggregatesInput | ApiTokenScalarWhereWithAggregatesInput[]
+    OR?: ApiTokenScalarWhereWithAggregatesInput[]
+    NOT?: ApiTokenScalarWhereWithAggregatesInput | ApiTokenScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"ApiToken"> | string
+    profileId?: StringWithAggregatesFilter<"ApiToken"> | string
+    name?: StringWithAggregatesFilter<"ApiToken"> | string
+    tokenHash?: StringWithAggregatesFilter<"ApiToken"> | string
+    createdAt?: DateTimeWithAggregatesFilter<"ApiToken"> | Date | string
+    lastUsedAt?: DateTimeNullableWithAggregatesFilter<"ApiToken"> | Date | string | null
   }
 
   export type BankConnectionWhereInput = {
@@ -21725,6 +22999,7 @@ export namespace Prisma {
     ruleSuggestions?: RuleSuggestionCreateNestedManyWithoutProfileInput
     savingsGoals?: SavingsGoalCreateNestedManyWithoutProfileInput
     bankConnections?: BankConnectionCreateNestedManyWithoutProfileInput
+    apiTokens?: ApiTokenCreateNestedManyWithoutProfileInput
   }
 
   export type ProfileUncheckedCreateInput = {
@@ -21742,6 +23017,7 @@ export namespace Prisma {
     ruleSuggestions?: RuleSuggestionUncheckedCreateNestedManyWithoutProfileInput
     savingsGoals?: SavingsGoalUncheckedCreateNestedManyWithoutProfileInput
     bankConnections?: BankConnectionUncheckedCreateNestedManyWithoutProfileInput
+    apiTokens?: ApiTokenUncheckedCreateNestedManyWithoutProfileInput
   }
 
   export type ProfileUpdateInput = {
@@ -21759,6 +23035,7 @@ export namespace Prisma {
     ruleSuggestions?: RuleSuggestionUpdateManyWithoutProfileNestedInput
     savingsGoals?: SavingsGoalUpdateManyWithoutProfileNestedInput
     bankConnections?: BankConnectionUpdateManyWithoutProfileNestedInput
+    apiTokens?: ApiTokenUpdateManyWithoutProfileNestedInput
   }
 
   export type ProfileUncheckedUpdateInput = {
@@ -21776,6 +23053,7 @@ export namespace Prisma {
     ruleSuggestions?: RuleSuggestionUncheckedUpdateManyWithoutProfileNestedInput
     savingsGoals?: SavingsGoalUncheckedUpdateManyWithoutProfileNestedInput
     bankConnections?: BankConnectionUncheckedUpdateManyWithoutProfileNestedInput
+    apiTokens?: ApiTokenUncheckedUpdateManyWithoutProfileNestedInput
   }
 
   export type ProfileCreateManyInput = {
@@ -21800,6 +23078,68 @@ export namespace Prisma {
     pinHash?: StringFieldUpdateOperationsInput | string
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type ApiTokenCreateInput = {
+    id?: string
+    name: string
+    tokenHash: string
+    createdAt?: Date | string
+    lastUsedAt?: Date | string | null
+    profile: ProfileCreateNestedOneWithoutApiTokensInput
+  }
+
+  export type ApiTokenUncheckedCreateInput = {
+    id?: string
+    profileId: string
+    name: string
+    tokenHash: string
+    createdAt?: Date | string
+    lastUsedAt?: Date | string | null
+  }
+
+  export type ApiTokenUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    tokenHash?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    lastUsedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    profile?: ProfileUpdateOneRequiredWithoutApiTokensNestedInput
+  }
+
+  export type ApiTokenUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    profileId?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    tokenHash?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    lastUsedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  }
+
+  export type ApiTokenCreateManyInput = {
+    id?: string
+    profileId: string
+    name: string
+    tokenHash: string
+    createdAt?: Date | string
+    lastUsedAt?: Date | string | null
+  }
+
+  export type ApiTokenUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    tokenHash?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    lastUsedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  }
+
+  export type ApiTokenUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    profileId?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    tokenHash?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    lastUsedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   }
 
   export type BankConnectionCreateInput = {
@@ -22984,6 +24324,12 @@ export namespace Prisma {
     none?: BankConnectionWhereInput
   }
 
+  export type ApiTokenListRelationFilter = {
+    every?: ApiTokenWhereInput
+    some?: ApiTokenWhereInput
+    none?: ApiTokenWhereInput
+  }
+
   export type SessionOrderByRelationAggregateInput = {
     _count?: SortOrder
   }
@@ -22997,6 +24343,10 @@ export namespace Prisma {
   }
 
   export type BankConnectionOrderByRelationAggregateInput = {
+    _count?: SortOrder
+  }
+
+  export type ApiTokenOrderByRelationAggregateInput = {
     _count?: SortOrder
   }
 
@@ -23022,6 +24372,33 @@ export namespace Prisma {
     pinHash?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
+  }
+
+  export type ApiTokenCountOrderByAggregateInput = {
+    id?: SortOrder
+    profileId?: SortOrder
+    name?: SortOrder
+    tokenHash?: SortOrder
+    createdAt?: SortOrder
+    lastUsedAt?: SortOrder
+  }
+
+  export type ApiTokenMaxOrderByAggregateInput = {
+    id?: SortOrder
+    profileId?: SortOrder
+    name?: SortOrder
+    tokenHash?: SortOrder
+    createdAt?: SortOrder
+    lastUsedAt?: SortOrder
+  }
+
+  export type ApiTokenMinOrderByAggregateInput = {
+    id?: SortOrder
+    profileId?: SortOrder
+    name?: SortOrder
+    tokenHash?: SortOrder
+    createdAt?: SortOrder
+    lastUsedAt?: SortOrder
   }
 
   export type BankConnectionCountOrderByAggregateInput = {
@@ -24205,6 +25582,13 @@ export namespace Prisma {
     connect?: BankConnectionWhereUniqueInput | BankConnectionWhereUniqueInput[]
   }
 
+  export type ApiTokenCreateNestedManyWithoutProfileInput = {
+    create?: XOR<ApiTokenCreateWithoutProfileInput, ApiTokenUncheckedCreateWithoutProfileInput> | ApiTokenCreateWithoutProfileInput[] | ApiTokenUncheckedCreateWithoutProfileInput[]
+    connectOrCreate?: ApiTokenCreateOrConnectWithoutProfileInput | ApiTokenCreateOrConnectWithoutProfileInput[]
+    createMany?: ApiTokenCreateManyProfileInputEnvelope
+    connect?: ApiTokenWhereUniqueInput | ApiTokenWhereUniqueInput[]
+  }
+
   export type SessionUncheckedCreateNestedManyWithoutProfileInput = {
     create?: XOR<SessionCreateWithoutProfileInput, SessionUncheckedCreateWithoutProfileInput> | SessionCreateWithoutProfileInput[] | SessionUncheckedCreateWithoutProfileInput[]
     connectOrCreate?: SessionCreateOrConnectWithoutProfileInput | SessionCreateOrConnectWithoutProfileInput[]
@@ -24266,6 +25650,13 @@ export namespace Prisma {
     connectOrCreate?: BankConnectionCreateOrConnectWithoutProfileInput | BankConnectionCreateOrConnectWithoutProfileInput[]
     createMany?: BankConnectionCreateManyProfileInputEnvelope
     connect?: BankConnectionWhereUniqueInput | BankConnectionWhereUniqueInput[]
+  }
+
+  export type ApiTokenUncheckedCreateNestedManyWithoutProfileInput = {
+    create?: XOR<ApiTokenCreateWithoutProfileInput, ApiTokenUncheckedCreateWithoutProfileInput> | ApiTokenCreateWithoutProfileInput[] | ApiTokenUncheckedCreateWithoutProfileInput[]
+    connectOrCreate?: ApiTokenCreateOrConnectWithoutProfileInput | ApiTokenCreateOrConnectWithoutProfileInput[]
+    createMany?: ApiTokenCreateManyProfileInputEnvelope
+    connect?: ApiTokenWhereUniqueInput | ApiTokenWhereUniqueInput[]
   }
 
   export type SessionUpdateManyWithoutProfileNestedInput = {
@@ -24394,6 +25785,20 @@ export namespace Prisma {
     deleteMany?: BankConnectionScalarWhereInput | BankConnectionScalarWhereInput[]
   }
 
+  export type ApiTokenUpdateManyWithoutProfileNestedInput = {
+    create?: XOR<ApiTokenCreateWithoutProfileInput, ApiTokenUncheckedCreateWithoutProfileInput> | ApiTokenCreateWithoutProfileInput[] | ApiTokenUncheckedCreateWithoutProfileInput[]
+    connectOrCreate?: ApiTokenCreateOrConnectWithoutProfileInput | ApiTokenCreateOrConnectWithoutProfileInput[]
+    upsert?: ApiTokenUpsertWithWhereUniqueWithoutProfileInput | ApiTokenUpsertWithWhereUniqueWithoutProfileInput[]
+    createMany?: ApiTokenCreateManyProfileInputEnvelope
+    set?: ApiTokenWhereUniqueInput | ApiTokenWhereUniqueInput[]
+    disconnect?: ApiTokenWhereUniqueInput | ApiTokenWhereUniqueInput[]
+    delete?: ApiTokenWhereUniqueInput | ApiTokenWhereUniqueInput[]
+    connect?: ApiTokenWhereUniqueInput | ApiTokenWhereUniqueInput[]
+    update?: ApiTokenUpdateWithWhereUniqueWithoutProfileInput | ApiTokenUpdateWithWhereUniqueWithoutProfileInput[]
+    updateMany?: ApiTokenUpdateManyWithWhereWithoutProfileInput | ApiTokenUpdateManyWithWhereWithoutProfileInput[]
+    deleteMany?: ApiTokenScalarWhereInput | ApiTokenScalarWhereInput[]
+  }
+
   export type SessionUncheckedUpdateManyWithoutProfileNestedInput = {
     create?: XOR<SessionCreateWithoutProfileInput, SessionUncheckedCreateWithoutProfileInput> | SessionCreateWithoutProfileInput[] | SessionUncheckedCreateWithoutProfileInput[]
     connectOrCreate?: SessionCreateOrConnectWithoutProfileInput | SessionCreateOrConnectWithoutProfileInput[]
@@ -24518,6 +25923,34 @@ export namespace Prisma {
     update?: BankConnectionUpdateWithWhereUniqueWithoutProfileInput | BankConnectionUpdateWithWhereUniqueWithoutProfileInput[]
     updateMany?: BankConnectionUpdateManyWithWhereWithoutProfileInput | BankConnectionUpdateManyWithWhereWithoutProfileInput[]
     deleteMany?: BankConnectionScalarWhereInput | BankConnectionScalarWhereInput[]
+  }
+
+  export type ApiTokenUncheckedUpdateManyWithoutProfileNestedInput = {
+    create?: XOR<ApiTokenCreateWithoutProfileInput, ApiTokenUncheckedCreateWithoutProfileInput> | ApiTokenCreateWithoutProfileInput[] | ApiTokenUncheckedCreateWithoutProfileInput[]
+    connectOrCreate?: ApiTokenCreateOrConnectWithoutProfileInput | ApiTokenCreateOrConnectWithoutProfileInput[]
+    upsert?: ApiTokenUpsertWithWhereUniqueWithoutProfileInput | ApiTokenUpsertWithWhereUniqueWithoutProfileInput[]
+    createMany?: ApiTokenCreateManyProfileInputEnvelope
+    set?: ApiTokenWhereUniqueInput | ApiTokenWhereUniqueInput[]
+    disconnect?: ApiTokenWhereUniqueInput | ApiTokenWhereUniqueInput[]
+    delete?: ApiTokenWhereUniqueInput | ApiTokenWhereUniqueInput[]
+    connect?: ApiTokenWhereUniqueInput | ApiTokenWhereUniqueInput[]
+    update?: ApiTokenUpdateWithWhereUniqueWithoutProfileInput | ApiTokenUpdateWithWhereUniqueWithoutProfileInput[]
+    updateMany?: ApiTokenUpdateManyWithWhereWithoutProfileInput | ApiTokenUpdateManyWithWhereWithoutProfileInput[]
+    deleteMany?: ApiTokenScalarWhereInput | ApiTokenScalarWhereInput[]
+  }
+
+  export type ProfileCreateNestedOneWithoutApiTokensInput = {
+    create?: XOR<ProfileCreateWithoutApiTokensInput, ProfileUncheckedCreateWithoutApiTokensInput>
+    connectOrCreate?: ProfileCreateOrConnectWithoutApiTokensInput
+    connect?: ProfileWhereUniqueInput
+  }
+
+  export type ProfileUpdateOneRequiredWithoutApiTokensNestedInput = {
+    create?: XOR<ProfileCreateWithoutApiTokensInput, ProfileUncheckedCreateWithoutApiTokensInput>
+    connectOrCreate?: ProfileCreateOrConnectWithoutApiTokensInput
+    upsert?: ProfileUpsertWithoutApiTokensInput
+    connect?: ProfileWhereUniqueInput
+    update?: XOR<XOR<ProfileUpdateToOneWithWhereWithoutApiTokensInput, ProfileUpdateWithoutApiTokensInput>, ProfileUncheckedUpdateWithoutApiTokensInput>
   }
 
   export type ProfileCreateNestedOneWithoutBankConnectionsInput = {
@@ -25045,6 +26478,7 @@ export namespace Prisma {
     ruleSuggestions?: RuleSuggestionCreateNestedManyWithoutProfileInput
     savingsGoals?: SavingsGoalCreateNestedManyWithoutProfileInput
     bankConnections?: BankConnectionCreateNestedManyWithoutProfileInput
+    apiTokens?: ApiTokenCreateNestedManyWithoutProfileInput
   }
 
   export type ProfileUncheckedCreateWithoutCategoriesInput = {
@@ -25061,6 +26495,7 @@ export namespace Prisma {
     ruleSuggestions?: RuleSuggestionUncheckedCreateNestedManyWithoutProfileInput
     savingsGoals?: SavingsGoalUncheckedCreateNestedManyWithoutProfileInput
     bankConnections?: BankConnectionUncheckedCreateNestedManyWithoutProfileInput
+    apiTokens?: ApiTokenUncheckedCreateNestedManyWithoutProfileInput
   }
 
   export type ProfileCreateOrConnectWithoutCategoriesInput = {
@@ -25369,6 +26804,7 @@ export namespace Prisma {
     ruleSuggestions?: RuleSuggestionUpdateManyWithoutProfileNestedInput
     savingsGoals?: SavingsGoalUpdateManyWithoutProfileNestedInput
     bankConnections?: BankConnectionUpdateManyWithoutProfileNestedInput
+    apiTokens?: ApiTokenUpdateManyWithoutProfileNestedInput
   }
 
   export type ProfileUncheckedUpdateWithoutCategoriesInput = {
@@ -25385,6 +26821,7 @@ export namespace Prisma {
     ruleSuggestions?: RuleSuggestionUncheckedUpdateManyWithoutProfileNestedInput
     savingsGoals?: SavingsGoalUncheckedUpdateManyWithoutProfileNestedInput
     bankConnections?: BankConnectionUncheckedUpdateManyWithoutProfileNestedInput
+    apiTokens?: ApiTokenUncheckedUpdateManyWithoutProfileNestedInput
   }
 
   export type TransactionUpsertWithWhereUniqueWithoutCategoryInput = {
@@ -25575,6 +27012,7 @@ export namespace Prisma {
     ruleSuggestions?: RuleSuggestionCreateNestedManyWithoutProfileInput
     savingsGoals?: SavingsGoalCreateNestedManyWithoutProfileInput
     bankConnections?: BankConnectionCreateNestedManyWithoutProfileInput
+    apiTokens?: ApiTokenCreateNestedManyWithoutProfileInput
   }
 
   export type ProfileUncheckedCreateWithoutAccountsInput = {
@@ -25591,6 +27029,7 @@ export namespace Prisma {
     ruleSuggestions?: RuleSuggestionUncheckedCreateNestedManyWithoutProfileInput
     savingsGoals?: SavingsGoalUncheckedCreateNestedManyWithoutProfileInput
     bankConnections?: BankConnectionUncheckedCreateNestedManyWithoutProfileInput
+    apiTokens?: ApiTokenUncheckedCreateNestedManyWithoutProfileInput
   }
 
   export type ProfileCreateOrConnectWithoutAccountsInput = {
@@ -25810,6 +27249,7 @@ export namespace Prisma {
     ruleSuggestions?: RuleSuggestionUpdateManyWithoutProfileNestedInput
     savingsGoals?: SavingsGoalUpdateManyWithoutProfileNestedInput
     bankConnections?: BankConnectionUpdateManyWithoutProfileNestedInput
+    apiTokens?: ApiTokenUpdateManyWithoutProfileNestedInput
   }
 
   export type ProfileUncheckedUpdateWithoutAccountsInput = {
@@ -25826,6 +27266,7 @@ export namespace Prisma {
     ruleSuggestions?: RuleSuggestionUncheckedUpdateManyWithoutProfileNestedInput
     savingsGoals?: SavingsGoalUncheckedUpdateManyWithoutProfileNestedInput
     bankConnections?: BankConnectionUncheckedUpdateManyWithoutProfileNestedInput
+    apiTokens?: ApiTokenUncheckedUpdateManyWithoutProfileNestedInput
   }
 
   export type BankConnectionUpsertWithoutAccountsInput = {
@@ -25970,6 +27411,7 @@ export namespace Prisma {
     ruleSuggestions?: RuleSuggestionCreateNestedManyWithoutProfileInput
     savingsGoals?: SavingsGoalCreateNestedManyWithoutProfileInput
     bankConnections?: BankConnectionCreateNestedManyWithoutProfileInput
+    apiTokens?: ApiTokenCreateNestedManyWithoutProfileInput
   }
 
   export type ProfileUncheckedCreateWithoutCostObjectsInput = {
@@ -25986,6 +27428,7 @@ export namespace Prisma {
     ruleSuggestions?: RuleSuggestionUncheckedCreateNestedManyWithoutProfileInput
     savingsGoals?: SavingsGoalUncheckedCreateNestedManyWithoutProfileInput
     bankConnections?: BankConnectionUncheckedCreateNestedManyWithoutProfileInput
+    apiTokens?: ApiTokenUncheckedCreateNestedManyWithoutProfileInput
   }
 
   export type ProfileCreateOrConnectWithoutCostObjectsInput = {
@@ -26098,6 +27541,7 @@ export namespace Prisma {
     ruleSuggestions?: RuleSuggestionUpdateManyWithoutProfileNestedInput
     savingsGoals?: SavingsGoalUpdateManyWithoutProfileNestedInput
     bankConnections?: BankConnectionUpdateManyWithoutProfileNestedInput
+    apiTokens?: ApiTokenUpdateManyWithoutProfileNestedInput
   }
 
   export type ProfileUncheckedUpdateWithoutCostObjectsInput = {
@@ -26114,6 +27558,7 @@ export namespace Prisma {
     ruleSuggestions?: RuleSuggestionUncheckedUpdateManyWithoutProfileNestedInput
     savingsGoals?: SavingsGoalUncheckedUpdateManyWithoutProfileNestedInput
     bankConnections?: BankConnectionUncheckedUpdateManyWithoutProfileNestedInput
+    apiTokens?: ApiTokenUncheckedUpdateManyWithoutProfileNestedInput
   }
 
   export type TransactionUpsertWithWhereUniqueWithoutCostObjectInput = {
@@ -26267,6 +27712,7 @@ export namespace Prisma {
     ruleSuggestions?: RuleSuggestionCreateNestedManyWithoutProfileInput
     savingsGoals?: SavingsGoalCreateNestedManyWithoutProfileInput
     bankConnections?: BankConnectionCreateNestedManyWithoutProfileInput
+    apiTokens?: ApiTokenCreateNestedManyWithoutProfileInput
   }
 
   export type ProfileUncheckedCreateWithoutTransactionsInput = {
@@ -26283,6 +27729,7 @@ export namespace Prisma {
     ruleSuggestions?: RuleSuggestionUncheckedCreateNestedManyWithoutProfileInput
     savingsGoals?: SavingsGoalUncheckedCreateNestedManyWithoutProfileInput
     bankConnections?: BankConnectionUncheckedCreateNestedManyWithoutProfileInput
+    apiTokens?: ApiTokenUncheckedCreateNestedManyWithoutProfileInput
   }
 
   export type ProfileCreateOrConnectWithoutTransactionsInput = {
@@ -26541,6 +27988,7 @@ export namespace Prisma {
     ruleSuggestions?: RuleSuggestionUpdateManyWithoutProfileNestedInput
     savingsGoals?: SavingsGoalUpdateManyWithoutProfileNestedInput
     bankConnections?: BankConnectionUpdateManyWithoutProfileNestedInput
+    apiTokens?: ApiTokenUpdateManyWithoutProfileNestedInput
   }
 
   export type ProfileUncheckedUpdateWithoutTransactionsInput = {
@@ -26557,6 +28005,7 @@ export namespace Prisma {
     ruleSuggestions?: RuleSuggestionUncheckedUpdateManyWithoutProfileNestedInput
     savingsGoals?: SavingsGoalUncheckedUpdateManyWithoutProfileNestedInput
     bankConnections?: BankConnectionUncheckedUpdateManyWithoutProfileNestedInput
+    apiTokens?: ApiTokenUncheckedUpdateManyWithoutProfileNestedInput
   }
 
   export type CategorizationRuleUpsertWithoutSuggestedTransactionsInput = {
@@ -26716,6 +28165,7 @@ export namespace Prisma {
     ruleSuggestions?: RuleSuggestionCreateNestedManyWithoutProfileInput
     savingsGoals?: SavingsGoalCreateNestedManyWithoutProfileInput
     bankConnections?: BankConnectionCreateNestedManyWithoutProfileInput
+    apiTokens?: ApiTokenCreateNestedManyWithoutProfileInput
   }
 
   export type ProfileUncheckedCreateWithoutCategorizationRulesInput = {
@@ -26732,6 +28182,7 @@ export namespace Prisma {
     ruleSuggestions?: RuleSuggestionUncheckedCreateNestedManyWithoutProfileInput
     savingsGoals?: SavingsGoalUncheckedCreateNestedManyWithoutProfileInput
     bankConnections?: BankConnectionUncheckedCreateNestedManyWithoutProfileInput
+    apiTokens?: ApiTokenUncheckedCreateNestedManyWithoutProfileInput
   }
 
   export type ProfileCreateOrConnectWithoutCategorizationRulesInput = {
@@ -26862,6 +28313,7 @@ export namespace Prisma {
     ruleSuggestions?: RuleSuggestionUpdateManyWithoutProfileNestedInput
     savingsGoals?: SavingsGoalUpdateManyWithoutProfileNestedInput
     bankConnections?: BankConnectionUpdateManyWithoutProfileNestedInput
+    apiTokens?: ApiTokenUpdateManyWithoutProfileNestedInput
   }
 
   export type ProfileUncheckedUpdateWithoutCategorizationRulesInput = {
@@ -26878,6 +28330,7 @@ export namespace Prisma {
     ruleSuggestions?: RuleSuggestionUncheckedUpdateManyWithoutProfileNestedInput
     savingsGoals?: SavingsGoalUncheckedUpdateManyWithoutProfileNestedInput
     bankConnections?: BankConnectionUncheckedUpdateManyWithoutProfileNestedInput
+    apiTokens?: ApiTokenUncheckedUpdateManyWithoutProfileNestedInput
   }
 
   export type TransactionUpsertWithWhereUniqueWithoutSuggestedRuleInput = {
@@ -26951,6 +28404,7 @@ export namespace Prisma {
     categorizationRules?: CategorizationRuleCreateNestedManyWithoutProfileInput
     savingsGoals?: SavingsGoalCreateNestedManyWithoutProfileInput
     bankConnections?: BankConnectionCreateNestedManyWithoutProfileInput
+    apiTokens?: ApiTokenCreateNestedManyWithoutProfileInput
   }
 
   export type ProfileUncheckedCreateWithoutRuleSuggestionsInput = {
@@ -26967,6 +28421,7 @@ export namespace Prisma {
     categorizationRules?: CategorizationRuleUncheckedCreateNestedManyWithoutProfileInput
     savingsGoals?: SavingsGoalUncheckedCreateNestedManyWithoutProfileInput
     bankConnections?: BankConnectionUncheckedCreateNestedManyWithoutProfileInput
+    apiTokens?: ApiTokenUncheckedCreateNestedManyWithoutProfileInput
   }
 
   export type ProfileCreateOrConnectWithoutRuleSuggestionsInput = {
@@ -27046,6 +28501,7 @@ export namespace Prisma {
     categorizationRules?: CategorizationRuleUpdateManyWithoutProfileNestedInput
     savingsGoals?: SavingsGoalUpdateManyWithoutProfileNestedInput
     bankConnections?: BankConnectionUpdateManyWithoutProfileNestedInput
+    apiTokens?: ApiTokenUpdateManyWithoutProfileNestedInput
   }
 
   export type ProfileUncheckedUpdateWithoutRuleSuggestionsInput = {
@@ -27062,6 +28518,7 @@ export namespace Prisma {
     categorizationRules?: CategorizationRuleUncheckedUpdateManyWithoutProfileNestedInput
     savingsGoals?: SavingsGoalUncheckedUpdateManyWithoutProfileNestedInput
     bankConnections?: BankConnectionUncheckedUpdateManyWithoutProfileNestedInput
+    apiTokens?: ApiTokenUncheckedUpdateManyWithoutProfileNestedInput
   }
 
   export type TransactionCreateWithoutSplitsInput = {
@@ -27367,6 +28824,7 @@ export namespace Prisma {
     categorizationRules?: CategorizationRuleCreateNestedManyWithoutProfileInput
     ruleSuggestions?: RuleSuggestionCreateNestedManyWithoutProfileInput
     bankConnections?: BankConnectionCreateNestedManyWithoutProfileInput
+    apiTokens?: ApiTokenCreateNestedManyWithoutProfileInput
   }
 
   export type ProfileUncheckedCreateWithoutSavingsGoalsInput = {
@@ -27383,6 +28841,7 @@ export namespace Prisma {
     categorizationRules?: CategorizationRuleUncheckedCreateNestedManyWithoutProfileInput
     ruleSuggestions?: RuleSuggestionUncheckedCreateNestedManyWithoutProfileInput
     bankConnections?: BankConnectionUncheckedCreateNestedManyWithoutProfileInput
+    apiTokens?: ApiTokenUncheckedCreateNestedManyWithoutProfileInput
   }
 
   export type ProfileCreateOrConnectWithoutSavingsGoalsInput = {
@@ -27462,6 +28921,7 @@ export namespace Prisma {
     categorizationRules?: CategorizationRuleUpdateManyWithoutProfileNestedInput
     ruleSuggestions?: RuleSuggestionUpdateManyWithoutProfileNestedInput
     bankConnections?: BankConnectionUpdateManyWithoutProfileNestedInput
+    apiTokens?: ApiTokenUpdateManyWithoutProfileNestedInput
   }
 
   export type ProfileUncheckedUpdateWithoutSavingsGoalsInput = {
@@ -27478,6 +28938,7 @@ export namespace Prisma {
     categorizationRules?: CategorizationRuleUncheckedUpdateManyWithoutProfileNestedInput
     ruleSuggestions?: RuleSuggestionUncheckedUpdateManyWithoutProfileNestedInput
     bankConnections?: BankConnectionUncheckedUpdateManyWithoutProfileNestedInput
+    apiTokens?: ApiTokenUncheckedUpdateManyWithoutProfileNestedInput
   }
 
   export type SessionCreateWithoutProfileInput = {
@@ -27831,6 +29292,31 @@ export namespace Prisma {
     data: BankConnectionCreateManyProfileInput | BankConnectionCreateManyProfileInput[]
   }
 
+  export type ApiTokenCreateWithoutProfileInput = {
+    id?: string
+    name: string
+    tokenHash: string
+    createdAt?: Date | string
+    lastUsedAt?: Date | string | null
+  }
+
+  export type ApiTokenUncheckedCreateWithoutProfileInput = {
+    id?: string
+    name: string
+    tokenHash: string
+    createdAt?: Date | string
+    lastUsedAt?: Date | string | null
+  }
+
+  export type ApiTokenCreateOrConnectWithoutProfileInput = {
+    where: ApiTokenWhereUniqueInput
+    create: XOR<ApiTokenCreateWithoutProfileInput, ApiTokenUncheckedCreateWithoutProfileInput>
+  }
+
+  export type ApiTokenCreateManyProfileInputEnvelope = {
+    data: ApiTokenCreateManyProfileInput | ApiTokenCreateManyProfileInput[]
+  }
+
   export type SessionUpsertWithWhereUniqueWithoutProfileInput = {
     where: SessionWhereUniqueInput
     update: XOR<SessionUpdateWithoutProfileInput, SessionUncheckedUpdateWithoutProfileInput>
@@ -28035,6 +29521,118 @@ export namespace Prisma {
     updatedAt?: DateTimeFilter<"BankConnection"> | Date | string
   }
 
+  export type ApiTokenUpsertWithWhereUniqueWithoutProfileInput = {
+    where: ApiTokenWhereUniqueInput
+    update: XOR<ApiTokenUpdateWithoutProfileInput, ApiTokenUncheckedUpdateWithoutProfileInput>
+    create: XOR<ApiTokenCreateWithoutProfileInput, ApiTokenUncheckedCreateWithoutProfileInput>
+  }
+
+  export type ApiTokenUpdateWithWhereUniqueWithoutProfileInput = {
+    where: ApiTokenWhereUniqueInput
+    data: XOR<ApiTokenUpdateWithoutProfileInput, ApiTokenUncheckedUpdateWithoutProfileInput>
+  }
+
+  export type ApiTokenUpdateManyWithWhereWithoutProfileInput = {
+    where: ApiTokenScalarWhereInput
+    data: XOR<ApiTokenUpdateManyMutationInput, ApiTokenUncheckedUpdateManyWithoutProfileInput>
+  }
+
+  export type ApiTokenScalarWhereInput = {
+    AND?: ApiTokenScalarWhereInput | ApiTokenScalarWhereInput[]
+    OR?: ApiTokenScalarWhereInput[]
+    NOT?: ApiTokenScalarWhereInput | ApiTokenScalarWhereInput[]
+    id?: StringFilter<"ApiToken"> | string
+    profileId?: StringFilter<"ApiToken"> | string
+    name?: StringFilter<"ApiToken"> | string
+    tokenHash?: StringFilter<"ApiToken"> | string
+    createdAt?: DateTimeFilter<"ApiToken"> | Date | string
+    lastUsedAt?: DateTimeNullableFilter<"ApiToken"> | Date | string | null
+  }
+
+  export type ProfileCreateWithoutApiTokensInput = {
+    id?: string
+    name: string
+    pinHash: string
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    sessions?: SessionCreateNestedManyWithoutProfileInput
+    categories?: CategoryCreateNestedManyWithoutProfileInput
+    accounts?: AccountCreateNestedManyWithoutProfileInput
+    costObjects?: CostObjectCreateNestedManyWithoutProfileInput
+    transactions?: TransactionCreateNestedManyWithoutProfileInput
+    categorizationRules?: CategorizationRuleCreateNestedManyWithoutProfileInput
+    ruleSuggestions?: RuleSuggestionCreateNestedManyWithoutProfileInput
+    savingsGoals?: SavingsGoalCreateNestedManyWithoutProfileInput
+    bankConnections?: BankConnectionCreateNestedManyWithoutProfileInput
+  }
+
+  export type ProfileUncheckedCreateWithoutApiTokensInput = {
+    id?: string
+    name: string
+    pinHash: string
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    sessions?: SessionUncheckedCreateNestedManyWithoutProfileInput
+    categories?: CategoryUncheckedCreateNestedManyWithoutProfileInput
+    accounts?: AccountUncheckedCreateNestedManyWithoutProfileInput
+    costObjects?: CostObjectUncheckedCreateNestedManyWithoutProfileInput
+    transactions?: TransactionUncheckedCreateNestedManyWithoutProfileInput
+    categorizationRules?: CategorizationRuleUncheckedCreateNestedManyWithoutProfileInput
+    ruleSuggestions?: RuleSuggestionUncheckedCreateNestedManyWithoutProfileInput
+    savingsGoals?: SavingsGoalUncheckedCreateNestedManyWithoutProfileInput
+    bankConnections?: BankConnectionUncheckedCreateNestedManyWithoutProfileInput
+  }
+
+  export type ProfileCreateOrConnectWithoutApiTokensInput = {
+    where: ProfileWhereUniqueInput
+    create: XOR<ProfileCreateWithoutApiTokensInput, ProfileUncheckedCreateWithoutApiTokensInput>
+  }
+
+  export type ProfileUpsertWithoutApiTokensInput = {
+    update: XOR<ProfileUpdateWithoutApiTokensInput, ProfileUncheckedUpdateWithoutApiTokensInput>
+    create: XOR<ProfileCreateWithoutApiTokensInput, ProfileUncheckedCreateWithoutApiTokensInput>
+    where?: ProfileWhereInput
+  }
+
+  export type ProfileUpdateToOneWithWhereWithoutApiTokensInput = {
+    where?: ProfileWhereInput
+    data: XOR<ProfileUpdateWithoutApiTokensInput, ProfileUncheckedUpdateWithoutApiTokensInput>
+  }
+
+  export type ProfileUpdateWithoutApiTokensInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    pinHash?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    sessions?: SessionUpdateManyWithoutProfileNestedInput
+    categories?: CategoryUpdateManyWithoutProfileNestedInput
+    accounts?: AccountUpdateManyWithoutProfileNestedInput
+    costObjects?: CostObjectUpdateManyWithoutProfileNestedInput
+    transactions?: TransactionUpdateManyWithoutProfileNestedInput
+    categorizationRules?: CategorizationRuleUpdateManyWithoutProfileNestedInput
+    ruleSuggestions?: RuleSuggestionUpdateManyWithoutProfileNestedInput
+    savingsGoals?: SavingsGoalUpdateManyWithoutProfileNestedInput
+    bankConnections?: BankConnectionUpdateManyWithoutProfileNestedInput
+  }
+
+  export type ProfileUncheckedUpdateWithoutApiTokensInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    pinHash?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    sessions?: SessionUncheckedUpdateManyWithoutProfileNestedInput
+    categories?: CategoryUncheckedUpdateManyWithoutProfileNestedInput
+    accounts?: AccountUncheckedUpdateManyWithoutProfileNestedInput
+    costObjects?: CostObjectUncheckedUpdateManyWithoutProfileNestedInput
+    transactions?: TransactionUncheckedUpdateManyWithoutProfileNestedInput
+    categorizationRules?: CategorizationRuleUncheckedUpdateManyWithoutProfileNestedInput
+    ruleSuggestions?: RuleSuggestionUncheckedUpdateManyWithoutProfileNestedInput
+    savingsGoals?: SavingsGoalUncheckedUpdateManyWithoutProfileNestedInput
+    bankConnections?: BankConnectionUncheckedUpdateManyWithoutProfileNestedInput
+  }
+
   export type ProfileCreateWithoutBankConnectionsInput = {
     id?: string
     name: string
@@ -28049,6 +29647,7 @@ export namespace Prisma {
     categorizationRules?: CategorizationRuleCreateNestedManyWithoutProfileInput
     ruleSuggestions?: RuleSuggestionCreateNestedManyWithoutProfileInput
     savingsGoals?: SavingsGoalCreateNestedManyWithoutProfileInput
+    apiTokens?: ApiTokenCreateNestedManyWithoutProfileInput
   }
 
   export type ProfileUncheckedCreateWithoutBankConnectionsInput = {
@@ -28065,6 +29664,7 @@ export namespace Prisma {
     categorizationRules?: CategorizationRuleUncheckedCreateNestedManyWithoutProfileInput
     ruleSuggestions?: RuleSuggestionUncheckedCreateNestedManyWithoutProfileInput
     savingsGoals?: SavingsGoalUncheckedCreateNestedManyWithoutProfileInput
+    apiTokens?: ApiTokenUncheckedCreateNestedManyWithoutProfileInput
   }
 
   export type ProfileCreateOrConnectWithoutBankConnectionsInput = {
@@ -28138,6 +29738,7 @@ export namespace Prisma {
     categorizationRules?: CategorizationRuleUpdateManyWithoutProfileNestedInput
     ruleSuggestions?: RuleSuggestionUpdateManyWithoutProfileNestedInput
     savingsGoals?: SavingsGoalUpdateManyWithoutProfileNestedInput
+    apiTokens?: ApiTokenUpdateManyWithoutProfileNestedInput
   }
 
   export type ProfileUncheckedUpdateWithoutBankConnectionsInput = {
@@ -28154,6 +29755,7 @@ export namespace Prisma {
     categorizationRules?: CategorizationRuleUncheckedUpdateManyWithoutProfileNestedInput
     ruleSuggestions?: RuleSuggestionUncheckedUpdateManyWithoutProfileNestedInput
     savingsGoals?: SavingsGoalUncheckedUpdateManyWithoutProfileNestedInput
+    apiTokens?: ApiTokenUncheckedUpdateManyWithoutProfileNestedInput
   }
 
   export type AccountUpsertWithWhereUniqueWithoutBankConnectionInput = {
@@ -28186,6 +29788,7 @@ export namespace Prisma {
     ruleSuggestions?: RuleSuggestionCreateNestedManyWithoutProfileInput
     savingsGoals?: SavingsGoalCreateNestedManyWithoutProfileInput
     bankConnections?: BankConnectionCreateNestedManyWithoutProfileInput
+    apiTokens?: ApiTokenCreateNestedManyWithoutProfileInput
   }
 
   export type ProfileUncheckedCreateWithoutSessionsInput = {
@@ -28202,6 +29805,7 @@ export namespace Prisma {
     ruleSuggestions?: RuleSuggestionUncheckedCreateNestedManyWithoutProfileInput
     savingsGoals?: SavingsGoalUncheckedCreateNestedManyWithoutProfileInput
     bankConnections?: BankConnectionUncheckedCreateNestedManyWithoutProfileInput
+    apiTokens?: ApiTokenUncheckedCreateNestedManyWithoutProfileInput
   }
 
   export type ProfileCreateOrConnectWithoutSessionsInput = {
@@ -28234,6 +29838,7 @@ export namespace Prisma {
     ruleSuggestions?: RuleSuggestionUpdateManyWithoutProfileNestedInput
     savingsGoals?: SavingsGoalUpdateManyWithoutProfileNestedInput
     bankConnections?: BankConnectionUpdateManyWithoutProfileNestedInput
+    apiTokens?: ApiTokenUpdateManyWithoutProfileNestedInput
   }
 
   export type ProfileUncheckedUpdateWithoutSessionsInput = {
@@ -28250,6 +29855,7 @@ export namespace Prisma {
     ruleSuggestions?: RuleSuggestionUncheckedUpdateManyWithoutProfileNestedInput
     savingsGoals?: SavingsGoalUncheckedUpdateManyWithoutProfileNestedInput
     bankConnections?: BankConnectionUncheckedUpdateManyWithoutProfileNestedInput
+    apiTokens?: ApiTokenUncheckedUpdateManyWithoutProfileNestedInput
   }
 
   export type AccountCreateWithoutMonthlyBalancesInput = {
@@ -29368,6 +30974,14 @@ export namespace Prisma {
     updatedAt?: Date | string
   }
 
+  export type ApiTokenCreateManyProfileInput = {
+    id?: string
+    name: string
+    tokenHash: string
+    createdAt?: Date | string
+    lastUsedAt?: Date | string | null
+  }
+
   export type SessionUpdateWithoutProfileInput = {
     id?: StringFieldUpdateOperationsInput | string
     token?: StringFieldUpdateOperationsInput | string
@@ -29756,6 +31370,30 @@ export namespace Prisma {
     accountsJson?: StringFieldUpdateOperationsInput | string
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type ApiTokenUpdateWithoutProfileInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    tokenHash?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    lastUsedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  }
+
+  export type ApiTokenUncheckedUpdateWithoutProfileInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    tokenHash?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    lastUsedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  }
+
+  export type ApiTokenUncheckedUpdateManyWithoutProfileInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    tokenHash?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    lastUsedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   }
 
   export type AccountCreateManyBankConnectionInput = {

@@ -1,6 +1,6 @@
 import { LitElement, html, css, nothing } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
-import { api, getApiBaseUrl, authApi, bankSyncApi } from '../api/client';
+import { api, getApiBaseUrl, authApi, bankSyncApi, haApi } from '../api/client';
 import { i18n } from '../i18n/i18n';
 import { getAppBasePath } from '../utils/router-paths';
 import {
@@ -32,6 +32,7 @@ type SettingsSection =
   | 'profile'
   | 'accounts'
   | 'bankSync'
+  | 'homeAssistant'
   | 'costObjects'
   | 'backup'
   | 'danger';
@@ -903,6 +904,17 @@ export class ViewSettings extends LitElement {
     }
 
     @state() private pendingConfirm: { message: string; confirmLabel: string } | null = null;
+
+    // ---- Home Assistant ----
+    @state() private haUser: { id: string; name: string | null; displayName: string | null } | null = null;
+    @state() private haMappedProfileName: string | null = null;
+    @state() private haLinked = false;
+    @state() private haInfo: { addonHostname: string | null; integrationUrl: string | null; appVersion: string | null; allowDirectAccess: boolean } | null = null;
+    @state() private apiTokens: Array<{ id: string; name: string; createdAt: string; lastUsedAt: string | null }> = [];
+    @state() private newTokenName = '';
+    @state() private createdToken: { name: string; token: string } | null = null;
+    @state() private tokenCopied = false;
+    @state() private haBusy = false;
     private confirmResolver: ((ok: boolean) => void) | null = null;
 
     /**
@@ -928,7 +940,7 @@ export class ViewSettings extends LitElement {
     async loadData() {
         this.loading = true;
         try {
-            const [cats, accts, costObjs, profile, allProfiles, bankSettings, bankConns] = await Promise.all([
+            const [cats, accts, costObjs, profile, allProfiles, bankSettings, bankConns, haUser, haInfo, tokens] = await Promise.all([
                 api.get('/categories'),
                 api.get('/accounts'),
                 api.get('/cost-objects'),
@@ -936,7 +948,15 @@ export class ViewSettings extends LitElement {
                 authApi.getProfiles().catch(() => []),
                 bankSyncApi.getSettings().catch(() => ({ hasAppId: false, hasKey: false, redirectUrl: null })),
                 bankSyncApi.getConnections().catch(() => []),
+                authApi.getHaUser().catch(() => null),
+                haApi.getInfo().catch(() => null),
+                authApi.listApiTokens().catch(() => []),
             ]);
+            this.haUser = haUser?.user ?? null;
+            this.haMappedProfileName = haUser?.mappedProfileName ?? null;
+            this.haLinked = !!haUser?.linkedToCurrentProfile;
+            this.haInfo = haInfo;
+            this.apiTokens = tokens || [];
             this.categories = cats || [];
             this.accounts = accts || [];
             this.costObjects = costObjs || [];
@@ -957,11 +977,198 @@ export class ViewSettings extends LitElement {
         }
     }
 
-    handleCurrencyChange(e: Event) {
+    async handleCurrencyChange(e: Event) {
         const val = (e.target as HTMLSelectElement).value;
         this.currency = val;
         localStorage.setItem('priperfin_currency', val);
+        // Also kept server-side so the Home Assistant integration can label
+        // money sensors; the UI itself keeps reading localStorage.
+        await api.post('/settings/currency', { value: val }).catch(() => null);
         window.location.reload();
+    }
+
+    // ---- Home Assistant ----
+
+    private async toggleHaLink(enable: boolean) {
+        this.haBusy = true;
+        try {
+            if (enable) {
+                await authApi.linkHaUser();
+                this.haLinked = true;
+                this.haMappedProfileName = this.currentProfile?.name ?? null;
+                this.notify(i18n.t('settings.home_assistant.link_saved'));
+            } else {
+                await authApi.unlinkHaUser();
+                this.haLinked = false;
+                this.haMappedProfileName = null;
+                this.notify(i18n.t('settings.home_assistant.unlink_saved'));
+            }
+        } catch (e: any) {
+            this.notify(i18n.t('settings.home_assistant.link_failed') + (e?.message ? `: ${e.message}` : ''));
+        } finally {
+            this.haBusy = false;
+        }
+    }
+
+    private async createApiToken() {
+        const name = this.newTokenName.trim() || 'Home Assistant';
+        this.haBusy = true;
+        try {
+            const created = await authApi.createApiToken(name);
+            this.createdToken = { name: created.name, token: created.token };
+            this.tokenCopied = false;
+            this.newTokenName = '';
+            this.apiTokens = await authApi.listApiTokens().catch(() => this.apiTokens);
+        } catch (e: any) {
+            this.notify(i18n.t('settings.home_assistant.token_create_failed') + (e?.message ? `: ${e.message}` : ''));
+        } finally {
+            this.haBusy = false;
+        }
+    }
+
+    private async revokeApiToken(token: { id: string; name: string }) {
+        const ok = await this.askConfirm(
+            i18n.t('settings.home_assistant.revoke_confirm', { name: token.name }),
+            i18n.t('settings.home_assistant.revoke'),
+        );
+        if (!ok) return;
+        try {
+            await authApi.revokeApiToken(token.id);
+            this.apiTokens = this.apiTokens.filter(t => t.id !== token.id);
+            if (this.createdToken?.name === token.name) this.createdToken = null;
+            this.notify(i18n.t('settings.home_assistant.token_revoked'));
+        } catch (e: any) {
+            this.notify(i18n.t('settings.home_assistant.token_revoke_failed') + (e?.message ? `: ${e.message}` : ''));
+        }
+    }
+
+    private async copyCreatedToken() {
+        if (!this.createdToken) return;
+        try {
+            await navigator.clipboard.writeText(this.createdToken.token);
+            this.tokenCopied = true;
+        } catch {
+            this.tokenCopied = false;
+        }
+    }
+
+    private formatDateTime(value: string | null): string {
+        if (!value) return i18n.t('settings.home_assistant.never_used');
+        return new Date(value).toLocaleString(i18n.getLocale());
+    }
+
+    /** The Home Assistant section, shared by the phone sub-screen and the desktop pane. */
+    private renderHomeAssistantSection() {
+        const t = (key: string, params?: Record<string, string | number>) => i18n.t(`settings.home_assistant.${key}`, params);
+        const profileName = this.currentProfile?.name ?? '';
+        const userLabel = this.haUser
+            ? (this.haUser.displayName || this.haUser.name || this.haUser.id)
+            : null;
+        const mappedElsewhere = this.haUser && this.haMappedProfileName && !this.haLinked;
+        return html`
+            <div style="font-size: 0.85rem; color: var(--md-sys-color-on-surface-variant); margin-bottom: 16px;">
+                ${t('intro')}
+            </div>
+
+            <!-- Ingress user mapping -->
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; background: var(--md-sys-color-surface-container); border-radius: 8px; margin-bottom: 12px; gap: 12px; flex-wrap: wrap;">
+                <div style="flex: 1; min-width: 240px;">
+                    <div style="font-weight: 500; font-size: 0.9rem;">
+                        ${userLabel
+                            ? t('link_toggle', { user: userLabel, profile: profileName })
+                            : t('no_user')}
+                    </div>
+                    <div style="font-size: 0.75rem; color: var(--md-sys-color-on-surface-variant);">
+                        ${userLabel
+                            ? (mappedElsewhere
+                                ? t('mapped_elsewhere', { profile: this.haMappedProfileName ?? '' })
+                                : t('link_desc'))
+                            : t('no_user_desc')}
+                    </div>
+                </div>
+                ${userLabel ? html`
+                    <label style="position: relative; display: inline-block; width: 44px; height: 24px; flex-shrink: 0; cursor: pointer;">
+                        <input
+                            type="checkbox"
+                            .checked="${this.haLinked}"
+                            ?disabled="${this.haBusy}"
+                            @change="${(e: Event) => this.toggleHaLink((e.target as HTMLInputElement).checked)}"
+                            style="opacity: 0; width: 0; height: 0; position: absolute;"
+                        />
+                        <span style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background-color: ${this.haLinked ? 'var(--md-sys-color-primary)' : 'var(--md-sys-color-surface-variant)'}; transition: .3s; border-radius: 24px; border: 1px solid var(--md-sys-color-outline-variant);">
+                            <span style="position: absolute; height: 16px; width: 16px; left: ${this.haLinked ? '22px' : '3px'}; bottom: 3px; background-color: var(--md-sys-color-surface); transition: .3s; border-radius: 50%;"></span>
+                        </span>
+                    </label>
+                ` : nothing}
+            </div>
+
+            <!-- Integration address -->
+            <div style="padding: 12px 16px; background: var(--md-sys-color-surface-container); border-radius: 8px; margin-bottom: 20px;">
+                <div style="font-weight: 500; font-size: 0.9rem;">${t('integration_url_label')}</div>
+                <div style="font-family: 'Roboto Mono', monospace; font-size: 0.9rem; margin: 6px 0; user-select: all; word-break: break-all;">
+                    ${this.haInfo?.integrationUrl ?? t('integration_url_unknown')}
+                </div>
+                <div style="font-size: 0.75rem; color: var(--md-sys-color-on-surface-variant);">
+                    ${this.haInfo?.integrationUrl ? t('integration_url_hint') : t('integration_url_unknown_hint')}
+                </div>
+            </div>
+
+            <!-- API tokens -->
+            <div style="font-weight: 500; font-size: 0.95rem; margin-bottom: 4px;">${t('tokens_title')}</div>
+            <div style="font-size: 0.8rem; color: var(--md-sys-color-on-surface-variant); margin-bottom: 12px;">${t('tokens_desc')}</div>
+
+            ${this.createdToken ? html`
+                <div style="padding: 12px 16px; background: var(--md-sys-color-tertiary-container); color: var(--md-sys-color-on-tertiary-container); border-radius: 8px; margin-bottom: 12px;">
+                    <div style="font-weight: 500; font-size: 0.9rem;">${t('token_created_title', { name: this.createdToken.name })}</div>
+                    <div style="font-size: 0.75rem; margin-bottom: 8px;">${t('token_created_desc')}</div>
+                    <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                        <code style="flex: 1; min-width: 200px; font-family: 'Roboto Mono', monospace; font-size: 0.85rem; user-select: all; word-break: break-all; background: var(--md-sys-color-surface); color: var(--md-sys-color-on-surface); padding: 8px; border-radius: 6px;">${this.createdToken.token}</code>
+                        <button class="d-btn-outlined" @click="${this.copyCreatedToken}">
+                            ${this.tokenCopied ? t('copied') : t('copy')}
+                        </button>
+                        <button class="d-btn-text" @click="${() => { this.createdToken = null; }}">${i18n.t('common.close')}</button>
+                    </div>
+                </div>
+            ` : nothing}
+
+            <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 12px; flex-wrap: wrap;">
+                <input
+                    class="d-input"
+                    style="flex: 1; min-width: 200px;"
+                    type="text"
+                    maxlength="40"
+                    placeholder="${t('token_name_placeholder')}"
+                    .value="${this.newTokenName}"
+                    @input="${(e: any) => { this.newTokenName = e.target.value; }}"
+                    @keydown="${(e: KeyboardEvent) => { if (e.key === 'Enter') this.createApiToken(); }}" />
+                <button class="d-btn" ?disabled="${this.haBusy}" @click="${this.createApiToken}">
+                    ${icon('add', 20)}
+                    <span>${t('create_token')}</span>
+                </button>
+            </div>
+
+            ${this.apiTokens.length === 0
+                ? html`<div style="font-size: 0.85rem; color: var(--md-sys-color-on-surface-variant);">${t('no_tokens')}</div>`
+                : html`
+                    <div class="ds-rows">
+                        ${this.apiTokens.map(token => html`
+                            <div class="ds-row">
+                                ${icon('key', 20)}
+                                <div style="flex: 1; min-width: 0">
+                                    <div class="ds-row-label">${token.name}</div>
+                                    <div class="ds-row-caption">
+                                        ${t('created_on', { date: this.formatDateTime(token.createdAt) })}
+                                        · ${t('last_used', { date: this.formatDateTime(token.lastUsedAt) })}
+                                    </div>
+                                </div>
+                                <button class="d-btn-text" @click="${() => this.revokeApiToken(token)}">
+                                    ${t('revoke')}
+                                </button>
+                            </div>
+                        `)}
+                    </div>
+                `}
+        `;
     }
 
     handleLanguageChange(e: Event) {
@@ -1843,6 +2050,7 @@ export class ViewSettings extends LitElement {
             profile: { title: i18n.t('auth.settings.title'), body: this.renderProfileSection() },
             accounts: { title: i18n.t('accounts.title'), body: this.renderAccountsSection() },
             bankSync: { title: i18n.t('bank_sync.title'), body: this.renderBankSyncSection() },
+            homeAssistant: { title: i18n.t('settings.home_assistant.title'), body: this.renderHomeAssistantSection() },
             costObjects: { title: i18n.t('cost_objects.title'), body: this.renderCostObjectsSection() },
             backup: { title: i18n.t('settings.backup_restore'), body: this.renderBackupSection() },
             danger: { title: i18n.t('mobile.danger_zone'), body: this.renderDangerSection() },
@@ -1911,6 +2119,13 @@ export class ViewSettings extends LitElement {
                         caption: this.lastSyncLabel(),
                         pill: this.bankStatus() ?? undefined,
                         onSelect: () => { this.mobileSection = 'bankSync'; },
+                    })}
+                    ${this.settingsRow({
+                        glyph: 'home',
+                        label: i18n.t('settings.home_assistant.title'),
+                        caption: this.haLinked ? i18n.t('settings.home_assistant.linked_caption') : undefined,
+                        value: this.apiTokens.length || undefined,
+                        onSelect: () => { this.mobileSection = 'homeAssistant'; },
                     })}
                     ${this.settingsRow({
                         glyph: 'work',
@@ -3269,6 +3484,7 @@ export class ViewSettings extends LitElement {
             { id: 'general', title: i18n.t('settings.general'), blurb: i18n.t('desktop.blurb_general') },
             { id: 'accounts', title: i18n.t('accounts.title'), blurb: i18n.t('desktop.blurb_accounts') },
             { id: 'bankSync', title: i18n.t('desktop.bank_sync'), blurb: i18n.t('desktop.blurb_bank_sync') },
+            { id: 'homeAssistant', title: i18n.t('settings.home_assistant.title'), blurb: i18n.t('desktop.blurb_home_assistant') },
             { id: 'costObjects', title: i18n.t('desktop.cost_objects'), blurb: i18n.t('desktop.blurb_cost_objects') },
             { id: 'backup', title: i18n.t('settings.backup_restore'), blurb: i18n.t('desktop.blurb_backup') },
             { id: 'profile', title: i18n.t('desktop.profile'), blurb: i18n.t('desktop.blurb_profile') },
@@ -3383,6 +3599,13 @@ export class ViewSettings extends LitElement {
                                 ok: bankStatus?.ok ?? true,
                               }
                             : undefined,
+                    })}
+                    ${this.indexRow({
+                        id: 'homeAssistant',
+                        glyph: 'home',
+                        label: i18n.t('settings.home_assistant.title'),
+                        caption: this.haLinked ? i18n.t('settings.home_assistant.linked_caption') : undefined,
+                        value: this.apiTokens.length || undefined,
                     })}
                     ${this.indexRow({
                         id: 'costObjects',
@@ -3525,6 +3748,7 @@ export class ViewSettings extends LitElement {
             case 'general': return this.renderDesktopGeneral();
             case 'accounts': return this.renderDesktopAccounts();
             case 'bankSync': return this.renderDesktopBankSync();
+            case 'homeAssistant': return this.renderHomeAssistantSection();
             case 'costObjects': return this.renderDesktopCostObjects();
             case 'backup': return this.renderDesktopBackup();
             case 'profile': return this.renderDesktopProfile();

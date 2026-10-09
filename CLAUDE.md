@@ -56,6 +56,7 @@ NestJS modular architecture with these domain modules:
 - **SettingsModule**: App configuration (key-value store)
 - **AdminModule**: Administrative operations
 - **BankSyncModule**: Optional Open Banking import via Enable Banking (PSD2); credentials live in the Settings table under `enable_banking_*` and are excluded from the generic settings endpoints and from backups. User guide in README under "Bank sync"
+- **HaModule**: `GET /api/ha/summary` (per-profile figures for the Home Assistant integration; the only route that accepts a long-lived `ApiToken` via `Authorization: Bearer pfp_…`, see `@AllowApiToken()`) and `GET /api/ha/info`. Tokens are managed under `/api/auth/api-tokens`; the Ingress user → profile mapping under `/api/auth/ha-user`. Imports record `ha_last_import_profile_<id>` so the integration can fire `priperfin_import`.
 
 **Database**: SQLite via Prisma with better-sqlite3 adapter. Schema at `apps/api/prisma/schema.prisma`. Database path configured via `DATABASE_URL` env var.
 
@@ -79,6 +80,16 @@ Lit web components with Material Design 3 theming:
 - **Account**: name, initialBalance, type (DEBIT/CREDIT)
 - **SavingsGoal**: name, targetAmount, targetDate, savedAmount, category
 - **MonthlyBalance**: month, balance, account (unique per month+account)
+
+### Home Assistant custom integration (`custom_components/priperfin`)
+
+A Python integration distributed through HACS from this same repository (`hacs.json`
+at the root). It polls `/api/ha/summary` with an API token, creates one device per
+profile with sensors and a binary sensor, and fires `priperfin_import` when the
+summary's `lastImport.at` changes. `manifest.json` `version` must equal
+`config.yaml`'s version. CI runs hassfest, the HACS validation action and
+`pytest tests` (pytest-homeassistant-custom-component). `custom_components/` and
+`tests/` are excluded from the add-on image via `.dockerignore`.
 
 ## Deployment
 

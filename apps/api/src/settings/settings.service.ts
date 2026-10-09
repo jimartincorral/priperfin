@@ -31,5 +31,11 @@ export class SettingsService {
  * report whether they are set. They must never be returned verbatim here.
  */
 export function isSecretSettingKey(key: string): boolean {
-  return key.startsWith('enable_banking_');
+  return (
+    key.startsWith('enable_banking_') ||
+    // Home Assistant bookkeeping is per profile and managed by its own
+    // endpoints; the generic ones are readable by every logged-in profile.
+    key.startsWith('ha_user_profile_') ||
+    key.startsWith('ha_last_import_profile_')
+  );
 }

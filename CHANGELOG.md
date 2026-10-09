@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.28.0 - 2026-10-09
+
+Home Assistant integration: entities, an import event, and profile pre-selection from the sidebar.
+
+- **Entities in Home Assistant.** A new companion integration, installed through HACS from this same repository, turns each profile into a device with sensors: uncategorized transactions, pending rule suggestions, this month's income, expenses and net, total balance and one balance per account, categories over budget and budget remaining, goals saved, left and behind schedule, last bank sync, bank consent days left and a "bank consent expired" problem sensor. It fires a `priperfin_import` event whenever an import or bank sync adds transactions. See the README section "Home Assistant integration".
+- **API tokens.** Settings → Home Assistant creates long-lived, read-only tokens for the integration (shown once, revocable). A token can only read that profile's summary; every other endpoint still needs the PIN session.
+- **Profile pre-selection from the sidebar.** When the add-on is opened from Home Assistant, the sign-in screen can start on the profile mapped to the Home Assistant user. Switch it on under Settings → Home Assistant. The PIN is still required.
+- **Currency** is now also stored on the server so the money sensors carry the right unit.
+- The add-on is unchanged for anyone who does not install the integration; the new endpoints are off the Ingress path and require a token.
+
 ## v1.27.1 - 2026-10-09
 
 Documentation for bank synchronization. No functional changes.
