@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ReportsController } from './reports.controller';
 import { ReportsService } from './reports.service';
 import { AuthService } from '../auth/auth.service';
+import { ApiTokenService } from '../auth/api-token.service';
 import { Profile } from '../generated/client';
 
 describe('ReportsController', () => {
@@ -25,6 +26,7 @@ describe('ReportsController', () => {
       providers: [
         { provide: ReportsService, useValue: mockReportsService },
         { provide: AuthService, useValue: mockAuthService },
+        { provide: ApiTokenService, useValue: { validate: jest.fn() } },
       ],
     }).compile();
 

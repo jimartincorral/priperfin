@@ -24,6 +24,45 @@ export class AuthService {
     return `pin_length_profile_${profileId}`;
   }
 
+  /** Maps a Home Assistant user id (from Ingress) to the profile to pre-select. */
+  private getHaUserSettingKey(haUserId: string) {
+    return `ha_user_profile_${haUserId}`;
+  }
+
+  /** The profile name mapped to a Home Assistant user, or null. */
+  async getHaUserMapping(haUserId: string): Promise<{
+    profileId: string;
+    profileName: string;
+  } | null> {
+    const setting = await this.prisma.setting.findUnique({
+      where: { key: this.getHaUserSettingKey(haUserId) },
+    });
+    if (!setting?.value) return null;
+    const profile = await this.prisma.profile.findUnique({
+      where: { id: setting.value },
+      select: { id: true, name: true },
+    });
+    if (!profile) return null;
+    return { profileId: profile.id, profileName: profile.name };
+  }
+
+  async linkHaUser(haUserId: string, profileId: string) {
+    await this.prisma.setting.upsert({
+      where: { key: this.getHaUserSettingKey(haUserId) },
+      update: { value: profileId },
+      create: { key: this.getHaUserSettingKey(haUserId), value: profileId },
+    });
+    this.logger.log(
+      `Home Assistant user ${haUserId} linked to profile ${profileId}`,
+    );
+  }
+
+  async unlinkHaUser(haUserId: string) {
+    await this.prisma.setting
+      .delete({ where: { key: this.getHaUserSettingKey(haUserId) } })
+      .catch(() => null);
+  }
+
   async createProfile(dto: CreateProfileDto) {
     this.logger.log(`Creating profile: ${dto.name}`);
 
@@ -290,6 +329,16 @@ export class AuthService {
     await this.prisma.setting
       .delete({ where: { key: this.getPinLengthSettingKey(profileId) } })
       .catch(() => null);
+    // Home Assistant bookkeeping for this profile: user mappings and the
+    // last-import marker read by the integration.
+    await this.prisma.setting.deleteMany({
+      where: {
+        OR: [
+          { key: { startsWith: 'ha_user_profile_' }, value: profileId },
+          { key: `ha_last_import_profile_${profileId}` },
+        ],
+      },
+    });
 
     this.logger.log(`Profile deleted successfully: ${profileId}`);
   }

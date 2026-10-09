@@ -478,6 +478,57 @@ describe('TransactionsService', () => {
       expect(result.duplicates).toHaveLength(1);
     });
 
+    it('should record the last-import marker with the uncategorized count', async () => {
+      prismaMock.transaction.findMany.mockResolvedValue([]);
+      prismaMock.transaction.createMany.mockResolvedValue({ count: 2 });
+      prismaMock.setting.upsert.mockResolvedValue({});
+      prismaMock.category.findMany.mockResolvedValue([{ id: 'cat-1' }]);
+      rulesServiceMock.evaluateTransaction.mockResolvedValue(null);
+
+      await service.createMany(
+        [
+          {
+            date: '2025-01-15',
+            amount: -50,
+            description: 'A',
+            categoryId: null,
+          },
+          {
+            date: '2025-01-16',
+            amount: -5,
+            description: 'B',
+            categoryId: 'cat-1',
+          },
+        ] as any,
+        true,
+        [],
+        'profile-1',
+      );
+
+      expect(prismaMock.setting.upsert).toHaveBeenCalledTimes(1);
+      const call = prismaMock.setting.upsert.mock.calls[0][0];
+      expect(call.where).toEqual({ key: 'ha_last_import_profile_profile-1' });
+      const marker = JSON.parse(call.create.value);
+      expect(marker.newCount).toBe(2);
+      expect(marker.uncategorizedCount).toBe(1);
+      expect(typeof marker.at).toBe('string');
+    });
+
+    it('should not record a marker when nothing was inserted', async () => {
+      prismaMock.transaction.findMany.mockResolvedValue([]);
+      prismaMock.transaction.createMany.mockResolvedValue({ count: 0 });
+      rulesServiceMock.evaluateTransaction.mockResolvedValue(null);
+
+      await service.createMany(
+        [{ date: '2025-01-15', amount: -50, description: 'A' }] as any,
+        true,
+        [],
+        'profile-1',
+      );
+
+      expect(prismaMock.setting.upsert).not.toHaveBeenCalled();
+    });
+
     it('should give in-batch repeats distinct externalIds when forced', async () => {
       prismaMock.transaction.findMany.mockResolvedValue([]);
       prismaMock.transaction.createMany.mockResolvedValue({ count: 2 });

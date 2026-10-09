@@ -20,6 +20,7 @@ import { AccountBalancesModule } from './account-balances/account-balances.modul
 import { RulesModule } from './rules/rules.module';
 import { AuthModule } from './auth/auth.module';
 import { BankSyncModule } from './bank-sync/bank-sync.module';
+import { HaModule } from './ha/ha.module';
 import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 
@@ -64,6 +65,7 @@ import { ScheduleModule } from '@nestjs/schedule';
           AccountBalancesModule,
           RulesModule,
           BankSyncModule,
+          HaModule,
         ],
       },
     ]),
@@ -83,6 +85,7 @@ import { ScheduleModule } from '@nestjs/schedule';
     AccountBalancesModule,
     RulesModule,
     BankSyncModule,
+    HaModule,
   ],
   controllers: [AppController],
 

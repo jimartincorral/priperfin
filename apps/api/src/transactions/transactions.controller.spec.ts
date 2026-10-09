@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { TransactionsController } from './transactions.controller';
 import { TransactionsService } from './transactions.service';
 import { AuthService } from '../auth/auth.service';
+import { ApiTokenService } from '../auth/api-token.service';
 
 describe('TransactionsController', () => {
   let controller: TransactionsController;
@@ -29,6 +30,7 @@ describe('TransactionsController', () => {
       providers: [
         { provide: TransactionsService, useValue: mockTransactionsService },
         { provide: AuthService, useValue: mockAuthService },
+        { provide: ApiTokenService, useValue: { validate: jest.fn() } },
       ],
     }).compile();
 

@@ -245,6 +245,15 @@ exports.Prisma.ProfileScalarFieldEnum = {
   updatedAt: 'updatedAt'
 };
 
+exports.Prisma.ApiTokenScalarFieldEnum = {
+  id: 'id',
+  profileId: 'profileId',
+  name: 'name',
+  tokenHash: 'tokenHash',
+  createdAt: 'createdAt',
+  lastUsedAt: 'lastUsedAt'
+};
+
 exports.Prisma.BankConnectionScalarFieldEnum = {
   id: 'id',
   provider: 'provider',
@@ -331,6 +340,7 @@ exports.Prisma.ModelName = {
   SavingsGoal: 'SavingsGoal',
   Setting: 'Setting',
   Profile: 'Profile',
+  ApiToken: 'ApiToken',
   BankConnection: 'BankConnection',
   Session: 'Session',
   MonthlyBalance: 'MonthlyBalance',

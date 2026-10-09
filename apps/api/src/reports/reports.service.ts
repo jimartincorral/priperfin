@@ -314,6 +314,71 @@ export class ReportsService {
       },
     });
 
+    const { totalIncome, incomeSources, expenseByCategory } =
+      this.aggregateCashFlow(transactions);
+
+    const nodes = [
+      { id: 'Income' },
+      { id: 'Savings' }, // Target for remainder
+      ...Array.from(incomeSources.keys()).map((id) => ({ id })),
+      ...Array.from(expenseByCategory.keys()).map((id) => ({ id })),
+    ];
+    // Remove duplicates (e.g. if 'Salary' is both input and output? Unlikely for category names)
+    // Set for uniqueness
+    const uniqueNodes = Array.from(new Set(nodes.map((n) => n.id))).map(
+      (id) => ({ id }),
+    );
+
+    const links = [];
+
+    // Income Sources -> "Income" node
+    incomeSources.forEach((val, source) => {
+      links.push({
+        source: source,
+        target: 'Income',
+        value: this.average(val, divisor),
+      });
+    });
+
+    let totalExpenses = 0;
+    // "Income" node -> Expense Categories
+    expenseByCategory.forEach((val, target) => {
+      totalExpenses += val;
+      links.push({
+        source: 'Income',
+        target: target,
+        value: this.average(val, divisor),
+      });
+    });
+
+    // Remainder -> Savings
+    const savings = totalIncome - totalExpenses;
+    if (savings > 0) {
+      links.push({
+        source: 'Income',
+        target: 'Savings',
+        value: this.average(savings, divisor),
+      });
+    }
+
+    return { nodes: uniqueNodes, links };
+  }
+
+  /**
+   * The cash-flow rules shared by the Sankey report and the Home Assistant
+   * summary. Transfers are excluded by the caller; outflows to GOAL categories
+   * are savings, not expenses; a negative amount on an INCOME category reduces
+   * that income source; a positive amount on an EXPENSE category is a refund
+   * that nets against the category. Categories whose net is not positive are
+   * dropped, as the diagram has nothing to draw for them.
+   */
+  private aggregateCashFlow(
+    transactions: Array<{
+      amount: Prisma.Decimal;
+      category: SankeyCategory;
+      splits: Array<{ amount: Prisma.Decimal; category: SankeyCategory }>;
+    }>,
+  ) {
     let totalIncome = 0;
     const expenseByCategory = new Map<string, number>();
     const incomeSources = new Map<string, number>();
@@ -383,51 +448,42 @@ export class ReportsService {
       if (val <= 0) incomeSources.delete(source);
     });
 
-    const nodes = [
-      { id: 'Income' },
-      { id: 'Savings' }, // Target for remainder
-      ...Array.from(incomeSources.keys()).map((id) => ({ id })),
-      ...Array.from(expenseByCategory.keys()).map((id) => ({ id })),
-    ];
-    // Remove duplicates (e.g. if 'Salary' is both input and output? Unlikely for category names)
-    // Set for uniqueness
-    const uniqueNodes = Array.from(new Set(nodes.map((n) => n.id))).map(
-      (id) => ({ id }),
-    );
+    return { totalIncome, incomeSources, expenseByCategory };
+  }
 
-    const links = [];
-
-    // Income Sources -> "Income" node
-    incomeSources.forEach((val, source) => {
-      links.push({
-        source: source,
-        target: 'Income',
-        value: this.average(val, divisor),
-      });
+  /**
+   * Income, expenses and net for a date range, with exactly the rules the
+   * Sankey report uses. Used by the Home Assistant summary.
+   */
+  async getCashFlowTotals(
+    profileId: string,
+    range: { gte: Date; lt: Date },
+  ): Promise<{ income: number; expenses: number; net: number }> {
+    const transactions = await this.prisma.transaction.findMany({
+      where: { profileId, isTransfer: false, date: range },
+      select: {
+        amount: true,
+        category: { select: REPORT_CATEGORY_SELECT },
+        splits: {
+          select: {
+            amount: true,
+            category: { select: REPORT_CATEGORY_SELECT },
+          },
+        },
+      },
     });
-
-    let totalExpenses = 0;
-    // "Income" node -> Expense Categories
-    expenseByCategory.forEach((val, target) => {
-      totalExpenses += val;
-      links.push({
-        source: 'Income',
-        target: target,
-        value: this.average(val, divisor),
-      });
-    });
-
-    // Remainder -> Savings
-    const savings = totalIncome - totalExpenses;
-    if (savings > 0) {
-      links.push({
-        source: 'Income',
-        target: 'Savings',
-        value: this.average(savings, divisor),
-      });
-    }
-
-    return { nodes: uniqueNodes, links };
+    const { totalIncome, expenseByCategory } =
+      this.aggregateCashFlow(transactions);
+    let expenses = 0;
+    expenseByCategory.forEach((val) => (expenses += val));
+    const round = (n: number) => Math.round(n * 100) / 100;
+    const income = round(totalIncome);
+    const roundedExpenses = round(expenses);
+    return {
+      income,
+      expenses: roundedExpenses,
+      net: round(income - roundedExpenses),
+    };
   }
 
   async getCostObjectBreakdown(query: GetReportsDto, profileId: string) {
