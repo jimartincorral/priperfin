@@ -55,6 +55,7 @@ NestJS modular architecture with these domain modules:
 - **BackupModule**: Data backup/restore functionality
 - **SettingsModule**: App configuration (key-value store)
 - **AdminModule**: Administrative operations
+- **BankSyncModule**: Optional Open Banking import via Enable Banking (PSD2); credentials live in the Settings table under `enable_banking_*` and are excluded from the generic settings endpoints and from backups. User guide in README under "Bank sync"
 
 **Database**: SQLite via Prisma with better-sqlite3 adapter. Schema at `apps/api/prisma/schema.prisma`. Database path configured via `DATABASE_URL` env var.
 
