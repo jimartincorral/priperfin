@@ -15,6 +15,7 @@ A comprehensive personal finance management system for Home Assistant.
 - **CSV Import**: Bulk import transactions from CSV files
 - **Backup & Restore**: Encrypted backup and restore functionality
 - **Bank Sync**: Optional automatic import from European banks via Enable Banking (PSD2), see [Bank sync](#bank-sync-enable-banking)
+- **Home Assistant entities**: A HACS integration exposes each profile as a device with finance sensors and an import event, see [Home Assistant integration](#home-assistant-integration)
 - **Responsive UI**: Modern web interface built with Lit web components
 
 ## Installation
@@ -56,7 +57,7 @@ Open <http://localhost:3000>.
 On Apple silicon, point it at the arm64 image first:
 
 ```bash
-PRIPERFIN_IMAGE=ghcr.io/jimartincorral/priperfin-aarch64:1.27.1 docker compose up -d
+PRIPERFIN_IMAGE=ghcr.io/jimartincorral/priperfin-aarch64:1.28.0 docker compose up -d
 ```
 
 Your database and backups live in the `priperfin-data` Docker volume, so they
@@ -160,6 +161,95 @@ find them by hand. Uninstalling does not delete this folder.
 The app runs its own server on a loopback port that is chosen at startup, so it
 never listens on your local network and does not conflict with a Home Assistant
 add-on or a development server on port 3000.
+
+## Home Assistant integration
+
+Besides running as an add-on, PriPerFin can feed **entities** into Home
+Assistant: one device per profile with sensors for uncategorized transactions,
+pending rule suggestions, this month's income, expenses and net, the total
+balance and one balance sensor per account, categories over budget and budget
+remaining, savings goals (saved, left, behind schedule), the last bank sync, a
+"bank consent expired" problem sensor and the days until the earliest consent
+expires. It also fires a `priperfin_import` event whenever an import or bank
+sync brings in new transactions, so automations can react.
+
+The integration is a custom component installed through
+[HACS](https://hacs.xyz). It polls the PriPerFin server with a read-only API
+token; it never needs your PIN.
+
+### Install
+
+1. In HACS, open **Integrations → ⋮ → Custom repositories**, add
+   `https://github.com/jimartincorral/priperfin` with category **Integration**,
+   then install **PriPerFin** and restart Home Assistant.
+2. In PriPerFin, open **Settings → Home Assistant**. Note the **address for the
+   integration** shown there (for the add-on it looks like
+   `http://xxxxxxxx-priperfin:3000`, reachable only from Home Assistant itself)
+   and create an **API token**. Copy the token: it is shown once.
+3. In Home Assistant, **Settings → Devices & services → Add integration →
+   PriPerFin**, enter the address and the token. The device is named after the
+   profile; repeat for other profiles with their own tokens.
+
+Options (⚙ on the integration): refresh interval (default 60 s) and a currency
+code override for the money sensors, which otherwise follow PriPerFin's
+currency setting.
+
+Running PriPerFin in Docker or as the desktop app instead of the add-on? The
+integration works against any address Home Assistant can reach, for example
+`http://your-computer:3000`. The Docker setup binds the port to the computer
+itself by default, so publish it on your network first (see the comment in
+`docker-compose.yml`).
+
+### Entities
+
+| Entity | Meaning |
+| --- | --- |
+| `sensor.<profile>_uncategorized_transactions` | Transactions with no category (transfers excluded) |
+| `sensor.<profile>_pending_rule_suggestions` | Rule suggestions waiting for a decision |
+| `sensor.<profile>_income_this_month`, `..._expenses_this_month`, `..._net_this_month` | Same rules as the reports: transfers excluded, refunds netted |
+| `sensor.<profile>_total_balance`, `sensor.<profile>_<account>_balance` | Initial balance plus movements, credit cards subtracted |
+| `sensor.<profile>_categories_over_budget`, `..._budget_remaining` | Against this month's budgets; a parent category counts its children's spend |
+| `sensor.<profile>_goals_saved`, `..._left_to_reach_goals`, `..._goals_behind_schedule` | As the Goals screen shows them |
+| `sensor.<profile>_last_bank_sync`, `..._bank_consent_days_left`, `binary_sensor.<profile>_bank_consent_expired` | Bank sync state; unavailable until a bank is connected |
+| `sensor.<profile>_last_import` | When the last import or sync ran, with `new_count` and `uncategorized_count` attributes |
+
+### Events
+
+`priperfin_import` fires after each import that added transactions, with
+`profile_id`, `profile_name`, `at`, `new_count` and `uncategorized_count`.
+Values arrive within one refresh interval of the import. Example automation:
+
+```yaml
+automation:
+  - alias: Categorize new transactions
+    triggers:
+      - trigger: event
+        event_type: priperfin_import
+    conditions:
+      - condition: template
+        value_template: "{{ trigger.event.data.uncategorized_count | int > 0 }}"
+    actions:
+      - action: notify.mobile_app_phone
+        data:
+          message: >
+            {{ trigger.event.data.uncategorized_count }} new transactions in
+            PriPerFin need a category.
+```
+
+### Signing in from the Home Assistant sidebar
+
+When you open the add-on from the sidebar, PriPerFin knows which Home
+Assistant user you are. In **Settings → Home Assistant**, switch on
+*Pre-select this profile* and the sign-in screen will start on your profile
+every time. The PIN is still required; this only saves picking the profile.
+
+### Security notes
+
+- A token can read that profile's summary and nothing else. Revoke it in
+  Settings if it leaks; the integration then asks for a new one.
+- The summary endpoint is the only part of the API reachable from Home
+  Assistant Core without going through Ingress, and it always requires the
+  token.
 
 ## Bank sync (Enable Banking)
 

@@ -65,6 +65,18 @@ The "Reports" tab provides:
 - **Sankey Diagram**: Visual flow of money from income to expenses
 - **Monthly Summaries**: Track spending trends over time
 
+## Home Assistant entities (optional)
+
+A companion integration, installed through HACS, turns each PriPerFin profile
+into a Home Assistant device with sensors (uncategorized transactions, this
+month's totals, balances, budgets, goals, bank sync state) and fires a
+`priperfin_import` event when an import adds transactions. In the add-on, open
+**Settings → Home Assistant** to see the address to enter and to create the
+API token the integration uses. The same page lets you pre-select your profile
+on the sign-in screen when you open the add-on from the sidebar; the PIN is
+still required. Full guide in the
+[README](https://github.com/jimartincorral/priperfin#home-assistant-integration).
+
 ## Bank Synchronization (optional)
 
 PriPerFin can import transactions directly from a European bank through
