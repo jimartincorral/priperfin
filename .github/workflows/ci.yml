@@ -92,11 +92,15 @@ jobs:
       - name: hassfest
         uses: home-assistant/actions/hassfest@master
 
-      # Validates what HACS needs to list the repository (hacs.json, manifest).
+      # Validates what HACS needs to list the repository (hacs.json, manifest,
+      # brand icon). "topics" is a GitHub repository setting (Settings → About →
+      # Topics, e.g. home-assistant, hacs, integration); it is skipped here so a
+      # missing topic cannot break CI, and can be removed once the topics exist.
       - name: HACS validation
         uses: hacs/action@main
         with:
           category: integration
+          ignore: topics
 
   ha-integration-tests:
     name: Home Assistant integration tests
