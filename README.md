@@ -14,6 +14,7 @@ A comprehensive personal finance management system for Home Assistant.
   - Monthly and yearly summaries
 - **CSV Import**: Bulk import transactions from CSV files
 - **Backup & Restore**: Encrypted backup and restore functionality
+- **Bank Sync**: Optional automatic import from European banks via Enable Banking (PSD2), see [Bank sync](#bank-sync-enable-banking)
 - **Responsive UI**: Modern web interface built with Lit web components
 
 ## Installation
@@ -55,7 +56,7 @@ Open <http://localhost:3000>.
 On Apple silicon, point it at the arm64 image first:
 
 ```bash
-PRIPERFIN_IMAGE=ghcr.io/jimartincorral/priperfin-aarch64:1.27.0 docker compose up -d
+PRIPERFIN_IMAGE=ghcr.io/jimartincorral/priperfin-aarch64:1.27.1 docker compose up -d
 ```
 
 Your database and backups live in the `priperfin-data` Docker volume, so they
@@ -159,6 +160,111 @@ find them by hand. Uninstalling does not delete this folder.
 The app runs its own server on a loopback port that is chosen at startup, so it
 never listens on your local network and does not conflict with a Home Assistant
 add-on or a development server on port 3000.
+
+## Bank sync (Enable Banking)
+
+PriPerFin can pull transactions straight from a European bank account through
+[Enable Banking](https://enablebanking.com), an Open Banking (PSD2) aggregator.
+It is optional: nothing in the app depends on it, and the CSV and OFX importers
+keep working either way. It is read-only. PriPerFin can see balances and
+transactions; it cannot move money.
+
+### What you need
+
+- A bank that Enable Banking supports. Their site lists the banks by country.
+- A free developer account at Enable Banking and an **application** registered
+  in the mode they offer for personal use, which they call *restricted
+  production*. It only works with accounts you authorise yourself, which is
+  all PriPerFin needs. Registering the application gives you:
+  - the **Application ID**;
+  - an **RSA private key** as a `.pem` file, generated when you create the
+    application. Keep it safe; Enable Banking does not store it;
+  - a **redirect URL** that you type in when registering. Enable Banking sends
+    you back to it after you authorise at your bank. It must use HTTPS and it
+    must match, character for character, what you enter in PriPerFin. See
+    [Choosing the redirect URL](#choosing-the-redirect-url).
+
+### Setting it up
+
+1. Open **Settings** and scroll to **Automatic Bank Synchronization**.
+2. Enter the Application ID, upload or paste the `.pem` file, enter the
+   redirect URL, and click **Save Configuration**. Both credentials show as
+   *Configured* once saved. The key is never shown again; to replace it, paste
+   a new one.
+3. Click **+ Connect Bank**, pick the country and the bank, and click
+   **Proceed to Bank Authentication**. You are sent to your bank's own login
+   and second-factor screen to approve access. Inside Home Assistant this opens
+   in a new window, because banks refuse to load inside the Home Assistant
+   frame.
+4. After approving, the bank sends you to the redirect URL with a `code` in
+   the address. If that URL is PriPerFin's own Settings page, the connection
+   completes by itself. Otherwise copy the full address from the browser's
+   address bar, go back to Settings, click **Paste Callback**, and paste it.
+5. The bank now appears under **Connected Banks** with the accounts it
+   exposed. For each one, choose the PriPerFin account it should feed and click
+   **Link Account**. Create the PriPerFin account first if it does not exist.
+
+### Choosing the redirect URL
+
+Enable Banking requires an HTTPS address, and PriPerFin only recognises the
+code automatically when that address is its own Settings page. So:
+
+- **Home Assistant with an HTTPS address** (Nabu Casa, a reverse proxy, or
+  your own certificate): use the add-on's Settings page. Open Settings in the
+  add-on, copy the address from the browser, and register that. The address
+  contains the add-on's ingress path; if Home Assistant ever changes it, update
+  the URL in both places.
+- **Desktop app or Docker** (served over plain HTTP on your machine): register
+  any HTTPS page you control, even one that shows an error. The page's content
+  does not matter; only the address with the `code` does. After approving at
+  the bank, copy that address and use **Paste Callback**. Do not use
+  `/api/bank-sync/callback`: that endpoint only accepts the code from the app
+  itself, not a browser visit.
+
+### How syncing works
+
+- **Sync Now** on a connected bank, or **Sync Bank** on the Expenses screen,
+  pulls new transactions for every linked account.
+- **Daily automatic sync** runs once a day at 06:00 server time for every
+  profile that has a linked account. It is on by default once credentials are
+  saved and can be switched off in the same section.
+- The **first sync** of an account fetches the last 90 days by default; choose
+  30 to 730 days under *Initial sync historical lookback* before linking. If
+  the account already holds imported transactions, the sync starts a week
+  before the newest one instead, so the two overlap rather than leave a gap.
+- **Later syncs** fetch from five days before the previous sync, and anything
+  already stored is skipped, so re-syncing never duplicates a transaction.
+- Imported rows get the bank's description, with any further detail in the
+  notes, and your categorisation rules run on them like on any other import.
+
+### Consent expiry
+
+Bank access under PSD2 is granted for **90 days**. The connection card shows
+*Active*, then *Expiring Soon* during the last 14 days, then *Expired*; an
+expired connection stops syncing and the Expenses screen warns you. Click
+**Re-authenticate** to go through the bank approval again. The accounts you
+linked are moved to the renewed connection automatically, matched by bank
+account, and their history is kept.
+**Disconnect** removes the bank connection; the PriPerFin accounts and the
+transactions already imported stay.
+
+### Where the credentials live, and what is not backed up
+
+- The Application ID and the private key are stored in PriPerFin's database.
+  The key is stored as you pasted it. Protect the database file as you would
+  the key itself; on the desktop app it sits in the data folder listed under
+  [Where your data lives](#where-your-data-lives).
+- The credentials are shared by every profile on the same installation, since
+  they identify the application, not a person. Bank connections and linked
+  accounts belong to the profile that created them.
+- **Backups do not include** the Enable Banking credentials or the bank
+  connections. After restoring a backup on a new machine, enter the
+  credentials and connect the banks again. The transactions themselves are in
+  the backup.
+- A profile with a connected bank can only ever read its own accounts.
+  Enable Banking's own terms limit how often an unattended sync may run; the
+  daily schedule stays well inside that limit, and manual syncs count too, so
+  avoid clicking **Sync Now** repeatedly.
 
 ## Configuration
 

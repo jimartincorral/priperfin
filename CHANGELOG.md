@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.27.1 - 2026-10-09
+
+Documentation for bank synchronization. No functional changes.
+
+- **Bank sync is now documented.** The README has a full guide to the optional Enable Banking integration: what to register, how to choose the redirect URL for Home Assistant, the desktop app and Docker, how syncing and the 90-day consent work, and what is and is not included in backups. The add-on documentation has a shorter version.
+- The redirect URL field in Settings no longer suggests an address that only the app itself can use; it now points at the Settings page and explains the Paste Callback alternative.
+
 ## v1.27.0 - 2026-10-08
 
 Structural fixes from the pre-release review: data model, transfers, performance and housekeeping.

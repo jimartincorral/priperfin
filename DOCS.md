@@ -65,6 +65,38 @@ The "Reports" tab provides:
 - **Sankey Diagram**: Visual flow of money from income to expenses
 - **Monthly Summaries**: Track spending trends over time
 
+## Bank Synchronization (optional)
+
+PriPerFin can import transactions directly from a European bank through
+[Enable Banking](https://enablebanking.com), an Open Banking (PSD2) service.
+Access is read-only: the add-on can see balances and transactions, never move
+money.
+
+You need a free Enable Banking developer account with an application
+registered in their personal-use ("restricted production") mode. It gives you
+an Application ID, an RSA private key (`.pem`) and lets you register a
+redirect URL. In the add-on, open **Settings → Automatic Bank Synchronization**,
+enter those three values and save, then **+ Connect Bank** to approve access at
+your bank (this opens in a new window, as banks refuse to load inside the Home
+Assistant frame) and link each discovered account to a PriPerFin account.
+
+The redirect URL must be HTTPS. If your Home Assistant is reachable over HTTPS,
+register the add-on's own Settings page: the connection then completes by
+itself when the bank sends you back. Otherwise register any HTTPS page you
+control and use **Paste Callback** in Settings with the address the bank
+returned you to.
+
+Bank access is granted for 90 days; the connection card shows when it is
+expiring and **Re-authenticate** renews it. A daily sync runs at 06:00 and
+**Sync Now** fetches on demand; transactions already stored are never
+duplicated. The credentials are kept in the add-on's database and are **not**
+part of backups, so after a restore they must be entered again and the banks
+reconnected.
+
+The full guide, including how to choose the redirect URL for each way of
+running PriPerFin, is in the
+[README](https://github.com/jimartincorral/priperfin#bank-sync-enable-banking).
+
 ## Backup and Restore
 
 ### Creating a Backup
