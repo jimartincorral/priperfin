@@ -48,3 +48,8 @@ verify_api.js
 
 # pnpm
 .pnpm-store/
+
+# Python (Home Assistant integration tests)
+__pycache__/
+*.pyc
+.pytest_cache/
