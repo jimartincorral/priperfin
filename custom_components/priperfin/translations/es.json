@@ -1,0 +1,63 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Conectar con PriPerFin",
+        "description": "Crea un token de API en PriPerFin, en Configuración → Home Assistant, e introduce la dirección que se muestra allí.",
+        "data": {
+          "url": "Dirección del servidor",
+          "token": "Token de API"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Actualizar el token de PriPerFin",
+        "description": "El token para {url} ha sido rechazado. Crea uno nuevo en PriPerFin, en Configuración → Home Assistant.",
+        "data": {
+          "token": "Token de API"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "No se pudo conectar con PriPerFin en esa dirección",
+      "invalid_auth": "PriPerFin ha rechazado el token",
+      "wrong_profile": "Ese token pertenece a otro perfil"
+    },
+    "abort": {
+      "already_configured": "Este perfil de PriPerFin ya está configurado",
+      "reauth_successful": "Token actualizado"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Opciones de PriPerFin",
+        "data": {
+          "scan_interval": "Actualizar cada (segundos)",
+          "currency": "Código de moneda a usar (p. ej. EUR)"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "uncategorized_transactions": { "name": "Movimientos sin categoría" },
+      "pending_suggestions": { "name": "Sugerencias de reglas pendientes" },
+      "month_income": { "name": "Ingresos este mes" },
+      "month_expenses": { "name": "Gastos este mes" },
+      "month_net": { "name": "Neto este mes" },
+      "total_balance": { "name": "Saldo total" },
+      "categories_over_budget": { "name": "Categorías por encima del presupuesto" },
+      "budget_remaining": { "name": "Presupuesto restante" },
+      "goals_saved": { "name": "Ahorrado para objetivos" },
+      "goals_left": { "name": "Falta para los objetivos" },
+      "goals_behind": { "name": "Objetivos con retraso" },
+      "bank_last_sync": { "name": "Última sincronización bancaria" },
+      "bank_days_until_expiry": { "name": "Días de consentimiento bancario restantes" },
+      "last_import": { "name": "Última importación" },
+      "account_balance": { "name": "Saldo de {account}" }
+    },
+    "binary_sensor": {
+      "bank_consent_expired": { "name": "Consentimiento bancario caducado" }
+    }
+  }
+}

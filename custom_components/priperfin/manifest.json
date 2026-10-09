@@ -1,0 +1,12 @@
+{
+  "domain": "priperfin",
+  "name": "PriPerFin",
+  "codeowners": ["@jimartincorral"],
+  "config_flow": true,
+  "documentation": "https://github.com/jimartincorral/priperfin#home-assistant-integration",
+  "integration_type": "service",
+  "iot_class": "local_polling",
+  "issue_tracker": "https://github.com/jimartincorral/priperfin/issues",
+  "requirements": [],
+  "version": "1.28.0"
+}
