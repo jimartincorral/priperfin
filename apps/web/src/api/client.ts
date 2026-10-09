@@ -291,6 +291,44 @@ export const authApi = {
         api.clearSession(); // Force re-login
         return response;
     },
+
+    // ---- Home Assistant user (only meaningful through Ingress) ----
+    async getHaUser(): Promise<{
+        user: { id: string; name: string | null; displayName: string | null } | null;
+        mappedProfileName: string | null;
+        linkedToCurrentProfile: boolean;
+    }> {
+        return api.get('/auth/ha-user');
+    },
+    async linkHaUser() {
+        return api.post('/auth/ha-user/link', {});
+    },
+    async unlinkHaUser() {
+        return api.delete('/auth/ha-user/link');
+    },
+
+    // ---- Long-lived API tokens for the Home Assistant integration ----
+    async listApiTokens(): Promise<Array<{ id: string; name: string; createdAt: string; lastUsedAt: string | null }>> {
+        return api.get('/auth/api-tokens');
+    },
+    async createApiToken(name: string): Promise<{ id: string; name: string; createdAt: string; token: string }> {
+        return api.post('/auth/api-tokens', { name });
+    },
+    async revokeApiToken(id: string) {
+        return api.delete(`/auth/api-tokens/${id}`);
+    },
+};
+
+// Home Assistant integration helpers
+export const haApi = {
+    async getInfo(): Promise<{
+        addonHostname: string | null;
+        integrationUrl: string | null;
+        appVersion: string | null;
+        allowDirectAccess: boolean;
+    }> {
+        return api.get('/ha/info');
+    },
 };
 
 // Bank Sync API methods (Enable Banking)

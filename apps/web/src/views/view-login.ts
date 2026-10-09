@@ -14,6 +14,7 @@ export class ViewLogin extends LitElement {
   @state() pinLength = 6;
   @state() loading = false;
   @state() error = '';
+  @state() haHint = '';
   @state() showPin = false;
   @state() rateLimited = false;
   @state() retryAfter = 0;
@@ -112,6 +113,16 @@ export class ViewLogin extends LitElement {
       cursor: not-allowed;
     }
 
+    .ha-hint {
+      font: var(--md-sys-typescale-body-small);
+      color: var(--md-sys-color-on-surface-variant);
+      background: var(--md-sys-color-surface-container);
+      border-radius: 8px;
+      padding: 8px 12px;
+      margin-bottom: 16px;
+      text-align: center;
+    }
+
     .error {
       color: var(--md-sys-color-error);
       font: var(--md-sys-typescale-body-small);
@@ -147,11 +158,26 @@ export class ViewLogin extends LitElement {
 
   async loadProfiles() {
     try {
-      const profiles = await authApi.getProfiles();
+      const [profiles, haUser] = await Promise.all([
+        authApi.getProfiles(),
+        // Only answers with a user when opened through Home Assistant Ingress.
+        authApi.getHaUser().catch(() => null),
+      ]);
       this.profiles = profiles;
       if (profiles.length > 0) {
-        this.selectedProfile = profiles[0].name;
+        // Pre-select the profile mapped to the Home Assistant user, if any.
+        // The PIN is still required: this is a convenience, not a sign-in.
+        const mapped = haUser?.mappedProfileName;
+        const preselect = mapped && profiles.some((p: any) => p.name === mapped)
+          ? mapped
+          : profiles[0].name;
+        this.selectedProfile = preselect;
         this.pinLength = this.getProfilePinLength(this.selectedProfile);
+        if (mapped && preselect === mapped) {
+          this.haHint = i18n.t('auth.login.haSignedInAs', {
+            name: haUser?.user?.displayName || haUser?.user?.name || mapped,
+          });
+        }
       }
     } catch (e: any) {
       this.error = i18n.t('auth.login.loadProfilesFailed');
@@ -247,6 +273,8 @@ export class ViewLogin extends LitElement {
     return html`
       <div class="login-card">
         <h1>${i18n.t('auth.login.title')}</h1>
+
+        ${this.haHint ? html`<div class="ha-hint">${this.haHint}</div>` : ''}
 
         <div class="form-field">
           <label>${i18n.t('auth.login.profile')}</label>
