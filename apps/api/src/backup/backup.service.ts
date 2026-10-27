@@ -139,6 +139,9 @@ export class BackupService {
     const savingsGoals = await this.prisma.savingsGoal.findMany({
       where: { profileId },
     });
+    const scenarios = await this.prisma.scenario.findMany({
+      where: { profileId },
+    });
     const accountBalances = await this.prisma.accountBalance.findMany({
       where: { account: { profileId } },
     });
@@ -162,6 +165,7 @@ export class BackupService {
       rules,
       ruleSuggestions,
       savingsGoals,
+      scenarios,
       accountBalances,
       monthlyBalances,
       settings: scopedSettings,
@@ -190,6 +194,9 @@ export class BackupService {
           where: { profileId: targetProfileId },
         });
         await tx.savingsGoal.deleteMany({
+          where: { profileId: targetProfileId },
+        });
+        await tx.scenario.deleteMany({
           where: { profileId: targetProfileId },
         });
         await tx.categorizationRule.deleteMany({
@@ -292,6 +299,16 @@ export class BackupService {
               profileId: targetProfileId,
               targetAmount: s.targetAmount,
               savedAmount: s.savedAmount,
+            })),
+          });
+        }
+
+        // Simulator scenarios (absent from backups made before they existed)
+        if (data.scenarios?.length) {
+          await tx.scenario.createMany({
+            data: data.scenarios.map((s: any) => ({
+              ...s,
+              profileId: targetProfileId,
             })),
           });
         }

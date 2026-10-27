@@ -56,6 +56,7 @@ NestJS modular architecture with these domain modules:
 - **SettingsModule**: App configuration (key-value store)
 - **AdminModule**: Administrative operations
 - **BankSyncModule**: Optional Open Banking import via Enable Banking (PSD2); credentials live in the Settings table under `enable_banking_*` and are excluded from the generic settings endpoints and from backups. User guide in README under "Bank sync"
+- **SimulatorModule**: What-if Simulator. `GET /api/simulator/baseline` returns the last 12 complete months of cash flow (same rules as the reports, via `ReportsService.getMonthlyCashFlow`), today's balance and the savings goals; `/api/simulator/scenarios` stores saved scenarios (`Scenario` model, changes and basis as validated JSON, included in backups). The projection itself runs in the browser: `apps/web/src/utils/simulator-engine.ts`
 - **HaModule**: `GET /api/ha/summary` (per-profile figures for the Home Assistant integration; the only route that accepts a long-lived `ApiToken` via `Authorization: Bearer pfp_…`, see `@AllowApiToken()`) and `GET /api/ha/info`. Tokens are managed under `/api/auth/api-tokens`; the Ingress user → profile mapping under `/api/auth/ha-user`. Imports record `ha_last_import_profile_<id>` so the integration can fire `priperfin_import`.
 
 **Database**: SQLite via Prisma with better-sqlite3 adapter. Schema at `apps/api/prisma/schema.prisma`. Database path configured via `DATABASE_URL` env var.
@@ -66,12 +67,12 @@ NestJS modular architecture with these domain modules:
 
 Lit web components with Material Design 3 theming:
 - **priperfin-app.ts**: Root component with Vaadin Router, navigation, and theme system
-- **views/**: Route components (view-expenses, view-goals, view-reports, view-settings)
+- **views/**: Route components (view-expenses, view-goals, view-reports, view-simulator, view-settings)
 - **components/**: Reusable components (csv-wizard)
 - **api/client.ts**: HTTP client for backend communication (port 3000)
 - **i18n/**: Internationalization (en, es translations)
 
-**Routing**: Vaadin Router with paths: `/`, `/goals`, `/reports`, `/settings`
+**Routing**: Vaadin Router with paths: `/`, `/goals`, `/reports`, `/simulator`, `/categories`, `/rules`, `/settings`
 
 ### Key Data Models
 

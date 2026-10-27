@@ -486,6 +486,73 @@ export class ReportsService {
     };
   }
 
+  /**
+   * Income, expenses and spend per top-level category for each calendar month
+   * (UTC) from `from` (a month start) for `months` months, with exactly the
+   * rules of getCashFlowTotals. Used by the Simulator to build its starting
+   * point; months without transactions come back as zeros.
+   */
+  async getMonthlyCashFlow(
+    profileId: string,
+    from: Date,
+    months: number,
+  ): Promise<
+    Array<{
+      month: string;
+      income: number;
+      expenses: number;
+      categories: Record<string, number>;
+    }>
+  > {
+    const keyOf = (d: Date) =>
+      `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+    const lt = new Date(
+      Date.UTC(from.getUTCFullYear(), from.getUTCMonth() + months, 1),
+    );
+    const transactions = await this.prisma.transaction.findMany({
+      where: { profileId, isTransfer: false, date: { gte: from, lt } },
+      select: {
+        date: true,
+        amount: true,
+        category: { select: REPORT_CATEGORY_SELECT },
+        splits: {
+          select: {
+            amount: true,
+            category: { select: REPORT_CATEGORY_SELECT },
+          },
+        },
+      },
+    });
+
+    const buckets = new Map<string, typeof transactions>();
+    for (let i = 0; i < months; i++) {
+      buckets.set(
+        keyOf(
+          new Date(Date.UTC(from.getUTCFullYear(), from.getUTCMonth() + i, 1)),
+        ),
+        [],
+      );
+    }
+    for (const t of transactions) buckets.get(keyOf(t.date))?.push(t);
+
+    const round = (n: number) => Math.round(n * 100) / 100;
+    return Array.from(buckets, ([month, rows]) => {
+      const { totalIncome, expenseByCategory } = this.aggregateCashFlow(rows);
+      const categories: Record<string, number> = {};
+      let expenses = 0;
+      expenseByCategory.forEach((val, name) => {
+        categories[name] = round(val);
+        expenses += val;
+      });
+      return {
+        month,
+        income: round(totalIncome),
+        expenses: round(expenses),
+        categories,
+      };
+    });
+  }
+
   async getCostObjectBreakdown(query: GetReportsDto, profileId: string) {
     const { accountId } = query;
 
