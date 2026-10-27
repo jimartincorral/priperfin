@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.29.2 - 2026-10-27
+
+Simulator: corrected calculations.
+
+- **Months with no transactions no longer count as zero.** Months before you started tracking, or never imported, were averaged in as no income and no spending, which lowered the average month. They are now left out and marked "No data".
+- **"Left over each month" shows a typical month.** A one-off in the last projected month (for example a down payment) used to show as the monthly figure, and in the summary and the scenario rating. One-offs are now left out of that figure.
+- **Changes that already started keep their dates.** A loan taken out months ago no longer restarts with all its payments, and a one-off that already happened is not paid again when you reopen an older scenario.
+- **The rest of this month is included.** What the current month still has to bring, such as a salary not yet paid, is now added to the projection instead of being dropped.
+- **Overdue savings goals** are shown as "Past due" and no longer make the other goals look late.
+- A spending change on a category that a new payment replaces is no longer applied twice, and a transfer to an account that is not tracked now counts as money out whether or not you filter by account.
+
 ## v1.29.1 - 2026-10-27
 
 Simulator: choose which accounts to simulate.
