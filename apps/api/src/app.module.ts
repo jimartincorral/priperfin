@@ -21,6 +21,7 @@ import { RulesModule } from './rules/rules.module';
 import { AuthModule } from './auth/auth.module';
 import { BankSyncModule } from './bank-sync/bank-sync.module';
 import { HaModule } from './ha/ha.module';
+import { SimulatorModule } from './simulator/simulator.module';
 import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 
@@ -66,6 +67,7 @@ import { ScheduleModule } from '@nestjs/schedule';
           RulesModule,
           BankSyncModule,
           HaModule,
+          SimulatorModule,
         ],
       },
     ]),
@@ -86,6 +88,7 @@ import { ScheduleModule } from '@nestjs/schedule';
     RulesModule,
     BankSyncModule,
     HaModule,
+    SimulatorModule,
   ],
   controllers: [AppController],
 

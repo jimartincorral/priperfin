@@ -602,6 +602,79 @@ describe('ReportsService', () => {
     });
   });
 
+  describe('getMonthlyCashFlow', () => {
+    it('buckets by UTC month, groups by parent category and fills empty months', async () => {
+      const salary = createMockCategory({
+        id: 'cat-salary',
+        name: 'Salary',
+        type: 'INCOME',
+      });
+      const housing = createMockCategory({
+        id: 'cat-housing',
+        name: 'Housing',
+        type: 'EXPENSE',
+      });
+      const rent = {
+        ...createMockCategory({
+          id: 'cat-rent',
+          name: 'Rent',
+          type: 'EXPENSE',
+        }),
+        parent: { id: 'cat-housing', name: 'Housing' },
+      };
+
+      prismaMock.transaction.findMany.mockResolvedValue([
+        createMockTransaction({
+          date: new Date('2026-05-01T00:00:00Z'),
+          amount: new Decimal(3000),
+          category: salary,
+          splits: [],
+        }),
+        createMockTransaction({
+          date: new Date('2026-05-31T00:00:00Z'),
+          amount: new Decimal(-950),
+          category: rent,
+          splits: [],
+        }),
+        createMockTransaction({
+          date: new Date('2026-05-15T00:00:00Z'),
+          amount: new Decimal(-50.25),
+          category: housing,
+          splits: [],
+        }),
+        createMockTransaction({
+          date: new Date('2026-07-01T00:00:00Z'),
+          amount: new Decimal(3100),
+          category: salary,
+          splits: [],
+        }),
+      ]);
+
+      const from = new Date(Date.UTC(2026, 4, 1));
+      const months = await service.getMonthlyCashFlow('profile-1', from, 3);
+
+      expect(prismaMock.transaction.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            profileId: 'profile-1',
+            isTransfer: false,
+            date: { gte: from, lt: new Date(Date.UTC(2026, 7, 1)) },
+          },
+        }),
+      );
+      expect(months).toEqual([
+        {
+          month: '2026-05',
+          income: 3000,
+          expenses: 1000.25,
+          categories: { Housing: 1000.25 },
+        },
+        { month: '2026-06', income: 0, expenses: 0, categories: {} },
+        { month: '2026-07', income: 3100, expenses: 0, categories: {} },
+      ]);
+    });
+  });
+
   describe('getSankeyData', () => {
     it('should create correct nodes for income and expenses', async () => {
       const incomeCategory = createMockCategory({

@@ -115,6 +115,15 @@ export function createPrismaMock() {
     count: jest.fn(),
   };
 
+  const scenarioMock = {
+    create: jest.fn(),
+    findMany: jest.fn(),
+    findFirst: jest.fn(),
+    update: jest.fn(),
+    delete: jest.fn(),
+    deleteMany: jest.fn(),
+  };
+
   const prismaMock = {
     transaction: transactionMock,
     category: categoryMock,
@@ -124,6 +133,7 @@ export function createPrismaMock() {
     transactionSplit: transactionSplitMock,
     monthlyBalance: monthlyBalanceMock,
     setting: settingMock,
+    scenario: scenarioMock,
 
     // Prisma client methods
     $connect: jest.fn(),

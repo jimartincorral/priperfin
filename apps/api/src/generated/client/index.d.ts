@@ -71,6 +71,13 @@ export type Profile = $Result.DefaultSelection<Prisma.$ProfilePayload>
  */
 export type ApiToken = $Result.DefaultSelection<Prisma.$ApiTokenPayload>
 /**
+ * Model Scenario
+ * A saved what-if for the Simulator. The changes and the averaging basis are
+ * stored as JSON so that adding a kind of change needs no migration; the API
+ * validates their shape on the way in.
+ */
+export type Scenario = $Result.DefaultSelection<Prisma.$ScenarioPayload>
+/**
  * Model BankConnection
  * 
  */
@@ -372,6 +379,16 @@ export class PrismaClient<
     * ```
     */
   get apiToken(): Prisma.ApiTokenDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.scenario`: Exposes CRUD operations for the **Scenario** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more Scenarios
+    * const scenarios = await prisma.scenario.findMany()
+    * ```
+    */
+  get scenario(): Prisma.ScenarioDelegate<ExtArgs, ClientOptions>;
 
   /**
    * `prisma.bankConnection`: Exposes CRUD operations for the **BankConnection** model.
@@ -857,6 +874,7 @@ export namespace Prisma {
     Setting: 'Setting',
     Profile: 'Profile',
     ApiToken: 'ApiToken',
+    Scenario: 'Scenario',
     BankConnection: 'BankConnection',
     Session: 'Session',
     MonthlyBalance: 'MonthlyBalance',
@@ -876,7 +894,7 @@ export namespace Prisma {
       omit: GlobalOmitOptions
     }
     meta: {
-      modelProps: "category" | "account" | "costObject" | "transaction" | "categorizationRule" | "ruleSuggestion" | "transactionSplit" | "savingsGoal" | "setting" | "profile" | "apiToken" | "bankConnection" | "session" | "monthlyBalance" | "accountBalance"
+      modelProps: "category" | "account" | "costObject" | "transaction" | "categorizationRule" | "ruleSuggestion" | "transactionSplit" | "savingsGoal" | "setting" | "profile" | "apiToken" | "scenario" | "bankConnection" | "session" | "monthlyBalance" | "accountBalance"
       txIsolationLevel: Prisma.TransactionIsolationLevel
     }
     model: {
@@ -1694,6 +1712,80 @@ export namespace Prisma {
           }
         }
       }
+      Scenario: {
+        payload: Prisma.$ScenarioPayload<ExtArgs>
+        fields: Prisma.ScenarioFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.ScenarioFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$ScenarioPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.ScenarioFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$ScenarioPayload>
+          }
+          findFirst: {
+            args: Prisma.ScenarioFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$ScenarioPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.ScenarioFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$ScenarioPayload>
+          }
+          findMany: {
+            args: Prisma.ScenarioFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$ScenarioPayload>[]
+          }
+          create: {
+            args: Prisma.ScenarioCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$ScenarioPayload>
+          }
+          createMany: {
+            args: Prisma.ScenarioCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.ScenarioCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$ScenarioPayload>[]
+          }
+          delete: {
+            args: Prisma.ScenarioDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$ScenarioPayload>
+          }
+          update: {
+            args: Prisma.ScenarioUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$ScenarioPayload>
+          }
+          deleteMany: {
+            args: Prisma.ScenarioDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.ScenarioUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.ScenarioUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$ScenarioPayload>[]
+          }
+          upsert: {
+            args: Prisma.ScenarioUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$ScenarioPayload>
+          }
+          aggregate: {
+            args: Prisma.ScenarioAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateScenario>
+          }
+          groupBy: {
+            args: Prisma.ScenarioGroupByArgs<ExtArgs>
+            result: $Utils.Optional<ScenarioGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.ScenarioCountArgs<ExtArgs>
+            result: $Utils.Optional<ScenarioCountAggregateOutputType> | number
+          }
+        }
+      }
       BankConnection: {
         payload: Prisma.$BankConnectionPayload<ExtArgs>
         fields: Prisma.BankConnectionFieldRefs
@@ -2109,6 +2201,7 @@ export namespace Prisma {
     setting?: SettingOmit
     profile?: ProfileOmit
     apiToken?: ApiTokenOmit
+    scenario?: ScenarioOmit
     bankConnection?: BankConnectionOmit
     session?: SessionOmit
     monthlyBalance?: MonthlyBalanceOmit
@@ -2439,6 +2532,7 @@ export namespace Prisma {
     savingsGoals: number
     bankConnections: number
     apiTokens: number
+    scenarios: number
   }
 
   export type ProfileCountOutputTypeSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
@@ -2452,6 +2546,7 @@ export namespace Prisma {
     savingsGoals?: boolean | ProfileCountOutputTypeCountSavingsGoalsArgs
     bankConnections?: boolean | ProfileCountOutputTypeCountBankConnectionsArgs
     apiTokens?: boolean | ProfileCountOutputTypeCountApiTokensArgs
+    scenarios?: boolean | ProfileCountOutputTypeCountScenariosArgs
   }
 
   // Custom InputTypes
@@ -2533,6 +2628,13 @@ export namespace Prisma {
    */
   export type ProfileCountOutputTypeCountApiTokensArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     where?: ApiTokenWhereInput
+  }
+
+  /**
+   * ProfileCountOutputType without action
+   */
+  export type ProfileCountOutputTypeCountScenariosArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: ScenarioWhereInput
   }
 
 
@@ -13790,6 +13892,7 @@ export namespace Prisma {
     savingsGoals?: boolean | Profile$savingsGoalsArgs<ExtArgs>
     bankConnections?: boolean | Profile$bankConnectionsArgs<ExtArgs>
     apiTokens?: boolean | Profile$apiTokensArgs<ExtArgs>
+    scenarios?: boolean | Profile$scenariosArgs<ExtArgs>
     _count?: boolean | ProfileCountOutputTypeDefaultArgs<ExtArgs>
   }, ExtArgs["result"]["profile"]>
 
@@ -13829,6 +13932,7 @@ export namespace Prisma {
     savingsGoals?: boolean | Profile$savingsGoalsArgs<ExtArgs>
     bankConnections?: boolean | Profile$bankConnectionsArgs<ExtArgs>
     apiTokens?: boolean | Profile$apiTokensArgs<ExtArgs>
+    scenarios?: boolean | Profile$scenariosArgs<ExtArgs>
     _count?: boolean | ProfileCountOutputTypeDefaultArgs<ExtArgs>
   }
   export type ProfileIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {}
@@ -13847,6 +13951,7 @@ export namespace Prisma {
       savingsGoals: Prisma.$SavingsGoalPayload<ExtArgs>[]
       bankConnections: Prisma.$BankConnectionPayload<ExtArgs>[]
       apiTokens: Prisma.$ApiTokenPayload<ExtArgs>[]
+      scenarios: Prisma.$ScenarioPayload<ExtArgs>[]
     }
     scalars: $Extensions.GetPayloadResult<{
       id: string
@@ -14258,6 +14363,7 @@ export namespace Prisma {
     savingsGoals<T extends Profile$savingsGoalsArgs<ExtArgs> = {}>(args?: Subset<T, Profile$savingsGoalsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$SavingsGoalPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     bankConnections<T extends Profile$bankConnectionsArgs<ExtArgs> = {}>(args?: Subset<T, Profile$bankConnectionsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$BankConnectionPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     apiTokens<T extends Profile$apiTokensArgs<ExtArgs> = {}>(args?: Subset<T, Profile$apiTokensArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$ApiTokenPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+    scenarios<T extends Profile$scenariosArgs<ExtArgs> = {}>(args?: Subset<T, Profile$scenariosArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$ScenarioPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     /**
      * Attaches callbacks for the resolution and/or rejection of the Promise.
      * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -14915,6 +15021,30 @@ export namespace Prisma {
     take?: number
     skip?: number
     distinct?: ApiTokenScalarFieldEnum | ApiTokenScalarFieldEnum[]
+  }
+
+  /**
+   * Profile.scenarios
+   */
+  export type Profile$scenariosArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Scenario
+     */
+    select?: ScenarioSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the Scenario
+     */
+    omit?: ScenarioOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: ScenarioInclude<ExtArgs> | null
+    where?: ScenarioWhereInput
+    orderBy?: ScenarioOrderByWithRelationInput | ScenarioOrderByWithRelationInput[]
+    cursor?: ScenarioWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: ScenarioScalarFieldEnum | ScenarioScalarFieldEnum[]
   }
 
   /**
@@ -16002,6 +16132,1088 @@ export namespace Prisma {
      * Choose, which related nodes to fetch as well
      */
     include?: ApiTokenInclude<ExtArgs> | null
+  }
+
+
+  /**
+   * Model Scenario
+   */
+
+  export type AggregateScenario = {
+    _count: ScenarioCountAggregateOutputType | null
+    _min: ScenarioMinAggregateOutputType | null
+    _max: ScenarioMaxAggregateOutputType | null
+  }
+
+  export type ScenarioMinAggregateOutputType = {
+    id: string | null
+    name: string | null
+    changesJson: string | null
+    basisJson: string | null
+    profileId: string | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type ScenarioMaxAggregateOutputType = {
+    id: string | null
+    name: string | null
+    changesJson: string | null
+    basisJson: string | null
+    profileId: string | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type ScenarioCountAggregateOutputType = {
+    id: number
+    name: number
+    changesJson: number
+    basisJson: number
+    profileId: number
+    createdAt: number
+    updatedAt: number
+    _all: number
+  }
+
+
+  export type ScenarioMinAggregateInputType = {
+    id?: true
+    name?: true
+    changesJson?: true
+    basisJson?: true
+    profileId?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type ScenarioMaxAggregateInputType = {
+    id?: true
+    name?: true
+    changesJson?: true
+    basisJson?: true
+    profileId?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type ScenarioCountAggregateInputType = {
+    id?: true
+    name?: true
+    changesJson?: true
+    basisJson?: true
+    profileId?: true
+    createdAt?: true
+    updatedAt?: true
+    _all?: true
+  }
+
+  export type ScenarioAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which Scenario to aggregate.
+     */
+    where?: ScenarioWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of Scenarios to fetch.
+     */
+    orderBy?: ScenarioOrderByWithRelationInput | ScenarioOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: ScenarioWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` Scenarios from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` Scenarios.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned Scenarios
+    **/
+    _count?: true | ScenarioCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: ScenarioMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: ScenarioMaxAggregateInputType
+  }
+
+  export type GetScenarioAggregateType<T extends ScenarioAggregateArgs> = {
+        [P in keyof T & keyof AggregateScenario]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateScenario[P]>
+      : GetScalarType<T[P], AggregateScenario[P]>
+  }
+
+
+
+
+  export type ScenarioGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: ScenarioWhereInput
+    orderBy?: ScenarioOrderByWithAggregationInput | ScenarioOrderByWithAggregationInput[]
+    by: ScenarioScalarFieldEnum[] | ScenarioScalarFieldEnum
+    having?: ScenarioScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: ScenarioCountAggregateInputType | true
+    _min?: ScenarioMinAggregateInputType
+    _max?: ScenarioMaxAggregateInputType
+  }
+
+  export type ScenarioGroupByOutputType = {
+    id: string
+    name: string
+    changesJson: string
+    basisJson: string
+    profileId: string
+    createdAt: Date
+    updatedAt: Date
+    _count: ScenarioCountAggregateOutputType | null
+    _min: ScenarioMinAggregateOutputType | null
+    _max: ScenarioMaxAggregateOutputType | null
+  }
+
+  type GetScenarioGroupByPayload<T extends ScenarioGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<ScenarioGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof ScenarioGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], ScenarioGroupByOutputType[P]>
+            : GetScalarType<T[P], ScenarioGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type ScenarioSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    name?: boolean
+    changesJson?: boolean
+    basisJson?: boolean
+    profileId?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+    profile?: boolean | ProfileDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["scenario"]>
+
+  export type ScenarioSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    name?: boolean
+    changesJson?: boolean
+    basisJson?: boolean
+    profileId?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+    profile?: boolean | ProfileDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["scenario"]>
+
+  export type ScenarioSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    name?: boolean
+    changesJson?: boolean
+    basisJson?: boolean
+    profileId?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+    profile?: boolean | ProfileDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["scenario"]>
+
+  export type ScenarioSelectScalar = {
+    id?: boolean
+    name?: boolean
+    changesJson?: boolean
+    basisJson?: boolean
+    profileId?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }
+
+  export type ScenarioOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "name" | "changesJson" | "basisJson" | "profileId" | "createdAt" | "updatedAt", ExtArgs["result"]["scenario"]>
+  export type ScenarioInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    profile?: boolean | ProfileDefaultArgs<ExtArgs>
+  }
+  export type ScenarioIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    profile?: boolean | ProfileDefaultArgs<ExtArgs>
+  }
+  export type ScenarioIncludeUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    profile?: boolean | ProfileDefaultArgs<ExtArgs>
+  }
+
+  export type $ScenarioPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "Scenario"
+    objects: {
+      profile: Prisma.$ProfilePayload<ExtArgs>
+    }
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      name: string
+      changesJson: string
+      basisJson: string
+      profileId: string
+      createdAt: Date
+      updatedAt: Date
+    }, ExtArgs["result"]["scenario"]>
+    composites: {}
+  }
+
+  type ScenarioGetPayload<S extends boolean | null | undefined | ScenarioDefaultArgs> = $Result.GetResult<Prisma.$ScenarioPayload, S>
+
+  type ScenarioCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<ScenarioFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: ScenarioCountAggregateInputType | true
+    }
+
+  export interface ScenarioDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['Scenario'], meta: { name: 'Scenario' } }
+    /**
+     * Find zero or one Scenario that matches the filter.
+     * @param {ScenarioFindUniqueArgs} args - Arguments to find a Scenario
+     * @example
+     * // Get one Scenario
+     * const scenario = await prisma.scenario.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends ScenarioFindUniqueArgs>(args: SelectSubset<T, ScenarioFindUniqueArgs<ExtArgs>>): Prisma__ScenarioClient<$Result.GetResult<Prisma.$ScenarioPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one Scenario that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {ScenarioFindUniqueOrThrowArgs} args - Arguments to find a Scenario
+     * @example
+     * // Get one Scenario
+     * const scenario = await prisma.scenario.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends ScenarioFindUniqueOrThrowArgs>(args: SelectSubset<T, ScenarioFindUniqueOrThrowArgs<ExtArgs>>): Prisma__ScenarioClient<$Result.GetResult<Prisma.$ScenarioPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first Scenario that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {ScenarioFindFirstArgs} args - Arguments to find a Scenario
+     * @example
+     * // Get one Scenario
+     * const scenario = await prisma.scenario.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends ScenarioFindFirstArgs>(args?: SelectSubset<T, ScenarioFindFirstArgs<ExtArgs>>): Prisma__ScenarioClient<$Result.GetResult<Prisma.$ScenarioPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first Scenario that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {ScenarioFindFirstOrThrowArgs} args - Arguments to find a Scenario
+     * @example
+     * // Get one Scenario
+     * const scenario = await prisma.scenario.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends ScenarioFindFirstOrThrowArgs>(args?: SelectSubset<T, ScenarioFindFirstOrThrowArgs<ExtArgs>>): Prisma__ScenarioClient<$Result.GetResult<Prisma.$ScenarioPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more Scenarios that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {ScenarioFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all Scenarios
+     * const scenarios = await prisma.scenario.findMany()
+     * 
+     * // Get first 10 Scenarios
+     * const scenarios = await prisma.scenario.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const scenarioWithIdOnly = await prisma.scenario.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends ScenarioFindManyArgs>(args?: SelectSubset<T, ScenarioFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$ScenarioPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a Scenario.
+     * @param {ScenarioCreateArgs} args - Arguments to create a Scenario.
+     * @example
+     * // Create one Scenario
+     * const Scenario = await prisma.scenario.create({
+     *   data: {
+     *     // ... data to create a Scenario
+     *   }
+     * })
+     * 
+     */
+    create<T extends ScenarioCreateArgs>(args: SelectSubset<T, ScenarioCreateArgs<ExtArgs>>): Prisma__ScenarioClient<$Result.GetResult<Prisma.$ScenarioPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many Scenarios.
+     * @param {ScenarioCreateManyArgs} args - Arguments to create many Scenarios.
+     * @example
+     * // Create many Scenarios
+     * const scenario = await prisma.scenario.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends ScenarioCreateManyArgs>(args?: SelectSubset<T, ScenarioCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many Scenarios and returns the data saved in the database.
+     * @param {ScenarioCreateManyAndReturnArgs} args - Arguments to create many Scenarios.
+     * @example
+     * // Create many Scenarios
+     * const scenario = await prisma.scenario.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many Scenarios and only return the `id`
+     * const scenarioWithIdOnly = await prisma.scenario.createManyAndReturn({
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends ScenarioCreateManyAndReturnArgs>(args?: SelectSubset<T, ScenarioCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$ScenarioPayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Delete a Scenario.
+     * @param {ScenarioDeleteArgs} args - Arguments to delete one Scenario.
+     * @example
+     * // Delete one Scenario
+     * const Scenario = await prisma.scenario.delete({
+     *   where: {
+     *     // ... filter to delete one Scenario
+     *   }
+     * })
+     * 
+     */
+    delete<T extends ScenarioDeleteArgs>(args: SelectSubset<T, ScenarioDeleteArgs<ExtArgs>>): Prisma__ScenarioClient<$Result.GetResult<Prisma.$ScenarioPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one Scenario.
+     * @param {ScenarioUpdateArgs} args - Arguments to update one Scenario.
+     * @example
+     * // Update one Scenario
+     * const scenario = await prisma.scenario.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends ScenarioUpdateArgs>(args: SelectSubset<T, ScenarioUpdateArgs<ExtArgs>>): Prisma__ScenarioClient<$Result.GetResult<Prisma.$ScenarioPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more Scenarios.
+     * @param {ScenarioDeleteManyArgs} args - Arguments to filter Scenarios to delete.
+     * @example
+     * // Delete a few Scenarios
+     * const { count } = await prisma.scenario.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends ScenarioDeleteManyArgs>(args?: SelectSubset<T, ScenarioDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more Scenarios.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {ScenarioUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many Scenarios
+     * const scenario = await prisma.scenario.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends ScenarioUpdateManyArgs>(args: SelectSubset<T, ScenarioUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more Scenarios and returns the data updated in the database.
+     * @param {ScenarioUpdateManyAndReturnArgs} args - Arguments to update many Scenarios.
+     * @example
+     * // Update many Scenarios
+     * const scenario = await prisma.scenario.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more Scenarios and only return the `id`
+     * const scenarioWithIdOnly = await prisma.scenario.updateManyAndReturn({
+     *   select: { id: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends ScenarioUpdateManyAndReturnArgs>(args: SelectSubset<T, ScenarioUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$ScenarioPayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Create or update one Scenario.
+     * @param {ScenarioUpsertArgs} args - Arguments to update or create a Scenario.
+     * @example
+     * // Update or create a Scenario
+     * const scenario = await prisma.scenario.upsert({
+     *   create: {
+     *     // ... data to create a Scenario
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the Scenario we want to update
+     *   }
+     * })
+     */
+    upsert<T extends ScenarioUpsertArgs>(args: SelectSubset<T, ScenarioUpsertArgs<ExtArgs>>): Prisma__ScenarioClient<$Result.GetResult<Prisma.$ScenarioPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of Scenarios.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {ScenarioCountArgs} args - Arguments to filter Scenarios to count.
+     * @example
+     * // Count the number of Scenarios
+     * const count = await prisma.scenario.count({
+     *   where: {
+     *     // ... the filter for the Scenarios we want to count
+     *   }
+     * })
+    **/
+    count<T extends ScenarioCountArgs>(
+      args?: Subset<T, ScenarioCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], ScenarioCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a Scenario.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {ScenarioAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends ScenarioAggregateArgs>(args: Subset<T, ScenarioAggregateArgs>): Prisma.PrismaPromise<GetScenarioAggregateType<T>>
+
+    /**
+     * Group by Scenario.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {ScenarioGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends ScenarioGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: ScenarioGroupByArgs['orderBy'] }
+        : { orderBy?: ScenarioGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, ScenarioGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetScenarioGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the Scenario model
+   */
+  readonly fields: ScenarioFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for Scenario.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__ScenarioClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    profile<T extends ProfileDefaultArgs<ExtArgs> = {}>(args?: Subset<T, ProfileDefaultArgs<ExtArgs>>): Prisma__ProfileClient<$Result.GetResult<Prisma.$ProfilePayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the Scenario model
+   */
+  interface ScenarioFieldRefs {
+    readonly id: FieldRef<"Scenario", 'String'>
+    readonly name: FieldRef<"Scenario", 'String'>
+    readonly changesJson: FieldRef<"Scenario", 'String'>
+    readonly basisJson: FieldRef<"Scenario", 'String'>
+    readonly profileId: FieldRef<"Scenario", 'String'>
+    readonly createdAt: FieldRef<"Scenario", 'DateTime'>
+    readonly updatedAt: FieldRef<"Scenario", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * Scenario findUnique
+   */
+  export type ScenarioFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Scenario
+     */
+    select?: ScenarioSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the Scenario
+     */
+    omit?: ScenarioOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: ScenarioInclude<ExtArgs> | null
+    /**
+     * Filter, which Scenario to fetch.
+     */
+    where: ScenarioWhereUniqueInput
+  }
+
+  /**
+   * Scenario findUniqueOrThrow
+   */
+  export type ScenarioFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Scenario
+     */
+    select?: ScenarioSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the Scenario
+     */
+    omit?: ScenarioOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: ScenarioInclude<ExtArgs> | null
+    /**
+     * Filter, which Scenario to fetch.
+     */
+    where: ScenarioWhereUniqueInput
+  }
+
+  /**
+   * Scenario findFirst
+   */
+  export type ScenarioFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Scenario
+     */
+    select?: ScenarioSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the Scenario
+     */
+    omit?: ScenarioOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: ScenarioInclude<ExtArgs> | null
+    /**
+     * Filter, which Scenario to fetch.
+     */
+    where?: ScenarioWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of Scenarios to fetch.
+     */
+    orderBy?: ScenarioOrderByWithRelationInput | ScenarioOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for Scenarios.
+     */
+    cursor?: ScenarioWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` Scenarios from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` Scenarios.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of Scenarios.
+     */
+    distinct?: ScenarioScalarFieldEnum | ScenarioScalarFieldEnum[]
+  }
+
+  /**
+   * Scenario findFirstOrThrow
+   */
+  export type ScenarioFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Scenario
+     */
+    select?: ScenarioSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the Scenario
+     */
+    omit?: ScenarioOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: ScenarioInclude<ExtArgs> | null
+    /**
+     * Filter, which Scenario to fetch.
+     */
+    where?: ScenarioWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of Scenarios to fetch.
+     */
+    orderBy?: ScenarioOrderByWithRelationInput | ScenarioOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for Scenarios.
+     */
+    cursor?: ScenarioWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` Scenarios from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` Scenarios.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of Scenarios.
+     */
+    distinct?: ScenarioScalarFieldEnum | ScenarioScalarFieldEnum[]
+  }
+
+  /**
+   * Scenario findMany
+   */
+  export type ScenarioFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Scenario
+     */
+    select?: ScenarioSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the Scenario
+     */
+    omit?: ScenarioOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: ScenarioInclude<ExtArgs> | null
+    /**
+     * Filter, which Scenarios to fetch.
+     */
+    where?: ScenarioWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of Scenarios to fetch.
+     */
+    orderBy?: ScenarioOrderByWithRelationInput | ScenarioOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing Scenarios.
+     */
+    cursor?: ScenarioWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` Scenarios from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` Scenarios.
+     */
+    skip?: number
+    distinct?: ScenarioScalarFieldEnum | ScenarioScalarFieldEnum[]
+  }
+
+  /**
+   * Scenario create
+   */
+  export type ScenarioCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Scenario
+     */
+    select?: ScenarioSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the Scenario
+     */
+    omit?: ScenarioOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: ScenarioInclude<ExtArgs> | null
+    /**
+     * The data needed to create a Scenario.
+     */
+    data: XOR<ScenarioCreateInput, ScenarioUncheckedCreateInput>
+  }
+
+  /**
+   * Scenario createMany
+   */
+  export type ScenarioCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many Scenarios.
+     */
+    data: ScenarioCreateManyInput | ScenarioCreateManyInput[]
+  }
+
+  /**
+   * Scenario createManyAndReturn
+   */
+  export type ScenarioCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Scenario
+     */
+    select?: ScenarioSelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the Scenario
+     */
+    omit?: ScenarioOmit<ExtArgs> | null
+    /**
+     * The data used to create many Scenarios.
+     */
+    data: ScenarioCreateManyInput | ScenarioCreateManyInput[]
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: ScenarioIncludeCreateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * Scenario update
+   */
+  export type ScenarioUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Scenario
+     */
+    select?: ScenarioSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the Scenario
+     */
+    omit?: ScenarioOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: ScenarioInclude<ExtArgs> | null
+    /**
+     * The data needed to update a Scenario.
+     */
+    data: XOR<ScenarioUpdateInput, ScenarioUncheckedUpdateInput>
+    /**
+     * Choose, which Scenario to update.
+     */
+    where: ScenarioWhereUniqueInput
+  }
+
+  /**
+   * Scenario updateMany
+   */
+  export type ScenarioUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update Scenarios.
+     */
+    data: XOR<ScenarioUpdateManyMutationInput, ScenarioUncheckedUpdateManyInput>
+    /**
+     * Filter which Scenarios to update
+     */
+    where?: ScenarioWhereInput
+    /**
+     * Limit how many Scenarios to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * Scenario updateManyAndReturn
+   */
+  export type ScenarioUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Scenario
+     */
+    select?: ScenarioSelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the Scenario
+     */
+    omit?: ScenarioOmit<ExtArgs> | null
+    /**
+     * The data used to update Scenarios.
+     */
+    data: XOR<ScenarioUpdateManyMutationInput, ScenarioUncheckedUpdateManyInput>
+    /**
+     * Filter which Scenarios to update
+     */
+    where?: ScenarioWhereInput
+    /**
+     * Limit how many Scenarios to update.
+     */
+    limit?: number
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: ScenarioIncludeUpdateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * Scenario upsert
+   */
+  export type ScenarioUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Scenario
+     */
+    select?: ScenarioSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the Scenario
+     */
+    omit?: ScenarioOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: ScenarioInclude<ExtArgs> | null
+    /**
+     * The filter to search for the Scenario to update in case it exists.
+     */
+    where: ScenarioWhereUniqueInput
+    /**
+     * In case the Scenario found by the `where` argument doesn't exist, create a new Scenario with this data.
+     */
+    create: XOR<ScenarioCreateInput, ScenarioUncheckedCreateInput>
+    /**
+     * In case the Scenario was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<ScenarioUpdateInput, ScenarioUncheckedUpdateInput>
+  }
+
+  /**
+   * Scenario delete
+   */
+  export type ScenarioDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Scenario
+     */
+    select?: ScenarioSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the Scenario
+     */
+    omit?: ScenarioOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: ScenarioInclude<ExtArgs> | null
+    /**
+     * Filter which Scenario to delete.
+     */
+    where: ScenarioWhereUniqueInput
+  }
+
+  /**
+   * Scenario deleteMany
+   */
+  export type ScenarioDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which Scenarios to delete
+     */
+    where?: ScenarioWhereInput
+    /**
+     * Limit how many Scenarios to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * Scenario without action
+   */
+  export type ScenarioDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Scenario
+     */
+    select?: ScenarioSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the Scenario
+     */
+    omit?: ScenarioOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: ScenarioInclude<ExtArgs> | null
   }
 
 
@@ -20702,6 +21914,19 @@ export namespace Prisma {
   export type ApiTokenScalarFieldEnum = (typeof ApiTokenScalarFieldEnum)[keyof typeof ApiTokenScalarFieldEnum]
 
 
+  export const ScenarioScalarFieldEnum: {
+    id: 'id',
+    name: 'name',
+    changesJson: 'changesJson',
+    basisJson: 'basisJson',
+    profileId: 'profileId',
+    createdAt: 'createdAt',
+    updatedAt: 'updatedAt'
+  };
+
+  export type ScenarioScalarFieldEnum = (typeof ScenarioScalarFieldEnum)[keyof typeof ScenarioScalarFieldEnum]
+
+
   export const BankConnectionScalarFieldEnum: {
     id: 'id',
     provider: 'provider',
@@ -21696,6 +22921,7 @@ export namespace Prisma {
     savingsGoals?: SavingsGoalListRelationFilter
     bankConnections?: BankConnectionListRelationFilter
     apiTokens?: ApiTokenListRelationFilter
+    scenarios?: ScenarioListRelationFilter
   }
 
   export type ProfileOrderByWithRelationInput = {
@@ -21714,6 +22940,7 @@ export namespace Prisma {
     savingsGoals?: SavingsGoalOrderByRelationAggregateInput
     bankConnections?: BankConnectionOrderByRelationAggregateInput
     apiTokens?: ApiTokenOrderByRelationAggregateInput
+    scenarios?: ScenarioOrderByRelationAggregateInput
   }
 
   export type ProfileWhereUniqueInput = Prisma.AtLeast<{
@@ -21735,6 +22962,7 @@ export namespace Prisma {
     savingsGoals?: SavingsGoalListRelationFilter
     bankConnections?: BankConnectionListRelationFilter
     apiTokens?: ApiTokenListRelationFilter
+    scenarios?: ScenarioListRelationFilter
   }, "id" | "name">
 
   export type ProfileOrderByWithAggregationInput = {
@@ -21817,6 +23045,71 @@ export namespace Prisma {
     tokenHash?: StringWithAggregatesFilter<"ApiToken"> | string
     createdAt?: DateTimeWithAggregatesFilter<"ApiToken"> | Date | string
     lastUsedAt?: DateTimeNullableWithAggregatesFilter<"ApiToken"> | Date | string | null
+  }
+
+  export type ScenarioWhereInput = {
+    AND?: ScenarioWhereInput | ScenarioWhereInput[]
+    OR?: ScenarioWhereInput[]
+    NOT?: ScenarioWhereInput | ScenarioWhereInput[]
+    id?: StringFilter<"Scenario"> | string
+    name?: StringFilter<"Scenario"> | string
+    changesJson?: StringFilter<"Scenario"> | string
+    basisJson?: StringFilter<"Scenario"> | string
+    profileId?: StringFilter<"Scenario"> | string
+    createdAt?: DateTimeFilter<"Scenario"> | Date | string
+    updatedAt?: DateTimeFilter<"Scenario"> | Date | string
+    profile?: XOR<ProfileScalarRelationFilter, ProfileWhereInput>
+  }
+
+  export type ScenarioOrderByWithRelationInput = {
+    id?: SortOrder
+    name?: SortOrder
+    changesJson?: SortOrder
+    basisJson?: SortOrder
+    profileId?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    profile?: ProfileOrderByWithRelationInput
+  }
+
+  export type ScenarioWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    AND?: ScenarioWhereInput | ScenarioWhereInput[]
+    OR?: ScenarioWhereInput[]
+    NOT?: ScenarioWhereInput | ScenarioWhereInput[]
+    name?: StringFilter<"Scenario"> | string
+    changesJson?: StringFilter<"Scenario"> | string
+    basisJson?: StringFilter<"Scenario"> | string
+    profileId?: StringFilter<"Scenario"> | string
+    createdAt?: DateTimeFilter<"Scenario"> | Date | string
+    updatedAt?: DateTimeFilter<"Scenario"> | Date | string
+    profile?: XOR<ProfileScalarRelationFilter, ProfileWhereInput>
+  }, "id">
+
+  export type ScenarioOrderByWithAggregationInput = {
+    id?: SortOrder
+    name?: SortOrder
+    changesJson?: SortOrder
+    basisJson?: SortOrder
+    profileId?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    _count?: ScenarioCountOrderByAggregateInput
+    _max?: ScenarioMaxOrderByAggregateInput
+    _min?: ScenarioMinOrderByAggregateInput
+  }
+
+  export type ScenarioScalarWhereWithAggregatesInput = {
+    AND?: ScenarioScalarWhereWithAggregatesInput | ScenarioScalarWhereWithAggregatesInput[]
+    OR?: ScenarioScalarWhereWithAggregatesInput[]
+    NOT?: ScenarioScalarWhereWithAggregatesInput | ScenarioScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"Scenario"> | string
+    name?: StringWithAggregatesFilter<"Scenario"> | string
+    changesJson?: StringWithAggregatesFilter<"Scenario"> | string
+    basisJson?: StringWithAggregatesFilter<"Scenario"> | string
+    profileId?: StringWithAggregatesFilter<"Scenario"> | string
+    createdAt?: DateTimeWithAggregatesFilter<"Scenario"> | Date | string
+    updatedAt?: DateTimeWithAggregatesFilter<"Scenario"> | Date | string
   }
 
   export type BankConnectionWhereInput = {
@@ -23000,6 +24293,7 @@ export namespace Prisma {
     savingsGoals?: SavingsGoalCreateNestedManyWithoutProfileInput
     bankConnections?: BankConnectionCreateNestedManyWithoutProfileInput
     apiTokens?: ApiTokenCreateNestedManyWithoutProfileInput
+    scenarios?: ScenarioCreateNestedManyWithoutProfileInput
   }
 
   export type ProfileUncheckedCreateInput = {
@@ -23018,6 +24312,7 @@ export namespace Prisma {
     savingsGoals?: SavingsGoalUncheckedCreateNestedManyWithoutProfileInput
     bankConnections?: BankConnectionUncheckedCreateNestedManyWithoutProfileInput
     apiTokens?: ApiTokenUncheckedCreateNestedManyWithoutProfileInput
+    scenarios?: ScenarioUncheckedCreateNestedManyWithoutProfileInput
   }
 
   export type ProfileUpdateInput = {
@@ -23036,6 +24331,7 @@ export namespace Prisma {
     savingsGoals?: SavingsGoalUpdateManyWithoutProfileNestedInput
     bankConnections?: BankConnectionUpdateManyWithoutProfileNestedInput
     apiTokens?: ApiTokenUpdateManyWithoutProfileNestedInput
+    scenarios?: ScenarioUpdateManyWithoutProfileNestedInput
   }
 
   export type ProfileUncheckedUpdateInput = {
@@ -23054,6 +24350,7 @@ export namespace Prisma {
     savingsGoals?: SavingsGoalUncheckedUpdateManyWithoutProfileNestedInput
     bankConnections?: BankConnectionUncheckedUpdateManyWithoutProfileNestedInput
     apiTokens?: ApiTokenUncheckedUpdateManyWithoutProfileNestedInput
+    scenarios?: ScenarioUncheckedUpdateManyWithoutProfileNestedInput
   }
 
   export type ProfileCreateManyInput = {
@@ -23140,6 +24437,75 @@ export namespace Prisma {
     tokenHash?: StringFieldUpdateOperationsInput | string
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     lastUsedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  }
+
+  export type ScenarioCreateInput = {
+    id?: string
+    name: string
+    changesJson?: string
+    basisJson?: string
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    profile: ProfileCreateNestedOneWithoutScenariosInput
+  }
+
+  export type ScenarioUncheckedCreateInput = {
+    id?: string
+    name: string
+    changesJson?: string
+    basisJson?: string
+    profileId: string
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type ScenarioUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    changesJson?: StringFieldUpdateOperationsInput | string
+    basisJson?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    profile?: ProfileUpdateOneRequiredWithoutScenariosNestedInput
+  }
+
+  export type ScenarioUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    changesJson?: StringFieldUpdateOperationsInput | string
+    basisJson?: StringFieldUpdateOperationsInput | string
+    profileId?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type ScenarioCreateManyInput = {
+    id?: string
+    name: string
+    changesJson?: string
+    basisJson?: string
+    profileId: string
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type ScenarioUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    changesJson?: StringFieldUpdateOperationsInput | string
+    basisJson?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type ScenarioUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    changesJson?: StringFieldUpdateOperationsInput | string
+    basisJson?: StringFieldUpdateOperationsInput | string
+    profileId?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
   export type BankConnectionCreateInput = {
@@ -24330,6 +25696,12 @@ export namespace Prisma {
     none?: ApiTokenWhereInput
   }
 
+  export type ScenarioListRelationFilter = {
+    every?: ScenarioWhereInput
+    some?: ScenarioWhereInput
+    none?: ScenarioWhereInput
+  }
+
   export type SessionOrderByRelationAggregateInput = {
     _count?: SortOrder
   }
@@ -24347,6 +25719,10 @@ export namespace Prisma {
   }
 
   export type ApiTokenOrderByRelationAggregateInput = {
+    _count?: SortOrder
+  }
+
+  export type ScenarioOrderByRelationAggregateInput = {
     _count?: SortOrder
   }
 
@@ -24399,6 +25775,36 @@ export namespace Prisma {
     tokenHash?: SortOrder
     createdAt?: SortOrder
     lastUsedAt?: SortOrder
+  }
+
+  export type ScenarioCountOrderByAggregateInput = {
+    id?: SortOrder
+    name?: SortOrder
+    changesJson?: SortOrder
+    basisJson?: SortOrder
+    profileId?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type ScenarioMaxOrderByAggregateInput = {
+    id?: SortOrder
+    name?: SortOrder
+    changesJson?: SortOrder
+    basisJson?: SortOrder
+    profileId?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type ScenarioMinOrderByAggregateInput = {
+    id?: SortOrder
+    name?: SortOrder
+    changesJson?: SortOrder
+    basisJson?: SortOrder
+    profileId?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
   }
 
   export type BankConnectionCountOrderByAggregateInput = {
@@ -25589,6 +26995,13 @@ export namespace Prisma {
     connect?: ApiTokenWhereUniqueInput | ApiTokenWhereUniqueInput[]
   }
 
+  export type ScenarioCreateNestedManyWithoutProfileInput = {
+    create?: XOR<ScenarioCreateWithoutProfileInput, ScenarioUncheckedCreateWithoutProfileInput> | ScenarioCreateWithoutProfileInput[] | ScenarioUncheckedCreateWithoutProfileInput[]
+    connectOrCreate?: ScenarioCreateOrConnectWithoutProfileInput | ScenarioCreateOrConnectWithoutProfileInput[]
+    createMany?: ScenarioCreateManyProfileInputEnvelope
+    connect?: ScenarioWhereUniqueInput | ScenarioWhereUniqueInput[]
+  }
+
   export type SessionUncheckedCreateNestedManyWithoutProfileInput = {
     create?: XOR<SessionCreateWithoutProfileInput, SessionUncheckedCreateWithoutProfileInput> | SessionCreateWithoutProfileInput[] | SessionUncheckedCreateWithoutProfileInput[]
     connectOrCreate?: SessionCreateOrConnectWithoutProfileInput | SessionCreateOrConnectWithoutProfileInput[]
@@ -25657,6 +27070,13 @@ export namespace Prisma {
     connectOrCreate?: ApiTokenCreateOrConnectWithoutProfileInput | ApiTokenCreateOrConnectWithoutProfileInput[]
     createMany?: ApiTokenCreateManyProfileInputEnvelope
     connect?: ApiTokenWhereUniqueInput | ApiTokenWhereUniqueInput[]
+  }
+
+  export type ScenarioUncheckedCreateNestedManyWithoutProfileInput = {
+    create?: XOR<ScenarioCreateWithoutProfileInput, ScenarioUncheckedCreateWithoutProfileInput> | ScenarioCreateWithoutProfileInput[] | ScenarioUncheckedCreateWithoutProfileInput[]
+    connectOrCreate?: ScenarioCreateOrConnectWithoutProfileInput | ScenarioCreateOrConnectWithoutProfileInput[]
+    createMany?: ScenarioCreateManyProfileInputEnvelope
+    connect?: ScenarioWhereUniqueInput | ScenarioWhereUniqueInput[]
   }
 
   export type SessionUpdateManyWithoutProfileNestedInput = {
@@ -25799,6 +27219,20 @@ export namespace Prisma {
     deleteMany?: ApiTokenScalarWhereInput | ApiTokenScalarWhereInput[]
   }
 
+  export type ScenarioUpdateManyWithoutProfileNestedInput = {
+    create?: XOR<ScenarioCreateWithoutProfileInput, ScenarioUncheckedCreateWithoutProfileInput> | ScenarioCreateWithoutProfileInput[] | ScenarioUncheckedCreateWithoutProfileInput[]
+    connectOrCreate?: ScenarioCreateOrConnectWithoutProfileInput | ScenarioCreateOrConnectWithoutProfileInput[]
+    upsert?: ScenarioUpsertWithWhereUniqueWithoutProfileInput | ScenarioUpsertWithWhereUniqueWithoutProfileInput[]
+    createMany?: ScenarioCreateManyProfileInputEnvelope
+    set?: ScenarioWhereUniqueInput | ScenarioWhereUniqueInput[]
+    disconnect?: ScenarioWhereUniqueInput | ScenarioWhereUniqueInput[]
+    delete?: ScenarioWhereUniqueInput | ScenarioWhereUniqueInput[]
+    connect?: ScenarioWhereUniqueInput | ScenarioWhereUniqueInput[]
+    update?: ScenarioUpdateWithWhereUniqueWithoutProfileInput | ScenarioUpdateWithWhereUniqueWithoutProfileInput[]
+    updateMany?: ScenarioUpdateManyWithWhereWithoutProfileInput | ScenarioUpdateManyWithWhereWithoutProfileInput[]
+    deleteMany?: ScenarioScalarWhereInput | ScenarioScalarWhereInput[]
+  }
+
   export type SessionUncheckedUpdateManyWithoutProfileNestedInput = {
     create?: XOR<SessionCreateWithoutProfileInput, SessionUncheckedCreateWithoutProfileInput> | SessionCreateWithoutProfileInput[] | SessionUncheckedCreateWithoutProfileInput[]
     connectOrCreate?: SessionCreateOrConnectWithoutProfileInput | SessionCreateOrConnectWithoutProfileInput[]
@@ -25939,6 +27373,20 @@ export namespace Prisma {
     deleteMany?: ApiTokenScalarWhereInput | ApiTokenScalarWhereInput[]
   }
 
+  export type ScenarioUncheckedUpdateManyWithoutProfileNestedInput = {
+    create?: XOR<ScenarioCreateWithoutProfileInput, ScenarioUncheckedCreateWithoutProfileInput> | ScenarioCreateWithoutProfileInput[] | ScenarioUncheckedCreateWithoutProfileInput[]
+    connectOrCreate?: ScenarioCreateOrConnectWithoutProfileInput | ScenarioCreateOrConnectWithoutProfileInput[]
+    upsert?: ScenarioUpsertWithWhereUniqueWithoutProfileInput | ScenarioUpsertWithWhereUniqueWithoutProfileInput[]
+    createMany?: ScenarioCreateManyProfileInputEnvelope
+    set?: ScenarioWhereUniqueInput | ScenarioWhereUniqueInput[]
+    disconnect?: ScenarioWhereUniqueInput | ScenarioWhereUniqueInput[]
+    delete?: ScenarioWhereUniqueInput | ScenarioWhereUniqueInput[]
+    connect?: ScenarioWhereUniqueInput | ScenarioWhereUniqueInput[]
+    update?: ScenarioUpdateWithWhereUniqueWithoutProfileInput | ScenarioUpdateWithWhereUniqueWithoutProfileInput[]
+    updateMany?: ScenarioUpdateManyWithWhereWithoutProfileInput | ScenarioUpdateManyWithWhereWithoutProfileInput[]
+    deleteMany?: ScenarioScalarWhereInput | ScenarioScalarWhereInput[]
+  }
+
   export type ProfileCreateNestedOneWithoutApiTokensInput = {
     create?: XOR<ProfileCreateWithoutApiTokensInput, ProfileUncheckedCreateWithoutApiTokensInput>
     connectOrCreate?: ProfileCreateOrConnectWithoutApiTokensInput
@@ -25951,6 +27399,20 @@ export namespace Prisma {
     upsert?: ProfileUpsertWithoutApiTokensInput
     connect?: ProfileWhereUniqueInput
     update?: XOR<XOR<ProfileUpdateToOneWithWhereWithoutApiTokensInput, ProfileUpdateWithoutApiTokensInput>, ProfileUncheckedUpdateWithoutApiTokensInput>
+  }
+
+  export type ProfileCreateNestedOneWithoutScenariosInput = {
+    create?: XOR<ProfileCreateWithoutScenariosInput, ProfileUncheckedCreateWithoutScenariosInput>
+    connectOrCreate?: ProfileCreateOrConnectWithoutScenariosInput
+    connect?: ProfileWhereUniqueInput
+  }
+
+  export type ProfileUpdateOneRequiredWithoutScenariosNestedInput = {
+    create?: XOR<ProfileCreateWithoutScenariosInput, ProfileUncheckedCreateWithoutScenariosInput>
+    connectOrCreate?: ProfileCreateOrConnectWithoutScenariosInput
+    upsert?: ProfileUpsertWithoutScenariosInput
+    connect?: ProfileWhereUniqueInput
+    update?: XOR<XOR<ProfileUpdateToOneWithWhereWithoutScenariosInput, ProfileUpdateWithoutScenariosInput>, ProfileUncheckedUpdateWithoutScenariosInput>
   }
 
   export type ProfileCreateNestedOneWithoutBankConnectionsInput = {
@@ -26479,6 +27941,7 @@ export namespace Prisma {
     savingsGoals?: SavingsGoalCreateNestedManyWithoutProfileInput
     bankConnections?: BankConnectionCreateNestedManyWithoutProfileInput
     apiTokens?: ApiTokenCreateNestedManyWithoutProfileInput
+    scenarios?: ScenarioCreateNestedManyWithoutProfileInput
   }
 
   export type ProfileUncheckedCreateWithoutCategoriesInput = {
@@ -26496,6 +27959,7 @@ export namespace Prisma {
     savingsGoals?: SavingsGoalUncheckedCreateNestedManyWithoutProfileInput
     bankConnections?: BankConnectionUncheckedCreateNestedManyWithoutProfileInput
     apiTokens?: ApiTokenUncheckedCreateNestedManyWithoutProfileInput
+    scenarios?: ScenarioUncheckedCreateNestedManyWithoutProfileInput
   }
 
   export type ProfileCreateOrConnectWithoutCategoriesInput = {
@@ -26805,6 +28269,7 @@ export namespace Prisma {
     savingsGoals?: SavingsGoalUpdateManyWithoutProfileNestedInput
     bankConnections?: BankConnectionUpdateManyWithoutProfileNestedInput
     apiTokens?: ApiTokenUpdateManyWithoutProfileNestedInput
+    scenarios?: ScenarioUpdateManyWithoutProfileNestedInput
   }
 
   export type ProfileUncheckedUpdateWithoutCategoriesInput = {
@@ -26822,6 +28287,7 @@ export namespace Prisma {
     savingsGoals?: SavingsGoalUncheckedUpdateManyWithoutProfileNestedInput
     bankConnections?: BankConnectionUncheckedUpdateManyWithoutProfileNestedInput
     apiTokens?: ApiTokenUncheckedUpdateManyWithoutProfileNestedInput
+    scenarios?: ScenarioUncheckedUpdateManyWithoutProfileNestedInput
   }
 
   export type TransactionUpsertWithWhereUniqueWithoutCategoryInput = {
@@ -27013,6 +28479,7 @@ export namespace Prisma {
     savingsGoals?: SavingsGoalCreateNestedManyWithoutProfileInput
     bankConnections?: BankConnectionCreateNestedManyWithoutProfileInput
     apiTokens?: ApiTokenCreateNestedManyWithoutProfileInput
+    scenarios?: ScenarioCreateNestedManyWithoutProfileInput
   }
 
   export type ProfileUncheckedCreateWithoutAccountsInput = {
@@ -27030,6 +28497,7 @@ export namespace Prisma {
     savingsGoals?: SavingsGoalUncheckedCreateNestedManyWithoutProfileInput
     bankConnections?: BankConnectionUncheckedCreateNestedManyWithoutProfileInput
     apiTokens?: ApiTokenUncheckedCreateNestedManyWithoutProfileInput
+    scenarios?: ScenarioUncheckedCreateNestedManyWithoutProfileInput
   }
 
   export type ProfileCreateOrConnectWithoutAccountsInput = {
@@ -27250,6 +28718,7 @@ export namespace Prisma {
     savingsGoals?: SavingsGoalUpdateManyWithoutProfileNestedInput
     bankConnections?: BankConnectionUpdateManyWithoutProfileNestedInput
     apiTokens?: ApiTokenUpdateManyWithoutProfileNestedInput
+    scenarios?: ScenarioUpdateManyWithoutProfileNestedInput
   }
 
   export type ProfileUncheckedUpdateWithoutAccountsInput = {
@@ -27267,6 +28736,7 @@ export namespace Prisma {
     savingsGoals?: SavingsGoalUncheckedUpdateManyWithoutProfileNestedInput
     bankConnections?: BankConnectionUncheckedUpdateManyWithoutProfileNestedInput
     apiTokens?: ApiTokenUncheckedUpdateManyWithoutProfileNestedInput
+    scenarios?: ScenarioUncheckedUpdateManyWithoutProfileNestedInput
   }
 
   export type BankConnectionUpsertWithoutAccountsInput = {
@@ -27412,6 +28882,7 @@ export namespace Prisma {
     savingsGoals?: SavingsGoalCreateNestedManyWithoutProfileInput
     bankConnections?: BankConnectionCreateNestedManyWithoutProfileInput
     apiTokens?: ApiTokenCreateNestedManyWithoutProfileInput
+    scenarios?: ScenarioCreateNestedManyWithoutProfileInput
   }
 
   export type ProfileUncheckedCreateWithoutCostObjectsInput = {
@@ -27429,6 +28900,7 @@ export namespace Prisma {
     savingsGoals?: SavingsGoalUncheckedCreateNestedManyWithoutProfileInput
     bankConnections?: BankConnectionUncheckedCreateNestedManyWithoutProfileInput
     apiTokens?: ApiTokenUncheckedCreateNestedManyWithoutProfileInput
+    scenarios?: ScenarioUncheckedCreateNestedManyWithoutProfileInput
   }
 
   export type ProfileCreateOrConnectWithoutCostObjectsInput = {
@@ -27542,6 +29014,7 @@ export namespace Prisma {
     savingsGoals?: SavingsGoalUpdateManyWithoutProfileNestedInput
     bankConnections?: BankConnectionUpdateManyWithoutProfileNestedInput
     apiTokens?: ApiTokenUpdateManyWithoutProfileNestedInput
+    scenarios?: ScenarioUpdateManyWithoutProfileNestedInput
   }
 
   export type ProfileUncheckedUpdateWithoutCostObjectsInput = {
@@ -27559,6 +29032,7 @@ export namespace Prisma {
     savingsGoals?: SavingsGoalUncheckedUpdateManyWithoutProfileNestedInput
     bankConnections?: BankConnectionUncheckedUpdateManyWithoutProfileNestedInput
     apiTokens?: ApiTokenUncheckedUpdateManyWithoutProfileNestedInput
+    scenarios?: ScenarioUncheckedUpdateManyWithoutProfileNestedInput
   }
 
   export type TransactionUpsertWithWhereUniqueWithoutCostObjectInput = {
@@ -27713,6 +29187,7 @@ export namespace Prisma {
     savingsGoals?: SavingsGoalCreateNestedManyWithoutProfileInput
     bankConnections?: BankConnectionCreateNestedManyWithoutProfileInput
     apiTokens?: ApiTokenCreateNestedManyWithoutProfileInput
+    scenarios?: ScenarioCreateNestedManyWithoutProfileInput
   }
 
   export type ProfileUncheckedCreateWithoutTransactionsInput = {
@@ -27730,6 +29205,7 @@ export namespace Prisma {
     savingsGoals?: SavingsGoalUncheckedCreateNestedManyWithoutProfileInput
     bankConnections?: BankConnectionUncheckedCreateNestedManyWithoutProfileInput
     apiTokens?: ApiTokenUncheckedCreateNestedManyWithoutProfileInput
+    scenarios?: ScenarioUncheckedCreateNestedManyWithoutProfileInput
   }
 
   export type ProfileCreateOrConnectWithoutTransactionsInput = {
@@ -27989,6 +29465,7 @@ export namespace Prisma {
     savingsGoals?: SavingsGoalUpdateManyWithoutProfileNestedInput
     bankConnections?: BankConnectionUpdateManyWithoutProfileNestedInput
     apiTokens?: ApiTokenUpdateManyWithoutProfileNestedInput
+    scenarios?: ScenarioUpdateManyWithoutProfileNestedInput
   }
 
   export type ProfileUncheckedUpdateWithoutTransactionsInput = {
@@ -28006,6 +29483,7 @@ export namespace Prisma {
     savingsGoals?: SavingsGoalUncheckedUpdateManyWithoutProfileNestedInput
     bankConnections?: BankConnectionUncheckedUpdateManyWithoutProfileNestedInput
     apiTokens?: ApiTokenUncheckedUpdateManyWithoutProfileNestedInput
+    scenarios?: ScenarioUncheckedUpdateManyWithoutProfileNestedInput
   }
 
   export type CategorizationRuleUpsertWithoutSuggestedTransactionsInput = {
@@ -28166,6 +29644,7 @@ export namespace Prisma {
     savingsGoals?: SavingsGoalCreateNestedManyWithoutProfileInput
     bankConnections?: BankConnectionCreateNestedManyWithoutProfileInput
     apiTokens?: ApiTokenCreateNestedManyWithoutProfileInput
+    scenarios?: ScenarioCreateNestedManyWithoutProfileInput
   }
 
   export type ProfileUncheckedCreateWithoutCategorizationRulesInput = {
@@ -28183,6 +29662,7 @@ export namespace Prisma {
     savingsGoals?: SavingsGoalUncheckedCreateNestedManyWithoutProfileInput
     bankConnections?: BankConnectionUncheckedCreateNestedManyWithoutProfileInput
     apiTokens?: ApiTokenUncheckedCreateNestedManyWithoutProfileInput
+    scenarios?: ScenarioUncheckedCreateNestedManyWithoutProfileInput
   }
 
   export type ProfileCreateOrConnectWithoutCategorizationRulesInput = {
@@ -28314,6 +29794,7 @@ export namespace Prisma {
     savingsGoals?: SavingsGoalUpdateManyWithoutProfileNestedInput
     bankConnections?: BankConnectionUpdateManyWithoutProfileNestedInput
     apiTokens?: ApiTokenUpdateManyWithoutProfileNestedInput
+    scenarios?: ScenarioUpdateManyWithoutProfileNestedInput
   }
 
   export type ProfileUncheckedUpdateWithoutCategorizationRulesInput = {
@@ -28331,6 +29812,7 @@ export namespace Prisma {
     savingsGoals?: SavingsGoalUncheckedUpdateManyWithoutProfileNestedInput
     bankConnections?: BankConnectionUncheckedUpdateManyWithoutProfileNestedInput
     apiTokens?: ApiTokenUncheckedUpdateManyWithoutProfileNestedInput
+    scenarios?: ScenarioUncheckedUpdateManyWithoutProfileNestedInput
   }
 
   export type TransactionUpsertWithWhereUniqueWithoutSuggestedRuleInput = {
@@ -28405,6 +29887,7 @@ export namespace Prisma {
     savingsGoals?: SavingsGoalCreateNestedManyWithoutProfileInput
     bankConnections?: BankConnectionCreateNestedManyWithoutProfileInput
     apiTokens?: ApiTokenCreateNestedManyWithoutProfileInput
+    scenarios?: ScenarioCreateNestedManyWithoutProfileInput
   }
 
   export type ProfileUncheckedCreateWithoutRuleSuggestionsInput = {
@@ -28422,6 +29905,7 @@ export namespace Prisma {
     savingsGoals?: SavingsGoalUncheckedCreateNestedManyWithoutProfileInput
     bankConnections?: BankConnectionUncheckedCreateNestedManyWithoutProfileInput
     apiTokens?: ApiTokenUncheckedCreateNestedManyWithoutProfileInput
+    scenarios?: ScenarioUncheckedCreateNestedManyWithoutProfileInput
   }
 
   export type ProfileCreateOrConnectWithoutRuleSuggestionsInput = {
@@ -28502,6 +29986,7 @@ export namespace Prisma {
     savingsGoals?: SavingsGoalUpdateManyWithoutProfileNestedInput
     bankConnections?: BankConnectionUpdateManyWithoutProfileNestedInput
     apiTokens?: ApiTokenUpdateManyWithoutProfileNestedInput
+    scenarios?: ScenarioUpdateManyWithoutProfileNestedInput
   }
 
   export type ProfileUncheckedUpdateWithoutRuleSuggestionsInput = {
@@ -28519,6 +30004,7 @@ export namespace Prisma {
     savingsGoals?: SavingsGoalUncheckedUpdateManyWithoutProfileNestedInput
     bankConnections?: BankConnectionUncheckedUpdateManyWithoutProfileNestedInput
     apiTokens?: ApiTokenUncheckedUpdateManyWithoutProfileNestedInput
+    scenarios?: ScenarioUncheckedUpdateManyWithoutProfileNestedInput
   }
 
   export type TransactionCreateWithoutSplitsInput = {
@@ -28825,6 +30311,7 @@ export namespace Prisma {
     ruleSuggestions?: RuleSuggestionCreateNestedManyWithoutProfileInput
     bankConnections?: BankConnectionCreateNestedManyWithoutProfileInput
     apiTokens?: ApiTokenCreateNestedManyWithoutProfileInput
+    scenarios?: ScenarioCreateNestedManyWithoutProfileInput
   }
 
   export type ProfileUncheckedCreateWithoutSavingsGoalsInput = {
@@ -28842,6 +30329,7 @@ export namespace Prisma {
     ruleSuggestions?: RuleSuggestionUncheckedCreateNestedManyWithoutProfileInput
     bankConnections?: BankConnectionUncheckedCreateNestedManyWithoutProfileInput
     apiTokens?: ApiTokenUncheckedCreateNestedManyWithoutProfileInput
+    scenarios?: ScenarioUncheckedCreateNestedManyWithoutProfileInput
   }
 
   export type ProfileCreateOrConnectWithoutSavingsGoalsInput = {
@@ -28922,6 +30410,7 @@ export namespace Prisma {
     ruleSuggestions?: RuleSuggestionUpdateManyWithoutProfileNestedInput
     bankConnections?: BankConnectionUpdateManyWithoutProfileNestedInput
     apiTokens?: ApiTokenUpdateManyWithoutProfileNestedInput
+    scenarios?: ScenarioUpdateManyWithoutProfileNestedInput
   }
 
   export type ProfileUncheckedUpdateWithoutSavingsGoalsInput = {
@@ -28939,6 +30428,7 @@ export namespace Prisma {
     ruleSuggestions?: RuleSuggestionUncheckedUpdateManyWithoutProfileNestedInput
     bankConnections?: BankConnectionUncheckedUpdateManyWithoutProfileNestedInput
     apiTokens?: ApiTokenUncheckedUpdateManyWithoutProfileNestedInput
+    scenarios?: ScenarioUncheckedUpdateManyWithoutProfileNestedInput
   }
 
   export type SessionCreateWithoutProfileInput = {
@@ -29317,6 +30807,33 @@ export namespace Prisma {
     data: ApiTokenCreateManyProfileInput | ApiTokenCreateManyProfileInput[]
   }
 
+  export type ScenarioCreateWithoutProfileInput = {
+    id?: string
+    name: string
+    changesJson?: string
+    basisJson?: string
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type ScenarioUncheckedCreateWithoutProfileInput = {
+    id?: string
+    name: string
+    changesJson?: string
+    basisJson?: string
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type ScenarioCreateOrConnectWithoutProfileInput = {
+    where: ScenarioWhereUniqueInput
+    create: XOR<ScenarioCreateWithoutProfileInput, ScenarioUncheckedCreateWithoutProfileInput>
+  }
+
+  export type ScenarioCreateManyProfileInputEnvelope = {
+    data: ScenarioCreateManyProfileInput | ScenarioCreateManyProfileInput[]
+  }
+
   export type SessionUpsertWithWhereUniqueWithoutProfileInput = {
     where: SessionWhereUniqueInput
     update: XOR<SessionUpdateWithoutProfileInput, SessionUncheckedUpdateWithoutProfileInput>
@@ -29549,6 +31066,35 @@ export namespace Prisma {
     lastUsedAt?: DateTimeNullableFilter<"ApiToken"> | Date | string | null
   }
 
+  export type ScenarioUpsertWithWhereUniqueWithoutProfileInput = {
+    where: ScenarioWhereUniqueInput
+    update: XOR<ScenarioUpdateWithoutProfileInput, ScenarioUncheckedUpdateWithoutProfileInput>
+    create: XOR<ScenarioCreateWithoutProfileInput, ScenarioUncheckedCreateWithoutProfileInput>
+  }
+
+  export type ScenarioUpdateWithWhereUniqueWithoutProfileInput = {
+    where: ScenarioWhereUniqueInput
+    data: XOR<ScenarioUpdateWithoutProfileInput, ScenarioUncheckedUpdateWithoutProfileInput>
+  }
+
+  export type ScenarioUpdateManyWithWhereWithoutProfileInput = {
+    where: ScenarioScalarWhereInput
+    data: XOR<ScenarioUpdateManyMutationInput, ScenarioUncheckedUpdateManyWithoutProfileInput>
+  }
+
+  export type ScenarioScalarWhereInput = {
+    AND?: ScenarioScalarWhereInput | ScenarioScalarWhereInput[]
+    OR?: ScenarioScalarWhereInput[]
+    NOT?: ScenarioScalarWhereInput | ScenarioScalarWhereInput[]
+    id?: StringFilter<"Scenario"> | string
+    name?: StringFilter<"Scenario"> | string
+    changesJson?: StringFilter<"Scenario"> | string
+    basisJson?: StringFilter<"Scenario"> | string
+    profileId?: StringFilter<"Scenario"> | string
+    createdAt?: DateTimeFilter<"Scenario"> | Date | string
+    updatedAt?: DateTimeFilter<"Scenario"> | Date | string
+  }
+
   export type ProfileCreateWithoutApiTokensInput = {
     id?: string
     name: string
@@ -29564,6 +31110,7 @@ export namespace Prisma {
     ruleSuggestions?: RuleSuggestionCreateNestedManyWithoutProfileInput
     savingsGoals?: SavingsGoalCreateNestedManyWithoutProfileInput
     bankConnections?: BankConnectionCreateNestedManyWithoutProfileInput
+    scenarios?: ScenarioCreateNestedManyWithoutProfileInput
   }
 
   export type ProfileUncheckedCreateWithoutApiTokensInput = {
@@ -29581,6 +31128,7 @@ export namespace Prisma {
     ruleSuggestions?: RuleSuggestionUncheckedCreateNestedManyWithoutProfileInput
     savingsGoals?: SavingsGoalUncheckedCreateNestedManyWithoutProfileInput
     bankConnections?: BankConnectionUncheckedCreateNestedManyWithoutProfileInput
+    scenarios?: ScenarioUncheckedCreateNestedManyWithoutProfileInput
   }
 
   export type ProfileCreateOrConnectWithoutApiTokensInput = {
@@ -29614,6 +31162,7 @@ export namespace Prisma {
     ruleSuggestions?: RuleSuggestionUpdateManyWithoutProfileNestedInput
     savingsGoals?: SavingsGoalUpdateManyWithoutProfileNestedInput
     bankConnections?: BankConnectionUpdateManyWithoutProfileNestedInput
+    scenarios?: ScenarioUpdateManyWithoutProfileNestedInput
   }
 
   export type ProfileUncheckedUpdateWithoutApiTokensInput = {
@@ -29631,6 +31180,95 @@ export namespace Prisma {
     ruleSuggestions?: RuleSuggestionUncheckedUpdateManyWithoutProfileNestedInput
     savingsGoals?: SavingsGoalUncheckedUpdateManyWithoutProfileNestedInput
     bankConnections?: BankConnectionUncheckedUpdateManyWithoutProfileNestedInput
+    scenarios?: ScenarioUncheckedUpdateManyWithoutProfileNestedInput
+  }
+
+  export type ProfileCreateWithoutScenariosInput = {
+    id?: string
+    name: string
+    pinHash: string
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    sessions?: SessionCreateNestedManyWithoutProfileInput
+    categories?: CategoryCreateNestedManyWithoutProfileInput
+    accounts?: AccountCreateNestedManyWithoutProfileInput
+    costObjects?: CostObjectCreateNestedManyWithoutProfileInput
+    transactions?: TransactionCreateNestedManyWithoutProfileInput
+    categorizationRules?: CategorizationRuleCreateNestedManyWithoutProfileInput
+    ruleSuggestions?: RuleSuggestionCreateNestedManyWithoutProfileInput
+    savingsGoals?: SavingsGoalCreateNestedManyWithoutProfileInput
+    bankConnections?: BankConnectionCreateNestedManyWithoutProfileInput
+    apiTokens?: ApiTokenCreateNestedManyWithoutProfileInput
+  }
+
+  export type ProfileUncheckedCreateWithoutScenariosInput = {
+    id?: string
+    name: string
+    pinHash: string
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    sessions?: SessionUncheckedCreateNestedManyWithoutProfileInput
+    categories?: CategoryUncheckedCreateNestedManyWithoutProfileInput
+    accounts?: AccountUncheckedCreateNestedManyWithoutProfileInput
+    costObjects?: CostObjectUncheckedCreateNestedManyWithoutProfileInput
+    transactions?: TransactionUncheckedCreateNestedManyWithoutProfileInput
+    categorizationRules?: CategorizationRuleUncheckedCreateNestedManyWithoutProfileInput
+    ruleSuggestions?: RuleSuggestionUncheckedCreateNestedManyWithoutProfileInput
+    savingsGoals?: SavingsGoalUncheckedCreateNestedManyWithoutProfileInput
+    bankConnections?: BankConnectionUncheckedCreateNestedManyWithoutProfileInput
+    apiTokens?: ApiTokenUncheckedCreateNestedManyWithoutProfileInput
+  }
+
+  export type ProfileCreateOrConnectWithoutScenariosInput = {
+    where: ProfileWhereUniqueInput
+    create: XOR<ProfileCreateWithoutScenariosInput, ProfileUncheckedCreateWithoutScenariosInput>
+  }
+
+  export type ProfileUpsertWithoutScenariosInput = {
+    update: XOR<ProfileUpdateWithoutScenariosInput, ProfileUncheckedUpdateWithoutScenariosInput>
+    create: XOR<ProfileCreateWithoutScenariosInput, ProfileUncheckedCreateWithoutScenariosInput>
+    where?: ProfileWhereInput
+  }
+
+  export type ProfileUpdateToOneWithWhereWithoutScenariosInput = {
+    where?: ProfileWhereInput
+    data: XOR<ProfileUpdateWithoutScenariosInput, ProfileUncheckedUpdateWithoutScenariosInput>
+  }
+
+  export type ProfileUpdateWithoutScenariosInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    pinHash?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    sessions?: SessionUpdateManyWithoutProfileNestedInput
+    categories?: CategoryUpdateManyWithoutProfileNestedInput
+    accounts?: AccountUpdateManyWithoutProfileNestedInput
+    costObjects?: CostObjectUpdateManyWithoutProfileNestedInput
+    transactions?: TransactionUpdateManyWithoutProfileNestedInput
+    categorizationRules?: CategorizationRuleUpdateManyWithoutProfileNestedInput
+    ruleSuggestions?: RuleSuggestionUpdateManyWithoutProfileNestedInput
+    savingsGoals?: SavingsGoalUpdateManyWithoutProfileNestedInput
+    bankConnections?: BankConnectionUpdateManyWithoutProfileNestedInput
+    apiTokens?: ApiTokenUpdateManyWithoutProfileNestedInput
+  }
+
+  export type ProfileUncheckedUpdateWithoutScenariosInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    pinHash?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    sessions?: SessionUncheckedUpdateManyWithoutProfileNestedInput
+    categories?: CategoryUncheckedUpdateManyWithoutProfileNestedInput
+    accounts?: AccountUncheckedUpdateManyWithoutProfileNestedInput
+    costObjects?: CostObjectUncheckedUpdateManyWithoutProfileNestedInput
+    transactions?: TransactionUncheckedUpdateManyWithoutProfileNestedInput
+    categorizationRules?: CategorizationRuleUncheckedUpdateManyWithoutProfileNestedInput
+    ruleSuggestions?: RuleSuggestionUncheckedUpdateManyWithoutProfileNestedInput
+    savingsGoals?: SavingsGoalUncheckedUpdateManyWithoutProfileNestedInput
+    bankConnections?: BankConnectionUncheckedUpdateManyWithoutProfileNestedInput
+    apiTokens?: ApiTokenUncheckedUpdateManyWithoutProfileNestedInput
   }
 
   export type ProfileCreateWithoutBankConnectionsInput = {
@@ -29648,6 +31286,7 @@ export namespace Prisma {
     ruleSuggestions?: RuleSuggestionCreateNestedManyWithoutProfileInput
     savingsGoals?: SavingsGoalCreateNestedManyWithoutProfileInput
     apiTokens?: ApiTokenCreateNestedManyWithoutProfileInput
+    scenarios?: ScenarioCreateNestedManyWithoutProfileInput
   }
 
   export type ProfileUncheckedCreateWithoutBankConnectionsInput = {
@@ -29665,6 +31304,7 @@ export namespace Prisma {
     ruleSuggestions?: RuleSuggestionUncheckedCreateNestedManyWithoutProfileInput
     savingsGoals?: SavingsGoalUncheckedCreateNestedManyWithoutProfileInput
     apiTokens?: ApiTokenUncheckedCreateNestedManyWithoutProfileInput
+    scenarios?: ScenarioUncheckedCreateNestedManyWithoutProfileInput
   }
 
   export type ProfileCreateOrConnectWithoutBankConnectionsInput = {
@@ -29739,6 +31379,7 @@ export namespace Prisma {
     ruleSuggestions?: RuleSuggestionUpdateManyWithoutProfileNestedInput
     savingsGoals?: SavingsGoalUpdateManyWithoutProfileNestedInput
     apiTokens?: ApiTokenUpdateManyWithoutProfileNestedInput
+    scenarios?: ScenarioUpdateManyWithoutProfileNestedInput
   }
 
   export type ProfileUncheckedUpdateWithoutBankConnectionsInput = {
@@ -29756,6 +31397,7 @@ export namespace Prisma {
     ruleSuggestions?: RuleSuggestionUncheckedUpdateManyWithoutProfileNestedInput
     savingsGoals?: SavingsGoalUncheckedUpdateManyWithoutProfileNestedInput
     apiTokens?: ApiTokenUncheckedUpdateManyWithoutProfileNestedInput
+    scenarios?: ScenarioUncheckedUpdateManyWithoutProfileNestedInput
   }
 
   export type AccountUpsertWithWhereUniqueWithoutBankConnectionInput = {
@@ -29789,6 +31431,7 @@ export namespace Prisma {
     savingsGoals?: SavingsGoalCreateNestedManyWithoutProfileInput
     bankConnections?: BankConnectionCreateNestedManyWithoutProfileInput
     apiTokens?: ApiTokenCreateNestedManyWithoutProfileInput
+    scenarios?: ScenarioCreateNestedManyWithoutProfileInput
   }
 
   export type ProfileUncheckedCreateWithoutSessionsInput = {
@@ -29806,6 +31449,7 @@ export namespace Prisma {
     savingsGoals?: SavingsGoalUncheckedCreateNestedManyWithoutProfileInput
     bankConnections?: BankConnectionUncheckedCreateNestedManyWithoutProfileInput
     apiTokens?: ApiTokenUncheckedCreateNestedManyWithoutProfileInput
+    scenarios?: ScenarioUncheckedCreateNestedManyWithoutProfileInput
   }
 
   export type ProfileCreateOrConnectWithoutSessionsInput = {
@@ -29839,6 +31483,7 @@ export namespace Prisma {
     savingsGoals?: SavingsGoalUpdateManyWithoutProfileNestedInput
     bankConnections?: BankConnectionUpdateManyWithoutProfileNestedInput
     apiTokens?: ApiTokenUpdateManyWithoutProfileNestedInput
+    scenarios?: ScenarioUpdateManyWithoutProfileNestedInput
   }
 
   export type ProfileUncheckedUpdateWithoutSessionsInput = {
@@ -29856,6 +31501,7 @@ export namespace Prisma {
     savingsGoals?: SavingsGoalUncheckedUpdateManyWithoutProfileNestedInput
     bankConnections?: BankConnectionUncheckedUpdateManyWithoutProfileNestedInput
     apiTokens?: ApiTokenUncheckedUpdateManyWithoutProfileNestedInput
+    scenarios?: ScenarioUncheckedUpdateManyWithoutProfileNestedInput
   }
 
   export type AccountCreateWithoutMonthlyBalancesInput = {
@@ -30982,6 +32628,15 @@ export namespace Prisma {
     lastUsedAt?: Date | string | null
   }
 
+  export type ScenarioCreateManyProfileInput = {
+    id?: string
+    name: string
+    changesJson?: string
+    basisJson?: string
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
   export type SessionUpdateWithoutProfileInput = {
     id?: StringFieldUpdateOperationsInput | string
     token?: StringFieldUpdateOperationsInput | string
@@ -31394,6 +33049,33 @@ export namespace Prisma {
     tokenHash?: StringFieldUpdateOperationsInput | string
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     lastUsedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  }
+
+  export type ScenarioUpdateWithoutProfileInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    changesJson?: StringFieldUpdateOperationsInput | string
+    basisJson?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type ScenarioUncheckedUpdateWithoutProfileInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    changesJson?: StringFieldUpdateOperationsInput | string
+    basisJson?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type ScenarioUncheckedUpdateManyWithoutProfileInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    changesJson?: StringFieldUpdateOperationsInput | string
+    basisJson?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
   export type AccountCreateManyBankConnectionInput = {

@@ -381,3 +381,29 @@ export const bankSyncApi = {
 };
 
 
+
+// What-if Simulator: the starting point and saved scenarios
+export interface SavedScenario {
+    id: string;
+    name: string;
+    changes: unknown[];
+    basis: Record<string, unknown>;
+}
+
+export const simulatorApi = {
+    async getBaseline() {
+        return api.get('/simulator/baseline');
+    },
+    async listScenarios(): Promise<SavedScenario[]> {
+        return api.get('/simulator/scenarios');
+    },
+    async createScenario(data: { name: string; changes: unknown[]; basis: unknown }): Promise<SavedScenario> {
+        return api.post('/simulator/scenarios', data);
+    },
+    async updateScenario(id: string, data: { name: string; changes: unknown[]; basis: unknown }): Promise<SavedScenario> {
+        return api.put(`/simulator/scenarios/${id}`, data);
+    },
+    async deleteScenario(id: string) {
+        return api.delete(`/simulator/scenarios/${id}`);
+    },
+};

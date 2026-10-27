@@ -333,17 +333,29 @@ export class PriPerFinApp extends LitElement {
         box-sizing: border-box;
       }
       
+      /* Seven destinations share the bar, so each takes an equal share and
+         the pill and label shrink to fit a 360px phone. */
       .nav-item {
+        flex: 1 1 0;
         width: auto;
-        min-width: 48px;
+        min-width: 0;
         padding: 8px 0 10px 0;
         height: auto;
       }
       
       .icon-container {
-        width: 64px; 
+        width: 100%;
+        max-width: 56px;
         height: 32px;
         border-radius: 16px;
+      }
+
+      .nav-label {
+        font-size: 11px;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
       }
       
       main {
@@ -516,6 +528,15 @@ export class PriPerFinApp extends LitElement {
         component: 'view-reports',
       },
       {
+        path: '/simulator',
+        action: async (context, commands) => {
+          const auth = this.authGuard(context, commands);
+          if (auth) return auth;
+          await import('./views/view-simulator');
+        },
+        component: 'view-simulator',
+      },
+      {
         path: '/categories',
         action: async (context, commands) => {
           const auth = this.authGuard(context, commands);
@@ -572,6 +593,10 @@ export class PriPerFinApp extends LitElement {
           <a href="reports${this.getCurrentQueryParams()}" class="nav-item ${this.currentPath === '/reports' ? 'active' : ''}">
                <div class="icon-container"><span class="material-symbols-outlined">bar_chart</span></div>
                <span class="nav-label">${i18n.t('nav.reports')}</span>
+          </a>
+          <a href="simulator" class="nav-item ${this.currentPath === '/simulator' ? 'active' : ''}">
+               <div class="icon-container"><span class="material-symbols-outlined">query_stats</span></div>
+               <span class="nav-label">${i18n.t('nav.simulator')}</span>
           </a>
           <a href="categories" class="nav-item ${this.currentPath === '/categories' ? 'active' : ''}">
                <div class="icon-container"><span class="material-symbols-outlined">category</span></div>
