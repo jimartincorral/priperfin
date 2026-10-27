@@ -214,3 +214,75 @@ describe('normalizing saved data', () => {
     ]);
   });
 });
+
+describe('calculation fixes', () => {
+  const flat = basis({ excluded: ['2026-06'] }); // income 3000, spending 2000
+
+  it('does not average in months with no transactions at all', () => {
+    const b = makeBaseline();
+    // Tracking only started in Aug 2026: the earlier months are empty.
+    b.months = b.months.map((m) =>
+      m.month < '2026-08' ? { ...m, income: 0, expenses: 0, categories: {} } : m,
+    );
+    const avg = averageMonth(b, basis({ period: 6 }));
+    expect(avg.income).toBe(3000);
+    expect(avg.spending).toBe(2000);
+    expect(avg.used).toEqual(['2026-08', '2026-09', '2026-10']);
+    expect([...avg.empty]).toEqual(['2026-05', '2026-06', '2026-07']);
+  });
+
+  it('keeps a one-off in the last month out of "left over each month"', () => {
+    const p = project(makeBaseline(), flat, [
+      change({ kind: 'oneoff', amount: 5000, startMonth: '2027-11' }),
+    ]);
+    expect(p.scenarioNet[12]).toBe(-4000); // the month itself
+    expect(p.endNet).toBe(1000); // a typical month
+    expect(verdict(p)).toBe('comfortable');
+  });
+
+  it('does not restart a loan that began before today', () => {
+    // 12 payments, Jun 2026 to May 2027. Today is Nov 2026, whose payment is
+    // part of this month, so six are left to project (Dec 2026 to May 2027).
+    const p = project(makeBaseline(), flat, [
+      change({ kind: 'temporary', amount: 300, months: 12, startMonth: '2026-06' }),
+    ]);
+    const paying = p.scenarioNet.slice(1).filter((n) => n === 700).length;
+    expect(paying).toBe(6);
+  });
+
+  it('does not apply a one-off dated before today again', () => {
+    const p = project(makeBaseline(), flat, [
+      change({ kind: 'oneoff', amount: 5000, startMonth: '2026-09' }),
+    ]);
+    expect(p.scenario).toEqual(p.base);
+  });
+
+  it('does not change a category that a new payment already replaced', () => {
+    const p = project(makeBaseline(), flat, [
+      change({ id: 'mortgage', amount: 1500, category: 'Housing' }),
+      change({ id: 'cut', kind: 'category', category: 'Housing', amount: -50 }),
+    ]);
+    // Rent (1000) is gone, the mortgage costs 1500; the -50% has nothing left to cut.
+    expect(p.endNet).toBe(500);
+  });
+
+  it('adds what is still to come this month to the first projected month', () => {
+    const b = makeBaseline({ currentMonthToDate: { income: 0, expenses: 1500 } });
+    const p = project(b, flat, []);
+    // Salary (3000) still to come, 500 of the usual 2000 still to spend.
+    expect(p.base[1]).toBe(10000 + 2500 + 1000);
+    expect(p.scenario[1]).toBe(p.base[1]);
+  });
+
+  it('keeps an overdue goal from making the others look late', () => {
+    const b = makeBaseline({
+      goals: [
+        { id: 'g1', name: 'Car', targetAmount: 50000, savedAmount: 0, targetDate: '2026-01-01T00:00:00.000Z', isEvergreen: false },
+        { id: 'g2', name: 'Trip', targetAmount: 1200, savedAmount: 0, targetDate: '2027-11-01T00:00:00.000Z', isEvergreen: false },
+      ],
+    });
+    const [car, trip] = project(b, flat, []).goals;
+    expect(car.outcome.kind).toBe('overdue');
+    expect(trip.outcome).toMatchObject({ kind: 'on_track', month: '2027-11' });
+  });
+});

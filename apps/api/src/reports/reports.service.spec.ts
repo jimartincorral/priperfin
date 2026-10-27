@@ -603,7 +603,7 @@ describe('ReportsService', () => {
   });
 
   describe('getMonthlyCashFlow', () => {
-    it('buckets by UTC month, groups by parent category and fills empty months', async () => {
+    it('buckets by UTC month, groups by parent category, fills empty months and counts one-sided transfers', async () => {
       const salary = createMockCategory({
         id: 'cat-salary',
         name: 'Salary',
@@ -623,7 +623,7 @@ describe('ReportsService', () => {
         parent: { id: 'cat-housing', name: 'Housing' },
       };
 
-      prismaMock.transaction.findMany.mockResolvedValue([
+      prismaMock.transaction.findMany.mockResolvedValueOnce([
         createMockTransaction({
           date: new Date('2026-05-01T00:00:00Z'),
           amount: new Decimal(3000),
@@ -649,6 +649,11 @@ describe('ReportsService', () => {
           splits: [],
         }),
       ]);
+      // A transfer flagged on import with no counterpart account: the money
+      // left every tracked account.
+      prismaMock.transaction.findMany.mockResolvedValueOnce([
+        { date: new Date('2026-07-15T00:00:00Z'), amount: new Decimal(-400) },
+      ]);
 
       const from = new Date(Date.UTC(2026, 4, 1));
       const months = await service.getMonthlyCashFlow('profile-1', from, 3);
@@ -670,8 +675,19 @@ describe('ReportsService', () => {
           categories: { Housing: 1000.25 },
         },
         { month: '2026-06', income: 0, expenses: 0, categories: {} },
-        { month: '2026-07', income: 3100, expenses: 0, categories: {} },
+        {
+          month: '2026-07',
+          income: 3100,
+          expenses: 400,
+          categories: { [TRANSFERS_OUT]: 400 },
+        },
       ]);
+      expect(prismaMock.transaction.findMany.mock.calls[1][0].where).toEqual({
+        profileId: 'profile-1',
+        isTransfer: true,
+        date: { gte: from, lt: new Date(Date.UTC(2026, 7, 1)) },
+        OR: [{ transferAccountId: null }],
+      });
     });
   });
 

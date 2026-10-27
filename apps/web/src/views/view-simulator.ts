@@ -448,6 +448,14 @@ export class ViewSimulator extends LitElement {
         <p class="hint">${i18n.t('simulator.months_hint')}</p>
         <div class="chips" role="group" aria-label="${i18n.t('simulator.months_group')}">
           ${avg.window.map((m) => {
+            if (avg.empty.has(m.month)) {
+              return html`
+                <button class="chip off" disabled title="${i18n.t('simulator.no_data_hint')}">
+                  <span class="chip-month">${this.month(m.month)}</span>
+                  <span class="small">${i18n.t('simulator.no_data')}</span>
+                </button>
+              `;
+            }
             const on = !excluded.has(m.month);
             return html`
               <button class="chip ${on ? 'on' : 'off'}" aria-pressed="${on}" @click="${() => this.toggleMonth(m.month)}">
@@ -538,7 +546,7 @@ export class ViewSimulator extends LitElement {
   private renderInsight(p: Projection) {
     const t = (k: string, params?: Record<string, string | number>) => i18n.t(`simulator.${k}`, params);
     const H = this.draft.basis.horizon;
-    const endNet = p.scenarioNet[H];
+    const endNet = p.endNet;
     const anyOn = this.draft.changes.some((c) => c.enabled);
     let kind = 'neutral';
     let title: string;
@@ -600,7 +608,7 @@ export class ViewSimulator extends LitElement {
     };
     return html`
       <div class="kpis">
-        ${tile(i18n.t('simulator.kpi_left_over'), p.baseNet, p.scenarioNet[H], (n) => this.money(n, true), (n) => this.money(n))}
+        ${tile(i18n.t('simulator.kpi_left_over'), p.baseNet, p.endNet, (n) => this.money(n, true), (n) => this.money(n))}
         ${tile(i18n.t('simulator.kpi_balance_in', { month: this.month(p.months[H]) }), p.base[H], p.scenario[H], (n) => this.money(n))}
         ${tile(i18n.t('simulator.kpi_lowest', { month: this.month(p.months[p.lowest.offset]) }), baseLow, p.lowest.value, (n) => this.money(n))}
         ${tile(i18n.t('simulator.kpi_cushion'), baseCushion, cushionMonths(p), months)}
@@ -720,6 +728,10 @@ export class ViewSimulator extends LitElement {
             case 'paused':
               tag = html`<span class="tag bad">${i18n.t('simulator.goal_paused')}</span>`;
               detail = i18n.t('simulator.goal_paused_detail');
+              break;
+            case 'overdue':
+              tag = html`<span class="tag warn">${i18n.t('simulator.goal_overdue')}</span>`;
+              detail = i18n.t('simulator.goal_overdue_detail');
               break;
             default: {
               tag = outcome.kind === 'on_track'
@@ -880,7 +892,7 @@ export class ViewSimulator extends LitElement {
         ${runs.map(({ s, p }) => {
           const v = verdict(p);
           const onTrack = p.goals.filter((g) => g.outcome.kind === 'on_track' || g.outcome.kind === 'done').length;
-          const endNet = p.scenarioNet[H];
+          const endNet = p.endNet;
           const cushion = cushionMonths(p);
           return html`
             <article class="card compare ${s.id === this.draft.id ? 'current' : ''}">
@@ -997,6 +1009,8 @@ export class ViewSimulator extends LitElement {
     .chip.on { background: var(--md-sys-color-surface-container-lowest); border: 1px solid var(--md-sys-color-primary); }
     .chip.off { background: transparent; border: 1px dashed var(--md-sys-color-outline); color: var(--md-sys-color-on-surface-variant); }
     .chip.off .chip-month { text-decoration: line-through; }
+    .chip[disabled] { cursor: default; opacity: 0.7; }
+    .chip[disabled] .chip-month { text-decoration: none; }
     .chip-month { font-size: 12px; font-weight: 500; }
     .tag { font-size: 11px; font-weight: 500; border-radius: 8px; padding: 2px 8px; white-space: nowrap; background: var(--md-sys-color-secondary-container); color: var(--md-sys-color-on-secondary-container); }
     .tag.warn { background: var(--pf-status-warn-bg); color: var(--pf-status-warn-text); }

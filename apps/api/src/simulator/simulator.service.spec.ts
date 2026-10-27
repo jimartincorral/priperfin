@@ -89,6 +89,12 @@ describe('SimulatorService', () => {
         12,
         undefined,
       );
+      expect(reports.getMonthlyCashFlow).toHaveBeenCalledWith(
+        'p1',
+        new Date(Date.UTC(2026, 9, 1)),
+        1,
+        undefined,
+      );
       expect(baseline).toMatchObject({
         currency: 'EUR',
         currentMonth: '2026-10',
