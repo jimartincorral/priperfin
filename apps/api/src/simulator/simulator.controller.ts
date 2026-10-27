@@ -6,6 +6,7 @@ import {
   Param,
   Post,
   Put,
+  Query,
   UseGuards,
   UsePipes,
   ValidationPipe,
@@ -31,9 +32,17 @@ const validate = new ValidationPipe({
 export class SimulatorController {
   constructor(private readonly simulator: SimulatorService) {}
 
+  /** `?accounts=id1,id2` limits the starting point to those accounts. */
   @Get('baseline')
-  getBaseline(@CurrentProfile() profile: Profile) {
-    return this.simulator.getBaseline(profile.id);
+  getBaseline(
+    @CurrentProfile() profile: Profile,
+    @Query('accounts') accounts?: string,
+  ) {
+    const ids = accounts
+      ?.split(',')
+      .map((id) => id.trim())
+      .filter(Boolean);
+    return this.simulator.getBaseline(profile.id, ids);
   }
 
   @Get('scenarios')

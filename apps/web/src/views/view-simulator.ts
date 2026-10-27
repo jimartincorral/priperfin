@@ -17,6 +17,7 @@ import {
   normalizeChanges,
   project,
   verdict,
+  TRANSFERS_OUT,
   type AverageMonth,
   type Baseline,
   type ChangeKind,
@@ -65,6 +66,8 @@ export class ViewSimulator extends LitElement {
   @state() private mode: 'build' | 'compare' = 'build';
   @state() private editor: Editor | null = null;
   @state() private saving = false;
+  /** Bumped per baseline request so a slow, older response cannot win. */
+  private baselineRequest = 0;
 
   private onLangChange = () => this.requestUpdate();
 
@@ -90,6 +93,20 @@ export class ViewSimulator extends LitElement {
     } catch (e) {
       console.error('[Simulator] load failed', e);
       this.loadError = i18n.t('simulator.load_failed');
+    }
+  }
+
+  /** Refetches the starting point when the draft's accounts differ from it. */
+  private async syncBaseline() {
+    const wanted = [...this.draft.basis.accounts].sort().join(',');
+    const have = [...(this.baseline?.selectedAccountIds ?? [])].sort().join(',');
+    if (!this.baseline || wanted === have) return;
+    const request = ++this.baselineRequest;
+    try {
+      const baseline = await simulatorApi.getBaseline(this.draft.basis.accounts);
+      if (request === this.baselineRequest) this.baseline = baseline;
+    } catch (e: any) {
+      this.notify(`${i18n.t('simulator.load_failed')}: ${e?.message ?? e}`);
     }
   }
 
@@ -137,6 +154,23 @@ export class ViewSimulator extends LitElement {
 
   private updateBasis(patch: Partial<ScenarioBasis>) {
     this.patchDraft({ basis: { ...this.draft.basis, ...patch } });
+    if (patch.accounts) this.syncBaseline();
+  }
+
+  private toggleAccount(id: string) {
+    const all = this.baseline?.accounts.map((a) => a.id) ?? [];
+    const current = new Set(this.draft.basis.accounts.length ? this.draft.basis.accounts : all);
+    if (current.has(id)) current.delete(id);
+    else current.add(id);
+    // At least one account has to stay in.
+    if (current.size === 0) return;
+    const next = all.filter((a) => current.has(a));
+    this.updateBasis({ accounts: next.length === all.length ? [] : next });
+  }
+
+  /** A category name as shown, translating the API's transfers key. */
+  private categoryLabel(name: string): string {
+    return name === TRANSFERS_OUT ? i18n.t('simulator.transfers_out') : name;
   }
 
   private confirmDiscard(): boolean {
@@ -151,6 +185,7 @@ export class ViewSimulator extends LitElement {
       : this.newDraft();
     this.dirty = false;
     this.mode = 'build';
+    this.syncBaseline();
   }
 
   private async save() {
@@ -304,7 +339,7 @@ export class ViewSimulator extends LitElement {
           effect: -delta,
           main: t('effect_monthly', { amount: this.money(-delta, true), month: start }),
           sub: c.category
-            ? t('sub_category', { category: c.category, from: this.money(base), to: this.money(base + delta) })
+            ? t('sub_category', { category: this.categoryLabel(c.category), from: this.money(base), to: this.money(base + delta) })
             : t('sub_pick_category'),
         };
       }
@@ -402,6 +437,7 @@ export class ViewSimulator extends LitElement {
           <div><span class="label">${i18n.t('simulator.balance_today')}</span><span class="mono strong">${this.money(baseline.balance)}</span></div>
         </div>
         ${empty ? html`<p class="hint">${i18n.t('simulator.no_history')}</p>` : nothing}
+        ${baseline.accounts.length > 1 ? this.renderAccounts(baseline) : nothing}
         <div class="divider"></div>
         <label class="inline-field">
           <span>${i18n.t('simulator.average_over')}</span>
@@ -427,6 +463,32 @@ export class ViewSimulator extends LitElement {
           ${leftOut.length ? html`<br />${i18n.t('simulator.left_out', { months: leftOut.join(', ') })}` : nothing}
         </p>
       </div>
+    `;
+  }
+
+  private renderAccounts(baseline: Baseline) {
+    const selected = new Set(this.draft.basis.accounts);
+    const all = selected.size === 0;
+    return html`
+      <div class="divider"></div>
+      <div class="inline-field">
+        <span>${i18n.t('simulator.accounts')}</span>
+        <span class="hint">${all
+          ? i18n.t('simulator.accounts_all')
+          : i18n.t('simulator.accounts_some', { n: selected.size, total: baseline.accounts.length })}</span>
+      </div>
+      <div class="chips" role="group" aria-label="${i18n.t('simulator.accounts')}">
+        ${baseline.accounts.map((a) => {
+          const on = all || selected.has(a.id);
+          return html`
+            <button class="chip ${on ? 'on' : 'off'}" aria-pressed="${on}" @click="${() => this.toggleAccount(a.id)}">
+              <span class="chip-month">${a.name}</span>
+              <span class="mono small">${this.money(a.balance)}</span>
+            </button>
+          `;
+        })}
+      </div>
+      ${all ? nothing : html`<p class="hint">${i18n.t('simulator.accounts_transfers')}</p>`}
     `;
   }
 
@@ -628,7 +690,7 @@ export class ViewSimulator extends LitElement {
             const diff = r.scenario - r.base;
             const rounded = Math.round(diff);
             const good = r.upIsGood ? diff > 0 : diff < 0;
-            const label = r.key === 'income' ? i18n.t('simulator.row_income') : r.key === 'left_over' ? i18n.t('simulator.row_left_over') : r.label;
+            const label = r.key === 'income' ? i18n.t('simulator.row_income') : r.key === 'left_over' ? i18n.t('simulator.row_left_over') : this.categoryLabel(r.label);
             return html`
               <div class="tr ${r.key === 'left_over' ? 'total' : ''}" role="row">
                 <span role="cell">${label}</span>
@@ -738,7 +800,7 @@ export class ViewSimulator extends LitElement {
               <span>${t('field_category')}</span>
               <select @change="${(e: Event) => this.editChange({ category: (e.target as HTMLSelectElement).value || undefined })}">
                 <option value="" ?selected="${!c.category}">—</option>
-                ${categories.map(([name, v]) => html`<option value="${name}" ?selected="${name === c.category}">${t('category_avg', { name, amount: this.money(v) })}</option>`)}
+                ${categories.map(([name, v]) => html`<option value="${name}" ?selected="${name === c.category}">${t('category_avg', { name: this.categoryLabel(name), amount: this.money(v) })}</option>`)}
               </select>
             </label>
           ` : nothing}
@@ -759,7 +821,7 @@ export class ViewSimulator extends LitElement {
               <span>${t('field_replaces')}</span>
               <select @change="${(e: Event) => this.editChange({ category: (e.target as HTMLSelectElement).value || undefined })}">
                 <option value="" ?selected="${!c.category}">${t('replaces_nothing')}</option>
-                ${categories.map(([name, v]) => html`<option value="${name}" ?selected="${name === c.category}">${t('category_avg', { name, amount: this.money(v) })}</option>`)}
+                ${categories.map(([name, v]) => html`<option value="${name}" ?selected="${name === c.category}">${t('category_avg', { name: this.categoryLabel(name), amount: this.money(v) })}</option>`)}
               </select>
             </label>
           ` : nothing}

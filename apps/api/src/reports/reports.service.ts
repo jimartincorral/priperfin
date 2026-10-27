@@ -28,6 +28,13 @@ const REPORT_COST_OBJECT_SELECT = {
   color: true,
 } as const;
 
+/**
+ * getMonthlyCashFlow's category key for money transferred out of the selected
+ * accounts. Chosen so it cannot pass for a real category name; the web client
+ * shows it translated.
+ */
+export const TRANSFERS_OUT = '__transfers_out__';
+
 @Injectable()
 export class ReportsService {
   constructor(private prisma: PrismaService) {}
@@ -491,11 +498,17 @@ export class ReportsService {
    * (UTC) from `from` (a month start) for `months` months, with exactly the
    * rules of getCashFlowTotals. Used by the Simulator to build its starting
    * point; months without transactions come back as zeros.
+   *
+   * With `accountIds`, only those accounts count. A transfer between two of
+   * them stays invisible, as usual, but a transfer to or from an account
+   * outside the selection is real money in or out of it: incoming counts as
+   * income and outgoing as spending under TRANSFERS_OUT.
    */
   async getMonthlyCashFlow(
     profileId: string,
     from: Date,
     months: number,
+    accountIds?: string[],
   ): Promise<
     Array<{
       month: string;
@@ -509,8 +522,14 @@ export class ReportsService {
     const lt = new Date(
       Date.UTC(from.getUTCFullYear(), from.getUTCMonth() + months, 1),
     );
+    const accountFilter = accountIds ? { accountId: { in: accountIds } } : {};
     const transactions = await this.prisma.transaction.findMany({
-      where: { profileId, isTransfer: false, date: { gte: from, lt } },
+      where: {
+        profileId,
+        isTransfer: false,
+        date: { gte: from, lt },
+        ...accountFilter,
+      },
       select: {
         date: true,
         amount: true,
@@ -535,9 +554,37 @@ export class ReportsService {
     }
     for (const t of transactions) buckets.get(keyOf(t.date))?.push(t);
 
+    const transfersIn = new Map<string, number>();
+    const transfersOut = new Map<string, number>();
+    if (accountIds) {
+      const crossing = await this.prisma.transaction.findMany({
+        where: {
+          profileId,
+          isTransfer: true,
+          date: { gte: from, lt },
+          accountId: { in: accountIds },
+          OR: [
+            { transferAccountId: null },
+            { transferAccountId: { notIn: accountIds } },
+          ],
+        },
+        select: { date: true, amount: true },
+      });
+      for (const t of crossing) {
+        const amount = t.amount.toNumber();
+        const into = amount > 0 ? transfersIn : transfersOut;
+        into.set(
+          keyOf(t.date),
+          (into.get(keyOf(t.date)) ?? 0) + Math.abs(amount),
+        );
+      }
+    }
+
     const round = (n: number) => Math.round(n * 100) / 100;
     return Array.from(buckets, ([month, rows]) => {
       const { totalIncome, expenseByCategory } = this.aggregateCashFlow(rows);
+      const out = transfersOut.get(month) ?? 0;
+      if (out > 0) expenseByCategory.set(TRANSFERS_OUT, out);
       const categories: Record<string, number> = {};
       let expenses = 0;
       expenseByCategory.forEach((val, name) => {
@@ -546,7 +593,7 @@ export class ReportsService {
       });
       return {
         month,
-        income: round(totalIncome),
+        income: round(totalIncome + (transfersIn.get(month) ?? 0)),
         expenses: round(expenses),
         categories,
       };

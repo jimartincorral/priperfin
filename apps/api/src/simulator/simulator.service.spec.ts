@@ -55,7 +55,10 @@ describe('SimulatorService', () => {
   describe('getBaseline', () => {
     it('averages the 12 complete months before now and sums every account', async () => {
       reports.getMonthlyCashFlow.mockResolvedValue([]);
-      accounts.findAll.mockResolvedValue([{ id: 'a1' }, { id: 'a2' }]);
+      accounts.findAll.mockResolvedValue([
+        { id: 'a1', name: 'Main', type: 'DEBIT' },
+        { id: 'a2', name: 'Card', type: 'CREDIT' },
+      ]);
       transactions.getAccountBalance
         .mockResolvedValueOnce({ balance: 1000.123 })
         .mockResolvedValueOnce({ balance: -200 });
@@ -76,6 +79,7 @@ describe('SimulatorService', () => {
 
       const baseline = await service.getBaseline(
         'p1',
+        undefined,
         new Date('2026-10-27T10:00:00Z'),
       );
 
@@ -83,12 +87,17 @@ describe('SimulatorService', () => {
         'p1',
         new Date(Date.UTC(2025, 9, 1)),
         12,
+        undefined,
       );
       expect(baseline).toMatchObject({
         currency: 'EUR',
         currentMonth: '2026-10',
         balance: 800.12,
-        accountCount: 2,
+        accounts: [
+          { id: 'a1', name: 'Main', type: 'DEBIT', balance: 1000.12 },
+          { id: 'a2', name: 'Card', type: 'CREDIT', balance: -200 },
+        ],
+        selectedAccountIds: [],
         goals: [
           {
             id: 'g1',
@@ -99,6 +108,48 @@ describe('SimulatorService', () => {
           },
         ],
       });
+    });
+  });
+
+  describe('getBaseline with an account filter', () => {
+    beforeEach(() => {
+      reports.getMonthlyCashFlow.mockResolvedValue([]);
+      accounts.findAll.mockResolvedValue([
+        { id: 'a1', name: 'Main', type: 'DEBIT' },
+        { id: 'a2', name: 'Savings', type: 'DEBIT' },
+      ]);
+      transactions.getAccountBalance
+        .mockResolvedValueOnce({ balance: 1000 })
+        .mockResolvedValueOnce({ balance: 5000 });
+      goals.findAll.mockResolvedValue([]);
+      prismaMock.setting.findUnique.mockResolvedValue(null);
+    });
+
+    it('limits cash flow and balance to the selected accounts', async () => {
+      const baseline = await service.getBaseline('p1', ['a2']);
+
+      expect(reports.getMonthlyCashFlow).toHaveBeenCalledWith(
+        'p1',
+        expect.any(Date),
+        12,
+        ['a2'],
+      );
+      expect(baseline.balance).toBe(5000);
+      expect(baseline.selectedAccountIds).toEqual(['a2']);
+      expect(baseline.accounts).toHaveLength(2);
+    });
+
+    it("ignores ids that are not this profile's and falls back to all", async () => {
+      const baseline = await service.getBaseline('p1', ['someone-else']);
+
+      expect(reports.getMonthlyCashFlow).toHaveBeenCalledWith(
+        'p1',
+        expect.any(Date),
+        12,
+        undefined,
+      );
+      expect(baseline.balance).toBe(6000);
+      expect(baseline.selectedAccountIds).toEqual([]);
     });
   });
 

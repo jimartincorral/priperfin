@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.29.1 - 2026-10-27
+
+Simulator: choose which accounts to simulate.
+
+- **Account filter.** The Simulator's starting point now lists your accounts with their balances. Leave one out (for example a savings account) and the average month and today's balance are worked out from the remaining accounts only. The choice is saved with each scenario.
+- **Transfers count when they cross the line.** Transfers between the accounts you keep stay invisible, as before. Money moved to or from an account you left out is real money in or out of the rest: it shows as income, or as spending under "Transfers out".
+- Savings goals belong to the profile, not to an account, so they always show.
+
 ## v1.29.0 - 2026-10-27
 
 New: a what-if Simulator for exploring how a change would affect your money.

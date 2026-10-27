@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { ReportsService } from './reports.service';
+import { ReportsService, TRANSFERS_OUT } from './reports.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { createPrismaMock, PrismaMock } from '../test/prisma-mock.factory';
 import {
@@ -672,6 +672,56 @@ describe('ReportsService', () => {
         { month: '2026-06', income: 0, expenses: 0, categories: {} },
         { month: '2026-07', income: 3100, expenses: 0, categories: {} },
       ]);
+    });
+  });
+
+  describe('getMonthlyCashFlow with an account filter', () => {
+    it('counts transfers that leave or enter the selection', async () => {
+      const salary = createMockCategory({
+        id: 'cat-salary',
+        name: 'Salary',
+        type: 'INCOME',
+      });
+      prismaMock.transaction.findMany
+        .mockResolvedValueOnce([
+          createMockTransaction({
+            date: new Date('2026-05-02T00:00:00Z'),
+            amount: new Decimal(3000),
+            category: salary,
+            splits: [],
+          }),
+        ])
+        .mockResolvedValueOnce([
+          // to an account outside the selection
+          { date: new Date('2026-05-10T00:00:00Z'), amount: new Decimal(-500) },
+          // from an account outside the selection
+          { date: new Date('2026-05-20T00:00:00Z'), amount: new Decimal(200) },
+        ]);
+
+      const from = new Date(Date.UTC(2026, 4, 1));
+      const [may] = await service.getMonthlyCashFlow('profile-1', from, 1, [
+        'acc-1',
+      ]);
+
+      const [regular, transfers] = prismaMock.transaction.findMany.mock.calls;
+      expect(regular[0].where).toMatchObject({
+        isTransfer: false,
+        accountId: { in: ['acc-1'] },
+      });
+      expect(transfers[0].where).toMatchObject({
+        isTransfer: true,
+        accountId: { in: ['acc-1'] },
+        OR: [
+          { transferAccountId: null },
+          { transferAccountId: { notIn: ['acc-1'] } },
+        ],
+      });
+      expect(may).toEqual({
+        month: '2026-05',
+        income: 3200,
+        expenses: 500,
+        categories: { [TRANSFERS_OUT]: 500 },
+      });
     });
   });
 
