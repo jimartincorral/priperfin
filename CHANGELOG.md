@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.29.0 - 2026-10-27
+
+New: a what-if Simulator for exploring how a change would affect your money.
+
+- **Simulator.** A new Simulator screen in the navigation shows how a change would affect your money, compared with carrying on as you are. Build a scenario from changes: a new regular payment (a mortgage or new rent, which can replace an existing expense such as your current rent), a payment for a set number of months (a loan), a one-off amount in or out, a change in income, or spending more or less in a category. Each change has a start month and can be switched off to see the difference.
+- **Your own starting point.** The simulator starts from your average month over the last 3, 6 or 12 complete months and today's balance across your accounts. You can leave individual months out of the average, for example a month with a bonus; months with unusually high income are tagged so they are easy to spot.
+- **Results.** Over 12, 24 or 36 months: a short summary, what is left over each month, your balance at the end, your lowest balance and how many months of spending it would cover, a balance chart against your current path, a typical month line by line, and whether each savings goal with a target date stays on track, runs late or pauses.
+- **Save and compare.** Scenarios can be saved and compared side by side. Saved scenarios are included in backups.
+- On phones, the bottom navigation bar now fits seven destinations.
+
 ## v1.28.0 - 2026-10-09
 
 Home Assistant integration: entities, an import event, and profile pre-selection from the sidebar.
