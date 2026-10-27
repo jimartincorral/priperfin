@@ -499,10 +499,10 @@ export class ReportsService {
    * rules of getCashFlowTotals. Used by the Simulator to build its starting
    * point; months without transactions come back as zeros.
    *
-   * With `accountIds`, only those accounts count. A transfer between two of
-   * them stays invisible, as usual, but a transfer to or from an account
-   * outside the selection is real money in or out of it: incoming counts as
-   * income and outgoing as spending under TRANSFERS_OUT.
+   * With `accountIds`, only those accounts count. A transfer between two
+   * counted accounts stays invisible, as usual, but one to or from an account
+   * outside them (or to no recorded account at all) is real money in or out:
+   * incoming counts as income and outgoing as spending under TRANSFERS_OUT.
    */
   async getMonthlyCashFlow(
     profileId: string,
@@ -554,30 +554,32 @@ export class ReportsService {
     }
     for (const t of transactions) buckets.get(keyOf(t.date))?.push(t);
 
+    // Transfers that cross the edge of what is counted are real money in or
+    // out: with an account filter, those to or from an account outside it;
+    // always, a transfer with no counterpart account (flagged as a transfer
+    // on import, to an account that is not tracked here).
+    const crossing = await this.prisma.transaction.findMany({
+      where: {
+        profileId,
+        isTransfer: true,
+        date: { gte: from, lt },
+        ...accountFilter,
+        OR: accountIds
+          ? [
+              { transferAccountId: null },
+              { transferAccountId: { notIn: accountIds } },
+            ]
+          : [{ transferAccountId: null }],
+      },
+      select: { date: true, amount: true },
+    });
     const transfersIn = new Map<string, number>();
     const transfersOut = new Map<string, number>();
-    if (accountIds) {
-      const crossing = await this.prisma.transaction.findMany({
-        where: {
-          profileId,
-          isTransfer: true,
-          date: { gte: from, lt },
-          accountId: { in: accountIds },
-          OR: [
-            { transferAccountId: null },
-            { transferAccountId: { notIn: accountIds } },
-          ],
-        },
-        select: { date: true, amount: true },
-      });
-      for (const t of crossing) {
-        const amount = t.amount.toNumber();
-        const into = amount > 0 ? transfersIn : transfersOut;
-        into.set(
-          keyOf(t.date),
-          (into.get(keyOf(t.date)) ?? 0) + Math.abs(amount),
-        );
-      }
+    for (const t of crossing) {
+      const amount = t.amount.toNumber();
+      const into = amount > 0 ? transfersIn : transfersOut;
+      const key = keyOf(t.date);
+      into.set(key, (into.get(key) ?? 0) + Math.abs(amount));
     }
 
     const round = (n: number) => Math.round(n * 100) / 100;

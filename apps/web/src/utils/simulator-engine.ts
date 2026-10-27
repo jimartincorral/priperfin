@@ -36,6 +36,11 @@ export interface Baseline {
   /** The accounts this baseline was built from; empty means all of them. */
   selectedAccountIds: string[];
   months: BaselineMonth[];
+  /**
+   * Cash flow of the current month so far. The rest of the month, up to the
+   * average, is still to come and is added to the first projected month.
+   */
+  currentMonthToDate?: { income: number; expenses: number };
   goals: BaselineGoal[];
 }
 
@@ -118,14 +123,25 @@ export interface AverageMonth {
   used: string[];
   /** Months whose income is well above the usual, e.g. a bonus. */
   unusual: Set<string>;
+  /** Months in the window with no transactions at all, never averaged. */
+  empty: Set<string>;
+}
+
+/**
+ * A month with no income and no spending is almost always one before the user
+ * started tracking (or one never imported), not a month that cost nothing.
+ */
+function hasData(m: BaselineMonth): boolean {
+  return m.income !== 0 || m.expenses !== 0 || Object.keys(m.categories).length > 0;
 }
 
 export function averageMonth(baseline: Baseline, basis: ScenarioBasis): AverageMonth {
   const window = baseline.months.slice(-basis.period);
   const excluded = new Set(basis.excluded);
-  let used = window.filter((m) => !excluded.has(m.month));
+  const withData = window.filter(hasData);
+  let used = withData.filter((m) => !excluded.has(m.month));
   // Leaving every month out would leave nothing to average: use them all.
-  if (!used.length) used = window;
+  if (!used.length) used = withData;
 
   const n = used.length || 1;
   const categories: Record<string, number> = {};
@@ -143,15 +159,23 @@ export function averageMonth(baseline: Baseline, basis: ScenarioBasis): AverageM
     window.filter((m) => median > 0 && m.income > median * 1.3).map((m) => m.month),
   );
 
-  return { income, spending, categories, window, used: used.map((m) => m.month), unusual };
+  const empty = new Set(window.filter((m) => !hasData(m)).map((m) => m.month));
+  return { income, spending, categories, window, used: used.map((m) => m.month), unusual, empty };
 }
 
 // ---------------------------------------------------------------------------
 // Changes
 
-/** First month offset (≥ 1) a change applies to. */
+/**
+ * The month offset a change starts in. One starting this month counts from
+ * the first projected month, as this month's average is already on its way;
+ * one that started earlier keeps its real (negative) start, so a loan taken
+ * out months ago runs only for the payments it has left and a one-off that
+ * already happened is not paid again (a saved scenario grows older).
+ */
 function startOffset(change: ScenarioChange, currentMonth: string): number {
-  return Math.max(1, monthDiff(currentMonth, change.startMonth));
+  const raw = monthDiff(currentMonth, change.startMonth);
+  return raw === 0 ? 1 : raw;
 }
 
 /** Last month offset a change applies to; Infinity when it never ends. */
@@ -165,7 +189,7 @@ function endOffset(change: ScenarioChange, currentMonth: string): number {
 export function isActive(change: ScenarioChange, offset: number, currentMonth: string): boolean {
   return (
     change.enabled &&
-    offset >= startOffset(change, currentMonth) &&
+    offset >= Math.max(1, startOffset(change, currentMonth)) &&
     offset <= endOffset(change, currentMonth)
   );
 }
@@ -193,6 +217,13 @@ export function monthEffect(
     effect.categories[category] = (effect.categories[category] ?? 0) + delta;
     effect.spending += delta;
   };
+  // A category a new payment replaces is gone; a % change to it has nothing
+  // left to change.
+  const replaced = new Set(
+    changes
+      .filter((c) => c.kind === 'recurring' && c.category && isActive(c, offset, currentMonth))
+      .map((c) => c.category as string),
+  );
   for (const c of changes) {
     if (!isActive(c, offset, currentMonth)) continue;
     switch (c.kind) {
@@ -212,7 +243,7 @@ export function monthEffect(
         else effect.spending += c.amount;
         break;
       case 'category':
-        if (c.category && avg.categories[c.category]) {
+        if (c.category && avg.categories[c.category] && !replaced.has(c.category)) {
           adjust(c.category, (avg.categories[c.category] * c.amount) / 100);
         }
         break;
@@ -228,7 +259,9 @@ export type GoalOutcome =
   | { kind: 'done' }
   | { kind: 'on_track'; month: string; baseMonth: string | null }
   | { kind: 'late'; month: string; baseMonth: string | null; monthsLate: number }
-  | { kind: 'paused'; baseMonth: string | null };
+  | { kind: 'paused'; baseMonth: string | null }
+  /** The target date has passed; not counted against what is left over. */
+  | { kind: 'overdue' };
 
 export interface GoalImpact {
   goal: BaselineGoal;
@@ -250,9 +283,12 @@ export interface Projection {
   /** Balance at the end of each month on the current path; [0] is today. */
   base: number[];
   scenario: number[];
-  /** Left over each month ([0] unused). */
+  /** Left over in an average month on the current path. */
   baseNet: number;
+  /** What each month adds to the balance, one-offs included ([0] unused). */
   scenarioNet: number[];
+  /** Left over in a typical month at the end of the projection (no one-offs). */
+  endNet: number;
   lowest: { value: number; offset: number };
   /** First month the scenario spends more than it earns, or null. */
   firstShortfall: number | null;
@@ -272,6 +308,14 @@ export function project(
   const now = baseline.currentMonth;
   const baseNet = avg.income - avg.spending;
 
+  // Today's balance already holds this month's transactions so far; what an
+  // average month would still bring lands by the end of the first projected
+  // month. Never negative: a month already over its average stays as it is.
+  const toDate = baseline.currentMonthToDate;
+  const restOfMonth = toDate
+    ? Math.max(0, avg.income - toDate.income) - Math.max(0, avg.spending - toDate.expenses)
+    : 0;
+
   const months = [now];
   const base = [baseline.balance];
   const scenario = [baseline.balance];
@@ -280,11 +324,12 @@ export function project(
 
   for (let k = 1; k <= H; k++) {
     months.push(addMonths(now, k));
-    base.push(base[k - 1] + baseNet);
+    const carry = k === 1 ? restOfMonth : 0;
+    base.push(base[k - 1] + baseNet + carry);
     const e = monthEffect(changes, k, now, avg);
     const net = baseNet + e.income - e.spending;
     scenarioNet.push(net);
-    scenario.push(scenario[k - 1] + net);
+    scenario.push(scenario[k - 1] + net + carry);
     // A one-off is not a monthly shortfall; only count recurring deficits.
     const recurringNet = net + oneOffSpend(changes, k, now) - oneOffIncome(changes, k, now);
     if (firstShortfall === null && recurringNet < 0) firstShortfall = k;
@@ -322,11 +367,12 @@ export function project(
     scenario,
     baseNet,
     scenarioNet,
+    endNet,
     lowest,
     firstShortfall,
     endBreakdown: rows,
     endSpending: avg.spending + end.spending,
-    goals: goalImpacts(baseline, baseNet, scenarioNet),
+    goals: goalImpacts(baseline, baseNet, scenarioNet, endNet),
   };
 }
 
@@ -351,6 +397,7 @@ export function goalImpacts(
   baseline: Baseline,
   baseNet: number,
   scenarioNet: number[],
+  lastNet: number,
 ): GoalImpact[] {
   const now = baseline.currentMonth;
   const goals = baseline.goals.filter((g) => !g.isEvergreen && g.targetDate);
@@ -358,8 +405,10 @@ export function goalImpacts(
     const dueMonth = g.targetDate!.slice(0, 7);
     const due = monthDiff(now, dueMonth);
     const remaining = Math.max(0, g.targetAmount - g.savedAmount);
-    return { goal: g, dueMonth, due, remaining, need: remaining / Math.max(1, due) };
+    return { goal: g, dueMonth, due, remaining, need: due >= 1 ? remaining / due : 0 };
   });
+  // An overdue goal would need everything at once, which would swamp the
+  // shares of the goals still on schedule; it is reported on its own.
   const totalNeed = plans.reduce((s, p) => s + p.need, 0);
   const LIMIT = 120;
 
@@ -372,18 +421,18 @@ export function goalImpacts(
     }
     return null;
   };
-  const lastNet = scenarioNet[scenarioNet.length - 1] ?? baseNet;
   const scenarioAt = (k: number) => (k < scenarioNet.length ? scenarioNet[k] : lastNet);
 
   return plans.map(({ goal, dueMonth, due, remaining, need }) => {
     if (remaining <= 0) return { goal, dueMonth, outcome: { kind: 'done' } };
+    if (due < 1) return { goal, dueMonth, outcome: { kind: 'overdue' } };
     const b = reach(need, remaining, () => baseNet);
     const s = reach(need, remaining, scenarioAt);
     const baseMonth = b === null ? null : addMonths(now, b);
     let outcome: GoalOutcome;
     if (s === null) outcome = { kind: 'paused', baseMonth };
-    else if (s <= Math.max(1, due)) outcome = { kind: 'on_track', month: addMonths(now, s), baseMonth };
-    else outcome = { kind: 'late', month: addMonths(now, s), baseMonth, monthsLate: s - Math.max(1, due) };
+    else if (s <= due) outcome = { kind: 'on_track', month: addMonths(now, s), baseMonth };
+    else outcome = { kind: 'late', month: addMonths(now, s), baseMonth, monthsLate: s - due };
     return { goal, dueMonth, outcome };
   });
 }
@@ -392,8 +441,7 @@ export type Verdict = 'comfortable' | 'tight' | 'unsustainable';
 
 /** A one-word read of a projection, used on the comparison cards. */
 export function verdict(p: Projection): Verdict {
-  const endNet = p.scenarioNet[p.scenarioNet.length - 1] ?? p.baseNet;
-  if (p.firstShortfall !== null && endNet < 0) return 'unsustainable';
+  if (p.firstShortfall !== null && p.endNet < 0) return 'unsustainable';
   const cushion = p.endSpending > 0 ? p.lowest.value / p.endSpending : Infinity;
   if (cushion < 3 || p.firstShortfall !== null) return 'tight';
   return 'comfortable';

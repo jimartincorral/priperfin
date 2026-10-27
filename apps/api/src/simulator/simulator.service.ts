@@ -53,16 +53,26 @@ export class SimulatorService {
     const selected = accounts.filter((a) => wanted.has(a.id)).map((a) => a.id);
     const filter = selected.length ? selected : undefined;
 
-    const [months, goals, currencySetting, balances] = await Promise.all([
-      this.reports.getMonthlyCashFlow(profileId, from, HISTORY_MONTHS, filter),
-      this.goals.findAll(profileId),
-      this.prisma.setting.findUnique({ where: { key: 'currency' } }),
-      Promise.all(
-        accounts.map((account) =>
-          this.transactions.getAccountBalance(account.id, profileId),
+    const thisMonth = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1),
+    );
+    const [months, [toDate], goals, currencySetting, balances] =
+      await Promise.all([
+        this.reports.getMonthlyCashFlow(
+          profileId,
+          from,
+          HISTORY_MONTHS,
+          filter,
         ),
-      ),
-    ]);
+        this.reports.getMonthlyCashFlow(profileId, thisMonth, 1, filter),
+        this.goals.findAll(profileId),
+        this.prisma.setting.findUnique({ where: { key: 'currency' } }),
+        Promise.all(
+          accounts.map((account) =>
+            this.transactions.getAccountBalance(account.id, profileId),
+          ),
+        ),
+      ]);
 
     const accountRows = accounts.map((a, i) => ({
       id: a.id,
@@ -81,6 +91,11 @@ export class SimulatorService {
       accounts: accountRows,
       selectedAccountIds: filter ?? [],
       months,
+      // The current month so far; the client adds what is still to come.
+      currentMonthToDate: {
+        income: toDate?.income ?? 0,
+        expenses: toDate?.expenses ?? 0,
+      },
       goals: goals.map((g) => ({
         id: g.id,
         name: g.name,
