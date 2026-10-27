@@ -33,31 +33,53 @@ export class SimulatorService {
 
   /**
    * The starting point every scenario is projected from: the last complete
-   * months of cash flow, today's balance across all accounts and the savings
-   * goals. The current month is left out because it is not over yet.
+   * months of cash flow, today's balance and the savings goals. The current
+   * month is left out because it is not over yet.
+   *
+   * `accountIds` narrows the cash flow and the balance to those accounts;
+   * ids that are not this profile's are ignored, and none (or none left)
+   * means every account. Goals are not per account and always come back.
    */
-  async getBaseline(profileId: string, now = new Date()) {
+  async getBaseline(
+    profileId: string,
+    accountIds?: string[],
+    now = new Date(),
+  ) {
     const from = new Date(
       Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - HISTORY_MONTHS, 1),
     );
-    const [months, accounts, goals, currencySetting] = await Promise.all([
-      this.reports.getMonthlyCashFlow(profileId, from, HISTORY_MONTHS),
-      this.accounts.findAll(profileId),
+    const accounts = await this.accounts.findAll(profileId);
+    const wanted = new Set(accountIds ?? []);
+    const selected = accounts.filter((a) => wanted.has(a.id)).map((a) => a.id);
+    const filter = selected.length ? selected : undefined;
+
+    const [months, goals, currencySetting, balances] = await Promise.all([
+      this.reports.getMonthlyCashFlow(profileId, from, HISTORY_MONTHS, filter),
       this.goals.findAll(profileId),
       this.prisma.setting.findUnique({ where: { key: 'currency' } }),
+      Promise.all(
+        accounts.map((account) =>
+          this.transactions.getAccountBalance(account.id, profileId),
+        ),
+      ),
     ]);
 
-    const balances = await Promise.all(
-      accounts.map((account) =>
-        this.transactions.getAccountBalance(account.id, profileId),
-      ),
-    );
+    const accountRows = accounts.map((a, i) => ({
+      id: a.id,
+      name: a.name,
+      type: a.type,
+      balance: round2(balances[i].balance),
+    }));
+    const counted = filter
+      ? accountRows.filter((a) => filter.includes(a.id))
+      : accountRows;
 
     return {
       currency: currencySetting?.value || null,
       currentMonth: monthKey(now),
-      balance: round2(balances.reduce((sum, b) => sum + b.balance, 0)),
-      accountCount: accounts.length,
+      balance: round2(counted.reduce((sum, a) => sum + a.balance, 0)),
+      accounts: accountRows,
+      selectedAccountIds: filter ?? [],
       months,
       goals: goals.map((g) => ({
         id: g.id,

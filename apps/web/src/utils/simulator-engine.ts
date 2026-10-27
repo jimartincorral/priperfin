@@ -30,8 +30,11 @@ export interface BaselineGoal {
 export interface Baseline {
   currency: string | null;
   currentMonth: string;
+  /** Today's balance across the selected accounts (all when none selected). */
   balance: number;
-  accountCount: number;
+  accounts: Array<{ id: string; name: string; type: string; balance: number }>;
+  /** The accounts this baseline was built from; empty means all of them. */
+  selectedAccountIds: string[];
   months: BaselineMonth[];
   goals: BaselineGoal[];
 }
@@ -64,9 +67,17 @@ export interface ScenarioBasis {
   period: Period;
   excluded: string[];
   horizon: Horizon;
+  /** Accounts the starting point uses; empty means all of them. */
+  accounts: string[];
 }
 
-export const DEFAULT_BASIS: ScenarioBasis = { period: 6, excluded: [], horizon: 24 };
+export const DEFAULT_BASIS: ScenarioBasis = { period: 6, excluded: [], horizon: 24, accounts: [] };
+
+/**
+ * The category key the API uses for money transferred out of the selected
+ * accounts (see ReportsService.getMonthlyCashFlow).
+ */
+export const TRANSFERS_OUT = '__transfers_out__';
 
 // ---------------------------------------------------------------------------
 // Months
@@ -407,7 +418,10 @@ export function normalizeBasis(raw: unknown): ScenarioBasis {
   const excluded = Array.isArray(b.excluded)
     ? b.excluded.filter((m): m is string => typeof m === 'string' && MONTH.test(m))
     : [];
-  return { period, horizon, excluded };
+  const accounts = Array.isArray(b.accounts)
+    ? b.accounts.filter((a): a is string => typeof a === 'string' && a.length > 0)
+    : [];
+  return { period, horizon, excluded, accounts };
 }
 
 /** Saved changes, dropping any that are not a change this version understands. */

@@ -86,6 +86,14 @@ export class ScenarioBasisDto {
 
   @IsIn([12, 24, 36])
   horizon: number;
+
+  /** Accounts the starting point uses; empty or absent means all of them. */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(100)
+  @IsString({ each: true })
+  @MaxLength(64, { each: true })
+  accounts?: string[];
 }
 
 export class SaveScenarioDto {

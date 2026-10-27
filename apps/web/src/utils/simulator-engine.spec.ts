@@ -28,7 +28,8 @@ function makeBaseline(overrides: Partial<Baseline> = {}): Baseline {
     currency: 'EUR',
     currentMonth: '2026-11',
     balance: 10000,
-    accountCount: 2,
+    accounts: [],
+    selectedAccountIds: [],
     months,
     goals: [],
     ...overrides,
@@ -39,6 +40,7 @@ const basis = (b: Partial<ScenarioBasis> = {}): ScenarioBasis => ({
   period: 6,
   excluded: [],
   horizon: 12,
+  accounts: [],
   ...b,
 });
 
@@ -189,12 +191,15 @@ describe('goal impacts', () => {
 
 describe('normalizing saved data', () => {
   it('replaces an unknown basis with the defaults', () => {
-    expect(normalizeBasis({ period: 5, horizon: 24, excluded: ['2026-06', 'junk', 3] })).toEqual({
+    expect(
+      normalizeBasis({ period: 5, horizon: 24, excluded: ['2026-06', 'junk', 3], accounts: ['a1', '', 7] }),
+    ).toEqual({
       period: 6,
       horizon: 24,
       excluded: ['2026-06'],
+      accounts: ['a1'],
     });
-    expect(normalizeBasis(null)).toEqual({ period: 6, horizon: 24, excluded: [] });
+    expect(normalizeBasis(null)).toEqual({ period: 6, horizon: 24, excluded: [], accounts: [] });
   });
 
   it('drops changes it does not understand', () => {

@@ -391,8 +391,9 @@ export interface SavedScenario {
 }
 
 export const simulatorApi = {
-    async getBaseline() {
-        return api.get('/simulator/baseline');
+    /** `accountIds` limits the starting point to those accounts; empty means all. */
+    async getBaseline(accountIds: string[] = []) {
+        return api.get('/simulator/baseline', accountIds.length ? { accounts: accountIds.join(',') } : {});
     },
     async listScenarios(): Promise<SavedScenario[]> {
         return api.get('/simulator/scenarios');
