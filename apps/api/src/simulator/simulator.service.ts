@@ -1,7 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AccountsService } from '../accounts/accounts.service';
-import { TransactionsService } from '../transactions/transactions.service';
 import { ReportsService } from '../reports/reports.service';
 import { SavingsGoalsService } from '../savings-goals/savings-goals.service';
 import { SaveScenarioDto } from './scenario.dto';
@@ -26,7 +25,6 @@ export class SimulatorService {
   constructor(
     private prisma: PrismaService,
     private accounts: AccountsService,
-    private transactions: TransactionsService,
     private reports: ReportsService,
     private goals: SavingsGoalsService,
   ) {}
@@ -69,7 +67,7 @@ export class SimulatorService {
         this.prisma.setting.findUnique({ where: { key: 'currency' } }),
         Promise.all(
           accounts.map((account) =>
-            this.transactions.getAccountBalance(account.id, profileId),
+            this.balanceToday(account, profileId, monthKey(now)),
           ),
         ),
       ]);
@@ -78,7 +76,7 @@ export class SimulatorService {
       id: a.id,
       name: a.name,
       type: a.type,
-      balance: round2(balances[i].balance),
+      balance: round2(balances[i]),
     }));
     const counted = filter
       ? accountRows.filter((a) => filter.includes(a.id))
@@ -105,6 +103,53 @@ export class SimulatorService {
         isEvergreen: g.isEvergreen,
       })),
     };
+  }
+
+  /**
+   * An account's balance today, the way the Expenses screen arrives at it:
+   * the latest starting balance set for a month (Monthly Balances) plus every
+   * transaction of the account since that month began. Without one, the
+   * account's initial balance plus all its transactions.
+   *
+   * The result is money: a credit card that is owed comes out negative. With
+   * a monthly starting balance it is whatever the user entered (the Expenses
+   * screen shows start plus transactions for both kinds of account); the
+   * initial balance of a credit account is the amount owed, hence the sign.
+   */
+  private async balanceToday(
+    account: {
+      id: string;
+      type: string;
+      initialBalance: { toNumber(): number };
+    },
+    profileId: string,
+    currentMonth: string,
+  ): Promise<number> {
+    const anchor = await this.prisma.monthlyBalance.findFirst({
+      where: { accountId: account.id, month: { lte: currentMonth } },
+      orderBy: { month: 'desc' },
+    });
+    const since = anchor
+      ? new Date(
+          Date.UTC(
+            Number(anchor.month.slice(0, 4)),
+            Number(anchor.month.slice(5, 7)) - 1,
+            1,
+          ),
+        )
+      : undefined;
+    const sum = await this.prisma.transaction.aggregate({
+      where: {
+        profileId,
+        accountId: account.id,
+        ...(since ? { date: { gte: since } } : {}),
+      },
+      _sum: { amount: true },
+    });
+    const moved = sum._sum.amount?.toNumber() ?? 0;
+    if (anchor) return anchor.balance.toNumber() + moved;
+    const initial = account.initialBalance.toNumber();
+    return account.type === 'CREDIT' ? moved - initial : initial + moved;
   }
 
   async findAll(profileId: string) {
