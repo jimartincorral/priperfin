@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.29.4 - 2026-10-28
+
+Simulator: "Balance today" now matches the Expenses screen.
+
+- **Balance today** was each account's initial balance plus every transaction ever recorded. If you set a starting balance per month instead (Monthly Balances), or your history does not go back to the beginning, it could be far off from what the Expenses screen shows. It now uses the same rule as the Expenses screen: the latest monthly starting balance up to this month, plus the account's transactions since then. Accounts without a monthly starting balance still use the initial balance plus all transactions.
+- A credit card's amount owed now counts as negative money in the Simulator, instead of being added as if it were money you have.
+- The Home Assistant balance sensors are unchanged.
+
 ## v1.29.3 - 2026-10-28
 
 Simulator: money received on an expense category is no longer lost.

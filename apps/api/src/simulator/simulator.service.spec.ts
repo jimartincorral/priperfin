@@ -3,7 +3,6 @@ import { NotFoundException } from '@nestjs/common';
 import { SimulatorService } from './simulator.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { AccountsService } from '../accounts/accounts.service';
-import { TransactionsService } from '../transactions/transactions.service';
 import { ReportsService } from '../reports/reports.service';
 import { SavingsGoalsService } from '../savings-goals/savings-goals.service';
 import { createPrismaMock, PrismaMock } from '../test/prisma-mock.factory';
@@ -16,7 +15,6 @@ describe('SimulatorService', () => {
   let service: SimulatorService;
   let prismaMock: PrismaMock;
   const accounts = { findAll: jest.fn() };
-  const transactions = { getAccountBalance: jest.fn() };
   const reports = { getMonthlyCashFlow: jest.fn() };
   const goals = { findAll: jest.fn() };
 
@@ -36,6 +34,35 @@ describe('SimulatorService', () => {
     basis: { period: 6, excluded: ['2026-06'], horizon: 24 },
   };
 
+  /**
+   * Per account: an optional monthly starting balance and the sum of the
+   * transactions the service asks for (since that month, or all of them).
+   */
+  const setBalances = (
+    byAccount: Record<
+      string,
+      { anchor?: { month: string; balance: number }; sum: number }
+    >,
+  ) => {
+    prismaMock.monthlyBalance.findFirst.mockImplementation(({ where }) => {
+      const anchor = byAccount[where.accountId]?.anchor;
+      return Promise.resolve(
+        anchor ? { ...anchor, balance: new Decimal(anchor.balance) } : null,
+      );
+    });
+    prismaMock.transaction.aggregate.mockImplementation(({ where }) =>
+      Promise.resolve({
+        _sum: { amount: new Decimal(byAccount[where.accountId]?.sum ?? 0) },
+      }),
+    );
+  };
+  const account = (
+    id: string,
+    name: string,
+    type = 'DEBIT',
+    initialBalance = 0,
+  ) => ({ id, name, type, initialBalance: new Decimal(initialBalance) });
+
   beforeEach(async () => {
     jest.clearAllMocks();
     prismaMock = createPrismaMock();
@@ -44,7 +71,6 @@ describe('SimulatorService', () => {
         SimulatorService,
         { provide: PrismaService, useValue: prismaMock },
         { provide: AccountsService, useValue: accounts },
-        { provide: TransactionsService, useValue: transactions },
         { provide: ReportsService, useValue: reports },
         { provide: SavingsGoalsService, useValue: goals },
       ],
@@ -56,12 +82,12 @@ describe('SimulatorService', () => {
     it('averages the 12 complete months before now and sums every account', async () => {
       reports.getMonthlyCashFlow.mockResolvedValue([]);
       accounts.findAll.mockResolvedValue([
-        { id: 'a1', name: 'Main', type: 'DEBIT' },
-        { id: 'a2', name: 'Card', type: 'CREDIT' },
+        account('a1', 'Main', 'DEBIT', 1000),
+        account('a2', 'Card', 'CREDIT', 150),
       ]);
-      transactions.getAccountBalance
-        .mockResolvedValueOnce({ balance: 1000.123 })
-        .mockResolvedValueOnce({ balance: -200 });
+      // Main: 1000 initial + 0.123 moved. Card: 150 owed at the start and
+      // 50 more spent since, so 200 owed, which is -200 of money.
+      setBalances({ a1: { sum: 0.123 }, a2: { sum: -50 } });
       goals.findAll.mockResolvedValue([
         {
           id: 'g1',
@@ -121,12 +147,10 @@ describe('SimulatorService', () => {
     beforeEach(() => {
       reports.getMonthlyCashFlow.mockResolvedValue([]);
       accounts.findAll.mockResolvedValue([
-        { id: 'a1', name: 'Main', type: 'DEBIT' },
-        { id: 'a2', name: 'Savings', type: 'DEBIT' },
+        account('a1', 'Main'),
+        account('a2', 'Savings'),
       ]);
-      transactions.getAccountBalance
-        .mockResolvedValueOnce({ balance: 1000 })
-        .mockResolvedValueOnce({ balance: 5000 });
+      setBalances({ a1: { sum: 1000 }, a2: { sum: 5000 } });
       goals.findAll.mockResolvedValue([]);
       prismaMock.setting.findUnique.mockResolvedValue(null);
     });
@@ -156,6 +180,56 @@ describe('SimulatorService', () => {
       );
       expect(baseline.balance).toBe(6000);
       expect(baseline.selectedAccountIds).toEqual([]);
+    });
+  });
+
+  describe("today's balance", () => {
+    beforeEach(() => {
+      reports.getMonthlyCashFlow.mockResolvedValue([]);
+      goals.findAll.mockResolvedValue([]);
+      prismaMock.setting.findUnique.mockResolvedValue(null);
+    });
+
+    it('starts from the latest monthly starting balance, as the Expenses screen does', async () => {
+      // No initial balance was ever entered: all transactions add up to
+      // -1286, but the starting balance set for September was 2400.
+      accounts.findAll.mockResolvedValue([account('a1', 'Main')]);
+      setBalances({
+        a1: { anchor: { month: '2026-09', balance: 2400 }, sum: -310.5 },
+      });
+
+      const baseline = await service.getBaseline(
+        'p1',
+        undefined,
+        new Date('2026-10-28T10:00:00Z'),
+      );
+
+      expect(prismaMock.monthlyBalance.findFirst).toHaveBeenCalledWith({
+        where: { accountId: 'a1', month: { lte: '2026-10' } },
+        orderBy: { month: 'desc' },
+      });
+      expect(prismaMock.transaction.aggregate).toHaveBeenCalledWith({
+        where: {
+          profileId: 'p1',
+          accountId: 'a1',
+          date: { gte: new Date(Date.UTC(2026, 8, 1)) },
+        },
+        _sum: { amount: true },
+      });
+      expect(baseline.balance).toBe(2089.5);
+    });
+
+    it('falls back to the initial balance and every transaction', async () => {
+      accounts.findAll.mockResolvedValue([account('a1', 'Main', 'DEBIT', 500)]);
+      setBalances({ a1: { sum: -1286 } });
+
+      const baseline = await service.getBaseline('p1');
+
+      expect(prismaMock.transaction.aggregate).toHaveBeenCalledWith({
+        where: { profileId: 'p1', accountId: 'a1' },
+        _sum: { amount: true },
+      });
+      expect(baseline.balance).toBe(-786);
     });
   });
 
