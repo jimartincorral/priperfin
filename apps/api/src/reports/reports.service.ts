@@ -35,6 +35,13 @@ const REPORT_COST_OBJECT_SELECT = {
  */
 export const TRANSFERS_OUT = '__transfers_out__';
 
+/**
+ * getMonthlyCashFlow's category key for money put into savings goals (GOAL
+ * categories). Shown translated by the web client, which also uses it to
+ * know how much already goes to goals each month.
+ */
+export const GOAL_SAVINGS = '__goal_savings__';
+
 @Injectable()
 export class ReportsService {
   constructor(private prisma: PrismaService) {}
@@ -387,6 +394,10 @@ export class ReportsService {
     }>,
   ) {
     let totalIncome = 0;
+    // Money on GOAL categories, kept apart for callers that must account for
+    // every euro (the Simulator): out is skipped below and in counts as income.
+    let goalOut = 0;
+    let goalIn = 0;
     const expenseByCategory = new Map<string, number>();
     const incomeSources = new Map<string, number>();
 
@@ -394,7 +405,11 @@ export class ReportsService {
       // An outflow to a goal category is a savings contribution, not an
       // expense. Leaving it out of the expense flows means it stays in the
       // "Savings" remainder, which is where the category breakdown puts it too.
-      if (amount < 0 && category?.type === 'GOAL') return;
+      if (amount < 0 && category?.type === 'GOAL') {
+        goalOut -= amount;
+        return;
+      }
+      if (amount > 0 && category?.type === 'GOAL') goalIn += amount;
 
       // A negative amount on an income category is an income reversal (a
       // clawback, a bounced payment): it shrinks that income source rather
@@ -461,7 +476,14 @@ export class ReportsService {
       if (val <= 0) incomeSources.delete(source);
     });
 
-    return { totalIncome, incomeSources, expenseByCategory, netInflow };
+    return {
+      totalIncome,
+      incomeSources,
+      expenseByCategory,
+      netInflow,
+      goalOut,
+      goalIn,
+    };
   }
 
   /**
@@ -593,10 +615,15 @@ export class ReportsService {
       // Money in on an expense category beyond what it spent (reimbursements,
       // payments received and booked to an expense category) is still money
       // in: the Simulator counts it as income rather than losing it.
-      const { totalIncome, expenseByCategory, netInflow } =
+      const { totalIncome, expenseByCategory, netInflow, goalOut, goalIn } =
         this.aggregateCashFlow(rows);
       const out = transfersOut.get(month) ?? 0;
       if (out > 0) expenseByCategory.set(TRANSFERS_OUT, out);
+      // Savings-goal money is real money moving: net it (a move between two
+      // goal-categorised legs cancels out) and book what left as its own
+      // line. The reports leave it out as "savings"; a balance cannot.
+      const goalNet = goalOut - goalIn;
+      if (goalNet > 0) expenseByCategory.set(GOAL_SAVINGS, goalNet);
       const categories: Record<string, number> = {};
       let expenses = 0;
       expenseByCategory.forEach((val, name) => {
@@ -605,7 +632,13 @@ export class ReportsService {
       });
       return {
         month,
-        income: round(totalIncome + netInflow + (transfersIn.get(month) ?? 0)),
+        income: round(
+          totalIncome -
+            goalIn +
+            Math.max(0, -goalNet) +
+            netInflow +
+            (transfersIn.get(month) ?? 0),
+        ),
         expenses: round(expenses),
         categories,
       };

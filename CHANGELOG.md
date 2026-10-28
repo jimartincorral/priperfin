@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.30.0 - 2026-10-28
+
+Simulator: a full review of the calculations, and every change is now entered in euros.
+
+- **Every change is money.** "Income changes" now asks for your new monthly income and "Spend more or less" for the new monthly spending on that category, both pre-filled with today's figure, instead of a signed amount and a percentage. Amounts are always positive numbers. Scenarios you saved before keep working and open in the new form.
+- **Savings-goal money adds up.** Money paid into savings-goal categories is now its own "Savings goals" line instead of disappearing from spending, and the goals panel counts it as available to your goals.
+- **Running out of money comes first.** If the balance would go below zero, the summary says so and the scenario is rated "Not sustainable", even when a one-off purchase causes it.
+- **Savings goals** are funded together, so the others catch up once one is done; deadlines are counted as on the Goals screen; goals due more than ten years out are followed; and a goal due later this month is no longer shown as overdue.
+- **Changes that already started** keep their real dates: a loan runs only for the payments it has left, and a one-off that already happened is not applied again.
+- **Balance today** with all accounts uses your all-accounts starting balance from the Expenses screen when you set one.
+- Two new payments replacing the same category no longer remove it twice, spending can no longer go below zero, and a change that started within the months being averaged is flagged, as it may already be in your history and count twice.
+
 ## v1.29.4 - 2026-10-28
 
 Simulator: "Balance today" now matches the Expenses screen.

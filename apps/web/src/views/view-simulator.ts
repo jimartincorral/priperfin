@@ -11,6 +11,8 @@ import {
   averageMonth,
   cushionMonths,
   formatMonth,
+  changeStatus,
+  GOAL_SAVINGS,
   isActive,
   monthDiff,
   normalizeBasis,
@@ -168,9 +170,11 @@ export class ViewSimulator extends LitElement {
     this.updateBasis({ accounts: next.length === all.length ? [] : next });
   }
 
-  /** A category name as shown, translating the API's transfers key. */
+  /** A category name as shown, translating the API's own keys. */
   private categoryLabel(name: string): string {
-    return name === TRANSFERS_OUT ? i18n.t('simulator.transfers_out') : name;
+    if (name === TRANSFERS_OUT) return i18n.t('simulator.transfers_out');
+    if (name === GOAL_SAVINGS) return i18n.t('simulator.goal_savings');
+    return name;
   }
 
   private confirmDiscard(): boolean {
@@ -242,7 +246,7 @@ export class ViewSimulator extends LitElement {
   private openEditor(change?: ScenarioChange) {
     if (!this.baseline) return;
     this.editor = change
-      ? { change: { ...change }, isNew: false }
+      ? { change: this.toTargetForm(change), isNew: false }
       : {
           isNew: true,
           change: {
@@ -261,24 +265,71 @@ export class ViewSimulator extends LitElement {
     });
   }
 
+  /**
+   * Scenarios saved before income and category changes took a new monthly
+   * amount stored a +/- change or a %. Opening one in the editor turns it into
+   * the new amount it works out to today, so every field is money.
+   */
+  private toTargetForm(change: ScenarioChange): ScenarioChange {
+    const c = { ...change };
+    if (c.to !== undefined || !this.baseline) return c;
+    const avg = averageMonth(this.baseline, this.draft.basis);
+    if (c.kind === 'income') {
+      c.to = Math.max(0, Math.round(avg.income + c.amount));
+      c.amount = 0;
+    } else if (c.kind === 'category' && c.category) {
+      const base = avg.categories[c.category] ?? 0;
+      c.to = Math.max(0, Math.round(base * (1 + Math.max(-100, c.amount) / 100)));
+      c.amount = 0;
+    }
+    return c;
+  }
+
   private editChange(patch: Partial<ScenarioChange>) {
-    if (!this.editor) return;
+    if (!this.editor || !this.baseline) return;
     const prev = this.editor.change;
     const next = { ...prev, ...patch };
     // A name the user has not typed follows the kind.
     if (patch.kind && prev.name === i18n.t(`simulator.default_name_${prev.kind}`)) {
       next.name = i18n.t(`simulator.default_name_${patch.kind}`);
     }
-    if (patch.kind && patch.kind !== prev.kind) next.category = undefined;
+    const avg = averageMonth(this.baseline, this.draft.basis);
+    if (patch.kind && patch.kind !== prev.kind) {
+      next.category = undefined;
+      next.amount = 0;
+      // Income starts from what comes in today, to be edited from there.
+      next.to = patch.kind === 'income' ? Math.round(avg.income) : undefined;
+    }
+    // Picking a category starts its new amount from what it costs today.
+    if (next.kind === 'category' && patch.category !== undefined && patch.category !== prev.category) {
+      next.to = patch.category ? Math.round(avg.categories[patch.category] ?? 0) : undefined;
+    }
     this.editor = { ...this.editor, change: next };
+  }
+
+  /** Whether the editor's change can be saved: amounts are money, never negative. */
+  private editorValid(c: ScenarioChange): boolean {
+    switch (c.kind) {
+      case 'recurring':
+      case 'temporary':
+      case 'oneoff':
+        return Number.isFinite(c.amount) && c.amount > 0;
+      case 'income':
+        return c.to !== undefined && Number.isFinite(c.to) && c.to >= 0;
+      case 'category':
+        return !!c.category && c.to !== undefined && Number.isFinite(c.to) && c.to >= 0;
+    }
   }
 
   private commitEditor() {
     if (!this.editor) return;
     const c = { ...this.editor.change, name: this.editor.change.name.trim() || i18n.t(`simulator.default_name_${this.editor.change.kind}`) };
+    if (!this.editorValid(c)) return;
     if (c.kind !== 'temporary') delete c.months;
     if (c.kind !== 'oneoff') delete c.direction;
     if (c.kind !== 'recurring' && c.kind !== 'category') delete c.category;
+    if (c.kind === 'income' || c.kind === 'category') c.amount = 0;
+    else delete c.to;
     this.patchDraft({
       changes: this.editor.isNew
         ? [...this.draft.changes, c]
@@ -294,19 +345,54 @@ export class ViewSimulator extends LitElement {
     this.editor = null;
   }
 
-  /** The headline and detail line for a change, shared by the list and the dialog. */
-  private describe(c: ScenarioChange, avg: AverageMonth): { main: string; sub: string; effect: number } {
+  /**
+   * The headline and detail line for a change, shared by the list and the
+   * dialog. `effect` is what it does to "left over" each month (or once, for a
+   * one-off); it follows the same rules as the projection.
+   */
+  private describe(
+    c: ScenarioChange,
+    avg: AverageMonth,
+  ): { main: string; sub: string; effect: number; note?: string } {
     const t = (k: string, p?: Record<string, string | number>) => i18n.t(`simulator.${k}`, p);
+    const now = this.baseline!.currentMonth;
     const start = this.month(c.startMonth);
+    const status = changeStatus(c, now);
+    const others = this.draft.changes.filter((x) => x.id !== c.id && x.enabled);
+    // A category replaced by a new payment earlier in the list is not freed
+    // again; one replaced by any payment cannot be changed any more.
+    const replacedBy = (name: string, before: boolean) =>
+      others.find(
+        (x) =>
+          x.kind === 'recurring' &&
+          x.category === name &&
+          (!before || this.draft.changes.indexOf(x) < this.draft.changes.indexOf(c)),
+      );
+    // Started before the end of the months being averaged: those months may
+    // already include it, so it would count twice.
+    const lastUsed = avg.used[avg.used.length - 1];
+    const note =
+      status !== 'over' && lastUsed && c.startMonth <= lastUsed && c.kind !== 'oneoff'
+        ? t('note_in_history')
+        : undefined;
+
+    if (status === 'over') {
+      return { effect: 0, main: t('effect_over'), sub: t('sub_over', { month: start }) };
+    }
+    const from = status === 'ongoing' ? t('ongoing') : start;
     switch (c.kind) {
       case 'recurring': {
-        const freed = c.category ? avg.categories[c.category] ?? 0 : 0;
+        const twice = c.category && replacedBy(c.category, true);
+        const freed = c.category && !twice ? avg.categories[c.category] ?? 0 : 0;
         const effect = -(c.amount - freed);
         return {
           effect,
-          main: t('effect_monthly', { amount: this.money(effect, true), month: start }),
+          note,
+          main: t('effect_monthly', { amount: this.money(effect, true), month: from }),
           sub: c.category
-            ? t('sub_replaces', { amount: this.money(c.amount), old: this.money(freed) })
+            ? twice
+              ? t('sub_replaced_already', { category: this.categoryLabel(c.category), name: twice.name })
+              : t('sub_replaces', { amount: this.money(c.amount), old: this.money(freed) })
             : t('sub_extra'),
         };
       }
@@ -314,6 +400,7 @@ export class ViewSimulator extends LitElement {
         const n = Math.max(1, c.months ?? 1);
         return {
           effect: -c.amount,
+          note,
           main: t('effect_for', { amount: this.money(-c.amount, true), n }),
           sub: t('sub_temporary', {
             from: start,
@@ -326,21 +413,31 @@ export class ViewSimulator extends LitElement {
         const effect = c.direction === 'in' ? c.amount : -c.amount;
         return { effect, main: t('effect_once', { amount: this.money(effect, true), month: start }), sub: t('sub_once') };
       }
-      case 'income':
+      case 'income': {
+        const to = c.to ?? avg.income + c.amount;
+        const effect = to - avg.income;
         return {
-          effect: c.amount,
-          main: t('effect_monthly', { amount: this.money(c.amount, true), month: start }),
-          sub: t('sub_income', { from: this.money(avg.income), to: this.money(avg.income + c.amount) }),
+          effect,
+          note,
+          main: t('effect_monthly', { amount: this.money(effect, true), month: from }),
+          sub: t('sub_income', { from: this.money(avg.income), to: this.money(to) }),
         };
+      }
       case 'category': {
-        const base = c.category ? avg.categories[c.category] ?? 0 : 0;
-        const delta = (base * c.amount) / 100;
+        if (!c.category) return { effect: 0, main: t('effect_none'), sub: t('sub_pick_category') };
+        const label = this.categoryLabel(c.category);
+        const by = replacedBy(c.category, false);
+        if (by) {
+          return { effect: 0, main: t('effect_none'), sub: t('sub_category_replaced', { category: label, name: by.name }) };
+        }
+        const base = avg.categories[c.category] ?? 0;
+        const to = c.to ?? Math.max(0, base * (1 + Math.max(-100, c.amount) / 100));
+        const effect = base - to;
         return {
-          effect: -delta,
-          main: t('effect_monthly', { amount: this.money(-delta, true), month: start }),
-          sub: c.category
-            ? t('sub_category', { category: this.categoryLabel(c.category), from: this.money(base), to: this.money(base + delta) })
-            : t('sub_pick_category'),
+          effect,
+          note,
+          main: t('effect_monthly', { amount: this.money(effect, true), month: from }),
+          sub: t('sub_category', { category: label, from: this.money(base), to: this.money(to) }),
         };
       }
     }
@@ -500,6 +597,16 @@ export class ViewSimulator extends LitElement {
     `;
   }
 
+  /** Colour of a money effect: good, bad, or neither for nothing at all. */
+  private effectClass(effect: number): string {
+    const rounded = Math.round(effect);
+    return rounded === 0 ? 'same' : rounded < 0 ? 'neg' : 'pos';
+  }
+
+  private cushionText(n: number): string {
+    return n.toLocaleString(this.locale, { maximumFractionDigits: 1 });
+  }
+
   private renderChanges(avg: AverageMonth) {
     return html`
       <div class="stack">
@@ -514,8 +621,9 @@ export class ViewSimulator extends LitElement {
                   aria-label="${i18n.t('simulator.include_change', { name: c.name })}" />
                 <span class="change-text">
                   <span class="change-name">${c.name}</span>
-                  <span class="change-effect ${d.effect < 0 ? 'neg' : 'pos'}">${d.main}</span>
+                  <span class="change-effect ${this.effectClass(d.effect)}">${d.main}</span>
                   <span class="hint">${d.sub}</span>
+                  ${d.note ? html`<span class="tag warn" title="${i18n.t('simulator.note_in_history_hint')}">${d.note}</span>` : nothing}
                 </span>
               </label>
               <button class="icon-btn" @click="${() => this.openEditor(c)}" aria-label="${i18n.t('simulator.edit_change')}" title="${i18n.t('simulator.edit_change')}">
@@ -554,6 +662,14 @@ export class ViewSimulator extends LitElement {
     if (!anyOn) {
       title = t('insight_none_title');
       body = t('insight_none_body', { amount: this.money(p.baseNet) });
+    } else if (p.belowZero !== null) {
+      // Running out of money matters more than anything else on the page.
+      kind = 'bad';
+      title = t('insight_below_zero_title', { month: this.month(p.months[p.belowZero]) });
+      body = t('insight_below_zero_body', {
+        low: this.money(p.lowest.value),
+        lowMonth: this.month(p.months[p.lowest.offset]),
+      });
     } else if (p.firstShortfall !== null) {
       kind = 'bad';
       const lowMonth = this.month(p.months[p.lowest.offset]);
@@ -562,7 +678,7 @@ export class ViewSimulator extends LitElement {
         body = t('insight_bad_body', {
           low: this.money(p.lowest.value),
           lowMonth,
-          cushion: cushionMonths(p).toLocaleString(this.locale, { maximumFractionDigits: 1 }),
+          cushion: this.cushionText(cushionMonths(p)),
         });
       } else {
         title = t('insight_dip_title', { month: this.month(p.months[p.firstShortfall]) });
@@ -589,10 +705,11 @@ export class ViewSimulator extends LitElement {
   private renderKpis(p: Projection, avg: AverageMonth) {
     const H = this.draft.basis.horizon;
     const baseLow = Math.min(...p.base);
-    const baseCushion = avg.spending > 0 ? Math.max(0, baseLow) / avg.spending : 0;
-    const months = (n: number) => i18n.t('simulator.cushion_value', { n: n.toLocaleString(this.locale, { maximumFractionDigits: 1 }) });
+    const baseCushion = baseLow <= 0 ? 0 : avg.spending > 0 ? baseLow / avg.spending : Infinity;
+    const months = (n: number) =>
+      Number.isFinite(n) ? i18n.t('simulator.cushion_value', { n: this.cushionText(n) }) : '—';
     const tile = (label: string, base: number, scen: number, fmt: (n: number) => string, deltaFmt = fmt) => {
-      const diff = Math.round((scen - base) * 10) / 10;
+      const diff = Number.isFinite(scen - base) ? Math.round((scen - base) * 10) / 10 : 0;
       const cls = diff === 0 ? 'same' : diff > 0 ? 'pos' : 'neg';
       const text = diff === 0
         ? i18n.t('simulator.no_change')
@@ -641,8 +758,10 @@ export class ViewSimulator extends LitElement {
     const ticks: number[] = [];
     for (let i = 0; i <= H; i += every) ticks.push(i);
     const now = this.baseline!.currentMonth;
+    // Only changes that still affect a month on the chart get a marker, at the
+    // first month they apply to.
     const markers = this.draft.changes
-      .filter((c) => c.enabled && monthDiff(now, c.startMonth) <= H)
+      .filter((c) => c.enabled && changeStatus(c, now) !== 'over' && monthDiff(now, c.startMonth) <= H)
       .map((c) => ({ c, k: Math.max(1, monthDiff(now, c.startMonth)) }))
       .slice(0, 6);
     const scenPts = this.points(p.scenario, y);
@@ -736,7 +855,9 @@ export class ViewSimulator extends LitElement {
             default: {
               tag = outcome.kind === 'on_track'
                 ? html`<span class="tag good">${i18n.t('simulator.goal_on_track')}</span>`
-                : html`<span class="tag bad">${i18n.t('simulator.goal_late', { n: outcome.monthsLate })}</span>`;
+                : html`<span class="tag bad">${outcome.monthsLate === 1
+                    ? i18n.t('simulator.goal_late_one')
+                    : i18n.t('simulator.goal_late', { n: outcome.monthsLate })}</span>`;
               detail = outcome.baseMonth === outcome.month
                 ? i18n.t('simulator.goal_reached_same', { month: this.month(outcome.month) })
                 : i18n.t('simulator.goal_reached_instead', {
@@ -769,20 +890,25 @@ export class ViewSimulator extends LitElement {
     const starts = Array.from({ length: 36 }, (_, i) => addMonths(now, i + 1));
     if (!starts.includes(c.startMonth)) starts.unshift(c.startMonth);
     const categories = Object.entries(avg.categories).sort((a, b) => b[1] - a[1]);
+    // A new payment replaces a real category, not money moved out or saved.
+    const replaceable = categories.filter(([name]) => name !== TRANSFERS_OUT && name !== GOAL_SAVINGS);
     const d = this.describe(c, avg);
-    const color = d.effect < 0 ? 'neg' : 'pos';
+    const color = this.effectClass(d.effect);
+    // Every amount is money, typed as a positive number. Income and category
+    // changes take the new monthly figure; the effect shows the difference.
+    const usesTarget = c.kind === 'income' || c.kind === 'category';
     const amountLabel = c.kind === 'oneoff'
       ? t('field_amount')
       : c.kind === 'income'
-        ? t('field_income_change')
+        ? t('field_new_income', { now: this.money(avg.income) })
         : c.kind === 'category'
-          ? t('field_percent')
+          ? t('field_new_spending', { now: this.money(c.category ? avg.categories[c.category] ?? 0 : 0) })
           : t('field_amount_month');
     const num = (e: Event) => {
       const v = (e.target as HTMLInputElement).valueAsNumber;
       return Number.isFinite(v) ? v : 0;
     };
-    const valid = Number.isFinite(c.amount) && (c.kind !== 'category' || !!c.category);
+    const valid = this.editorValid(c);
 
     return html`
       <div class="scrim" @click="${() => (this.editor = null)}"></div>
@@ -818,9 +944,10 @@ export class ViewSimulator extends LitElement {
           ` : nothing}
           <label class="field">
             <span>${amountLabel}</span>
-            <input type="number" inputmode="decimal" step="${c.kind === 'category' ? 1 : 10}"
-              min="${c.kind === 'income' || c.kind === 'category' ? nothing : 0}"
-              .value="${String(c.amount)}" @input="${(e: Event) => this.editChange({ amount: num(e) })}" />
+            <input type="number" inputmode="decimal" step="10" min="0"
+              ?disabled="${c.kind === 'category' && !c.category}"
+              .value="${String(usesTarget ? c.to ?? '' : c.amount)}"
+              @input="${(e: Event) => this.editChange(usesTarget ? { to: Math.max(0, num(e)) } : { amount: Math.max(0, num(e)) })}" />
           </label>
           <label class="field">
             <span>${c.kind === 'oneoff' ? t('field_when') : t('field_starts')}</span>
@@ -833,7 +960,7 @@ export class ViewSimulator extends LitElement {
               <span>${t('field_replaces')}</span>
               <select @change="${(e: Event) => this.editChange({ category: (e.target as HTMLSelectElement).value || undefined })}">
                 <option value="" ?selected="${!c.category}">${t('replaces_nothing')}</option>
-                ${categories.map(([name, v]) => html`<option value="${name}" ?selected="${name === c.category}">${t('category_avg', { name: this.categoryLabel(name), amount: this.money(v) })}</option>`)}
+                ${replaceable.map(([name, v]) => html`<option value="${name}" ?selected="${name === c.category}">${t('category_avg', { name: this.categoryLabel(name), amount: this.money(v) })}</option>`)}
               </select>
             </label>
           ` : nothing}
@@ -858,6 +985,7 @@ export class ViewSimulator extends LitElement {
           <span class="label">${t('effect')}</span>
           <span class="effect-main ${color}">${d.main}</span>
           <span class="hint">${d.sub}</span>
+          ${d.note ? html`<span class="hint">${t('note_in_history_hint')}</span>` : nothing}
           <div class="strip" aria-hidden="true" style="grid-template-columns: repeat(${H}, minmax(0, 1fr))">
             ${Array.from({ length: H }, (_, i) => html`<i class="${isActive({ ...c, enabled: true }, i + 1, now) ? color : ''}"></i>`)}
           </div>
@@ -911,7 +1039,7 @@ export class ViewSimulator extends LitElement {
                 <div><dt>${i18n.t('simulator.kpi_left_over')}</dt><dd class="mono ${endNet < 0 ? 'neg' : ''}">${this.money(endNet, true)}</dd></div>
                 <div><dt>${i18n.t('simulator.kpi_balance_in', { month: this.month(p.months[H]) })}</dt><dd class="mono">${this.money(p.scenario[H])}</dd></div>
                 <div><dt>${i18n.t('simulator.kpi_lowest', { month: this.month(p.months[p.lowest.offset]) })}</dt><dd class="mono">${this.money(p.lowest.value)}</dd></div>
-                <div><dt>${i18n.t('simulator.kpi_cushion')}</dt><dd class="mono ${cushion < 3 ? 'neg' : ''}">${i18n.t('simulator.cushion_value', { n: cushion.toLocaleString(this.locale, { maximumFractionDigits: 1 }) })}</dd></div>
+                <div><dt>${i18n.t('simulator.kpi_cushion')}</dt><dd class="mono ${cushion < 3 ? 'neg' : ''}">${Number.isFinite(cushion) ? i18n.t('simulator.cushion_value', { n: this.cushionText(cushion) }) : '—'}</dd></div>
                 <div><dt>${i18n.t('simulator.goals_title')}</dt><dd>${p.goals.length ? i18n.t('simulator.goals_summary', { n: onTrack, total: p.goals.length }) : i18n.t('simulator.goals_none')}</dd></div>
               </dl>
               <button class="btn outlined" @click="${() => this.openScenario(s.id)}">${i18n.t('simulator.open')}</button>
@@ -1014,6 +1142,7 @@ export class ViewSimulator extends LitElement {
     .chip-month { font-size: 12px; font-weight: 500; }
     .tag { font-size: 11px; font-weight: 500; border-radius: 8px; padding: 2px 8px; white-space: nowrap; background: var(--md-sys-color-secondary-container); color: var(--md-sys-color-on-secondary-container); }
     .tag.warn { background: var(--pf-status-warn-bg); color: var(--pf-status-warn-text); }
+    .change-text .tag { align-self: flex-start; }
     .tag.good { background: var(--md-sys-color-primary-container); color: var(--md-sys-color-on-primary-container); }
     .tag.bad { background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container); }
 
