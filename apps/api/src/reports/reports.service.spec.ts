@@ -691,6 +691,63 @@ describe('ReportsService', () => {
     });
   });
 
+  describe('getMonthlyCashFlow money-in on an expense category', () => {
+    it('keeps an inflow larger than the spending as income', async () => {
+      const bizum = createMockCategory({
+        id: 'cat-bizum',
+        name: 'Bizum',
+        type: 'EXPENSE',
+      });
+      const groceries = createMockCategory({
+        id: 'cat-groceries',
+        name: 'Groceries',
+        type: 'EXPENSE',
+      });
+      prismaMock.transaction.findMany
+        .mockResolvedValueOnce([
+          // 500 received and 100 sent on the same expense category
+          createMockTransaction({
+            date: new Date('2026-05-03T00:00:00Z'),
+            amount: new Decimal(500),
+            category: bizum,
+            splits: [],
+          }),
+          createMockTransaction({
+            date: new Date('2026-05-04T00:00:00Z'),
+            amount: new Decimal(-100),
+            category: bizum,
+            splits: [],
+          }),
+          // an ordinary refund that only shrinks the spending
+          createMockTransaction({
+            date: new Date('2026-05-05T00:00:00Z'),
+            amount: new Decimal(-300),
+            category: groceries,
+            splits: [],
+          }),
+          createMockTransaction({
+            date: new Date('2026-05-06T00:00:00Z'),
+            amount: new Decimal(50),
+            category: groceries,
+            splits: [],
+          }),
+        ])
+        .mockResolvedValueOnce([]);
+
+      const from = new Date(Date.UTC(2026, 4, 1));
+      const [may] = await service.getMonthlyCashFlow('profile-1', from, 1);
+
+      // Every euro in and out is accounted for: 550 in, 400 out, net +150.
+      expect(may).toEqual({
+        month: '2026-05',
+        income: 400,
+        expenses: 250,
+        categories: { Groceries: 250 },
+      });
+      expect(may.income - may.expenses).toBe(500 - 100 - 300 + 50);
+    });
+  });
+
   describe('getMonthlyCashFlow with an account filter', () => {
     it('counts transfers that leave or enter the selection', async () => {
       const salary = createMockCategory({

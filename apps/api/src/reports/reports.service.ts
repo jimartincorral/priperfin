@@ -446,16 +446,22 @@ export class ReportsService {
     });
 
     // A category refunded more than it was charged has no outflow left to draw,
-    // so drop it before it becomes an orphan node.
+    // so drop it before it becomes an orphan node. What came in beyond what
+    // went out is returned as `netInflow`, for callers that must account for
+    // every euro (the Simulator); the diagrams ignore it.
+    let netInflow = 0;
     expenseByCategory.forEach((val, target) => {
-      if (val <= 0) expenseByCategory.delete(target);
+      if (val <= 0) {
+        netInflow -= val;
+        expenseByCategory.delete(target);
+      }
     });
     // Likewise an income source reversed in full has nothing left to draw.
     incomeSources.forEach((val, source) => {
       if (val <= 0) incomeSources.delete(source);
     });
 
-    return { totalIncome, incomeSources, expenseByCategory };
+    return { totalIncome, incomeSources, expenseByCategory, netInflow };
   }
 
   /**
@@ -584,7 +590,11 @@ export class ReportsService {
 
     const round = (n: number) => Math.round(n * 100) / 100;
     return Array.from(buckets, ([month, rows]) => {
-      const { totalIncome, expenseByCategory } = this.aggregateCashFlow(rows);
+      // Money in on an expense category beyond what it spent (reimbursements,
+      // payments received and booked to an expense category) is still money
+      // in: the Simulator counts it as income rather than losing it.
+      const { totalIncome, expenseByCategory, netInflow } =
+        this.aggregateCashFlow(rows);
       const out = transfersOut.get(month) ?? 0;
       if (out > 0) expenseByCategory.set(TRANSFERS_OUT, out);
       const categories: Record<string, number> = {};
@@ -595,7 +605,7 @@ export class ReportsService {
       });
       return {
         month,
-        income: round(totalIncome + (transfersIn.get(month) ?? 0)),
+        income: round(totalIncome + netInflow + (transfersIn.get(month) ?? 0)),
         expenses: round(expenses),
         categories,
       };
