@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { ReportsService, TRANSFERS_OUT } from './reports.service';
+import { GOAL_SAVINGS, ReportsService, TRANSFERS_OUT } from './reports.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { createPrismaMock, PrismaMock } from '../test/prisma-mock.factory';
 import {
@@ -745,6 +745,64 @@ describe('ReportsService', () => {
         categories: { Groceries: 250 },
       });
       expect(may.income - may.expenses).toBe(500 - 100 - 300 + 50);
+    });
+  });
+
+  describe('getMonthlyCashFlow savings-goal money', () => {
+    const goal = createMockCategory({
+      id: 'cat-goal',
+      name: 'Holiday',
+      type: 'GOAL',
+    });
+    const salary = createMockCategory({
+      id: 'cat-salary',
+      name: 'Salary',
+      type: 'INCOME',
+    });
+    const line = (day: string, amount: number, category: unknown) =>
+      createMockTransaction({
+        date: new Date(`2026-05-${day}T00:00:00Z`),
+        amount: new Decimal(amount),
+        category: category as never,
+        splits: [],
+      });
+    const from = new Date(Date.UTC(2026, 4, 1));
+
+    it('books money put into goals as its own spending line', async () => {
+      prismaMock.transaction.findMany
+        .mockResolvedValueOnce([
+          line('01', 3000, salary),
+          line('02', -500, goal),
+        ])
+        .mockResolvedValueOnce([]);
+
+      const [may] = await service.getMonthlyCashFlow('profile-1', from, 1);
+
+      expect(may).toEqual({
+        month: '2026-05',
+        income: 3000,
+        expenses: 500,
+        categories: { [GOAL_SAVINGS]: 500 },
+      });
+    });
+
+    it('nets a move between two goal-categorised legs to nothing', async () => {
+      prismaMock.transaction.findMany
+        .mockResolvedValueOnce([
+          line('01', 3000, salary),
+          line('02', -500, goal),
+          line('02', 500, goal),
+        ])
+        .mockResolvedValueOnce([]);
+
+      const [may] = await service.getMonthlyCashFlow('profile-1', from, 1);
+
+      expect(may).toEqual({
+        month: '2026-05',
+        income: 3000,
+        expenses: 0,
+        categories: {},
+      });
     });
   });
 

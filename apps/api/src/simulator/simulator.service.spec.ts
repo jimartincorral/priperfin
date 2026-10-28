@@ -66,6 +66,7 @@ describe('SimulatorService', () => {
   beforeEach(async () => {
     jest.clearAllMocks();
     prismaMock = createPrismaMock();
+    prismaMock.setting.findMany.mockResolvedValue([]);
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         SimulatorService,
@@ -217,6 +218,46 @@ describe('SimulatorService', () => {
         _sum: { amount: true },
       });
       expect(baseline.balance).toBe(2089.5);
+    });
+
+    it('uses the all-accounts starting balance when every account counts', async () => {
+      accounts.findAll.mockResolvedValue([
+        account('a1', 'Main'),
+        account('a2', 'Card', 'CREDIT'),
+      ]);
+      setBalances({ a1: { sum: 999 }, a2: { sum: 999 } });
+      prismaMock.setting.findMany.mockResolvedValue([
+        { key: 'starting_balance_all_2026-08', value: '1000' },
+        { key: 'starting_balance_all_2026-09', value: '3000' },
+        // a later month is not "today" yet
+        { key: 'starting_balance_all_2026-11', value: '9999' },
+      ]);
+      prismaMock.transaction.aggregate.mockImplementation(({ where }) =>
+        Promise.resolve({
+          _sum: {
+            amount: new Decimal(where.accountId ? 999 : -450.25),
+          },
+        }),
+      );
+
+      const baseline = await service.getBaseline(
+        'p1',
+        undefined,
+        new Date('2026-10-28T10:00:00Z'),
+      );
+
+      expect(prismaMock.transaction.aggregate).toHaveBeenCalledWith({
+        where: {
+          profileId: 'p1',
+          date: { gte: new Date(Date.UTC(2026, 8, 1)) },
+        },
+        _sum: { amount: true },
+      });
+      expect(baseline.balance).toBe(2549.75);
+
+      // With an account filter the per-account balances apply instead.
+      const filtered = await service.getBaseline('p1', ['a1']);
+      expect(filtered.balance).toBe(999);
     });
 
     it('falls back to the initial balance and every transaction', async () => {

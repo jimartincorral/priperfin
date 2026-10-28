@@ -54,7 +54,7 @@ export class SimulatorService {
     const thisMonth = new Date(
       Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1),
     );
-    const [months, [toDate], goals, currencySetting, balances] =
+    const [months, [toDate], goals, currencySetting, balances, allStart] =
       await Promise.all([
         this.reports.getMonthlyCashFlow(
           profileId,
@@ -70,6 +70,9 @@ export class SimulatorService {
             this.balanceToday(account, profileId, monthKey(now)),
           ),
         ),
+        filter
+          ? Promise.resolve(null)
+          : this.allAccountsBalanceToday(profileId, monthKey(now)),
       ]);
 
     const accountRows = accounts.map((a, i) => ({
@@ -85,7 +88,12 @@ export class SimulatorService {
     return {
       currency: currencySetting?.value || null,
       currentMonth: monthKey(now),
-      balance: round2(counted.reduce((sum, a) => sum + a.balance, 0)),
+      today: now.toISOString(),
+      // With every account counted, the Expenses screen's all-accounts view
+      // starts from its own starting balance; use it when one was set.
+      balance: round2(
+        allStart ?? counted.reduce((sum, a) => sum + a.balance, 0),
+      ),
       accounts: accountRows,
       selectedAccountIds: filter ?? [],
       months,
@@ -103,6 +111,47 @@ export class SimulatorService {
         isEvergreen: g.isEvergreen,
       })),
     };
+  }
+
+  /**
+   * The all-accounts balance the Expenses screen shows with no account picked:
+   * the latest all-accounts starting balance (`starting_balance_all_YYYY-MM`)
+   * up to this month plus every transaction since that month began. Null when
+   * none was ever set.
+   */
+  private async allAccountsBalanceToday(
+    profileId: string,
+    currentMonth: string,
+  ): Promise<number | null> {
+    const prefix = 'starting_balance_all_';
+    const settings = await this.prisma.setting.findMany({
+      where: { key: { startsWith: prefix } },
+    });
+    const latest = settings
+      .map((s) => ({
+        month: s.key.slice(prefix.length),
+        value: Number(s.value),
+      }))
+      .filter(
+        (s) =>
+          /^\d{4}-\d{2}$/.test(s.month) &&
+          s.month <= currentMonth &&
+          Number.isFinite(s.value),
+      )
+      .sort((a, b) => b.month.localeCompare(a.month))[0];
+    if (!latest) return null;
+    const since = new Date(
+      Date.UTC(
+        Number(latest.month.slice(0, 4)),
+        Number(latest.month.slice(5, 7)) - 1,
+        1,
+      ),
+    );
+    const sum = await this.prisma.transaction.aggregate({
+      where: { profileId, date: { gte: since } },
+      _sum: { amount: true },
+    });
+    return latest.value + (sum._sum.amount?.toNumber() ?? 0);
   }
 
   /**

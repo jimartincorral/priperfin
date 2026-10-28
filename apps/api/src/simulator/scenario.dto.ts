@@ -24,8 +24,10 @@ const MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
  *   `category` names an existing expense category it replaces, if any.
  * - temporary: a payment every month for `months` months (a loan).
  * - oneoff: a single amount in `startMonth`, `direction` in or out.
- * - income: a change to monthly income (+ or −), no end.
- * - category: spend `amount` percent more (+) or less (−) on `category`.
+ * - income: monthly income becomes `to`, no end.
+ * - category: monthly spending on `category` becomes `to`, no end.
+ * Amounts are money and never negative, except in scenarios saved before
+ * `to` existed, where income held a +/- change and category a % change.
  */
 export const CHANGE_KINDS = [
   'recurring',
@@ -72,6 +74,13 @@ export class ScenarioChangeDto {
   @IsOptional()
   @IsIn(['in', 'out'])
   direction?: 'in' | 'out';
+
+  /** income / category: the new monthly amount (the change is the difference). */
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(1e9)
+  to?: number;
 }
 
 /** Which past months the averages use, and how far ahead to project. */

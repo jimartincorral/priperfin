@@ -2,6 +2,9 @@ import { describe, it, expect } from 'vitest';
 import {
   addMonths,
   averageMonth,
+  changeStatus,
+  cushionMonths,
+  GOAL_SAVINGS,
   monthDiff,
   normalizeBasis,
   normalizeChanges,
@@ -153,7 +156,9 @@ describe('goal impacts', () => {
       name: 'Emergency fund',
       targetAmount: 3400,
       savedAmount: 1000,
-      targetDate: '2027-11-01T00:00:00.000Z', // 12 months away, needs 200/mo
+      // Due 1 Nov 2027; seen on 1 Nov 2026 that is 11 whole months (the Goals
+      // screen's count), so it needs 2400 / 11 a month.
+      targetDate: '2027-11-01T00:00:00.000Z',
       isEvergreen: false,
     },
     {
@@ -170,18 +175,18 @@ describe('goal impacts', () => {
 
   it('is on track when there is enough left over', () => {
     const [impact] = project(b, flat, []).goals;
-    expect(impact.outcome).toMatchObject({ kind: 'on_track', month: '2027-11' });
+    expect(impact.outcome).toMatchObject({ kind: 'on_track', month: '2027-10' });
   });
 
   it('is late when less is left over than the goal needs', () => {
     const [impact] = project(b, flat, [change({ kind: 'income', amount: -900 })]).goals;
-    // 100 left over pays half of the 200 a month the goal needs.
-    expect(impact.outcome).toMatchObject({ kind: 'late', month: '2028-11', monthsLate: 12 });
+    // 100 left over a month pays 2400 in 24 months: 13 past the 11 it has.
+    expect(impact.outcome).toMatchObject({ kind: 'late', month: '2028-11', monthsLate: 13 });
   });
 
   it('pauses when nothing is left over', () => {
     const [impact] = project(b, flat, [change({ kind: 'income', amount: -1500 })]).goals;
-    expect(impact.outcome).toMatchObject({ kind: 'paused', baseMonth: '2027-11' });
+    expect(impact.outcome).toMatchObject({ kind: 'paused', baseMonth: '2027-10' });
   });
 
   it('skips goals without a target date', () => {
@@ -283,6 +288,118 @@ describe('calculation fixes', () => {
     });
     const [car, trip] = project(b, flat, []).goals;
     expect(car.outcome.kind).toBe('overdue');
-    expect(trip.outcome).toMatchObject({ kind: 'on_track', month: '2027-11' });
+    expect(trip.outcome).toMatchObject({ kind: 'on_track', month: '2027-10' });
+  });
+});
+
+describe('review fixes', () => {
+  const flat = basis({ excluded: ['2026-06'] }); // income 3000, spending 2000
+  const b = makeBaseline();
+
+  it('frees a replaced category once, however many payments replace it', () => {
+    const p = project(b, flat, [
+      change({ id: 'mortgage', amount: 1200, category: 'Housing' }),
+      change({ id: 'insurance', amount: 50, category: 'Housing' }),
+    ]);
+    // 3000 - (2000 - 1000 rent) - 1200 - 50
+    expect(p.endNet).toBe(750);
+    expect(p.endBreakdown.find((r) => r.key === 'cat:Housing')!.scenario).toBe(0);
+  });
+
+  it('sets income and category spending to a new monthly amount', () => {
+    const p = project(b, flat, [
+      change({ id: 'pay', kind: 'income', amount: 0, to: 2500 }),
+      change({ id: 'food', kind: 'category', category: 'Groceries', amount: 0, to: 400 }),
+    ]);
+    expect(p.endNet).toBe(2500 - (2000 - 600 + 400));
+  });
+
+  it('lets the newest income change win rather than adding them up', () => {
+    const p = project(b, flat, [
+      change({ id: 'cut', kind: 'income', amount: 0, to: 2500, startMonth: '2026-12' }),
+      change({ id: 'raise', kind: 'income', amount: 0, to: 3500, startMonth: '2027-06' }),
+    ]);
+    expect(p.scenarioNet[1]).toBe(500);
+    expect(p.endNet).toBe(1500);
+  });
+
+  it('never lets an old-style % change make spending negative', () => {
+    const p = project(b, flat, [change({ kind: 'category', category: 'Leisure', amount: -150 })]);
+    expect(p.endBreakdown.find((r) => r.key === 'cat:Leisure')!.scenario).toBe(0);
+  });
+
+  it('treats a change dated this month as already under way', () => {
+    // 3 payments from Nov 2026 (this month): Dec and Jan are left.
+    const loan = change({ kind: 'temporary', amount: 300, months: 3, startMonth: '2026-11' });
+    const p = project(b, flat, [loan]);
+    expect(p.scenarioNet.slice(1, 4)).toEqual([700, 700, 1000]);
+    expect(changeStatus(loan, '2026-11')).toBe('ongoing');
+    const oneoff = change({ kind: 'oneoff', amount: 5000, startMonth: '2026-11' });
+    expect(project(b, flat, [oneoff]).scenario).toEqual(project(b, flat, []).scenario);
+    expect(changeStatus(oneoff, '2026-11')).toBe('over');
+  });
+
+  it('calls a scenario that goes below zero not sustainable', () => {
+    const p = project(b, flat, [change({ kind: 'oneoff', amount: 20000, startMonth: '2026-12' })]);
+    expect(p.firstShortfall).toBeNull();
+    expect(p.belowZero).toBe(1);
+    expect(verdict(p)).toBe('unsustainable');
+    expect(cushionMonths(p)).toBe(0);
+  });
+
+  it('has no cushion and no comfort with no spending and a negative balance', () => {
+    const empty = makeBaseline({ balance: 0 });
+    empty.months = empty.months.map((m) => ({ ...m, income: 0, expenses: 0, categories: {} }));
+    const p = project(empty, flat, [change({ kind: 'oneoff', amount: 500 })]);
+    expect(cushionMonths(p)).toBe(0);
+    expect(verdict(p)).toBe('unsustainable');
+  });
+
+  it('lets other goals catch up once one is done', () => {
+    // 1000 a month for both. A needs 1000 a month for 3 months and B about 92
+    // for 12: together more than there is, so both get a share at first and A
+    // lands a month late. Once A is done B gets all it needs and catches up.
+    const goals = [
+      { id: 'a', name: 'A', targetAmount: 3000, savedAmount: 0, targetDate: '2027-03-01T00:00:00.000Z', isEvergreen: false },
+      { id: 'c', name: 'B', targetAmount: 1100, savedAmount: 0, targetDate: '2027-12-01T00:00:00.000Z', isEvergreen: false },
+    ];
+    const [a, c] = project(makeBaseline({ goals }), flat, []).goals;
+    expect(a.outcome).toMatchObject({ kind: 'late', monthsLate: 1 });
+    expect(c.outcome).toMatchObject({ kind: 'on_track', month: '2027-11' });
+  });
+
+  it('follows goals due more than ten years out', () => {
+    const goals = [
+      { id: 'far', name: 'Far', targetAmount: 15000, savedAmount: 0, targetDate: '2039-11-01T00:00:00.000Z', isEvergreen: false },
+    ];
+    const [far] = project(makeBaseline({ goals }), flat, []).goals;
+    expect(far.outcome.kind).toBe('on_track');
+  });
+
+  it('counts money already going to goals as available to them', () => {
+    const withSaving = makeBaseline({
+      goals: [
+        { id: 'g', name: 'G', targetAmount: 2200, savedAmount: 0, targetDate: '2027-11-01T00:00:00.000Z', isEvergreen: false },
+      ],
+    });
+    // 200 a month already goes to goals and nothing else is left over.
+    withSaving.months = withSaving.months.map((m) => ({
+      ...m,
+      income: 3000,
+      expenses: 3000,
+      categories: { ...m.categories, Leisure: 1200, [GOAL_SAVINGS]: 200 },
+    }));
+    const [g] = project(withSaving, flat, []).goals;
+    expect(g.outcome).toMatchObject({ kind: 'on_track', month: '2027-10' });
+  });
+
+  it('marks a goal due later this month as not overdue yet', () => {
+    const due = makeBaseline({
+      today: '2026-11-10T00:00:00.000Z',
+      goals: [
+        { id: 'g', name: 'G', targetAmount: 100, savedAmount: 0, targetDate: '2026-11-30T00:00:00.000Z', isEvergreen: false },
+      ],
+    });
+    expect(project(due, flat, []).goals[0].outcome.kind).not.toBe('overdue');
   });
 });

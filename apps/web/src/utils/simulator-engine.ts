@@ -30,6 +30,8 @@ export interface BaselineGoal {
 export interface Baseline {
   currency: string | null;
   currentMonth: string;
+  /** Today's date (ISO), for goal deadlines; the 1st of currentMonth if absent. */
+  today?: string;
   /** Today's balance across the selected accounts (all when none selected). */
   balance: number;
   accounts: Array<{ id: string; name: string; type: string; balance: number }>;
@@ -52,10 +54,16 @@ export interface ScenarioChange {
   name: string;
   enabled: boolean;
   /**
-   * recurring / temporary: payment per month. oneoff: the sum. income: change
-   * per month (+ or −). category: percent more (+) or less (−).
+   * recurring / temporary: payment per month. oneoff: the sum. Always a
+   * positive amount of money. (Scenarios saved before `to` existed stored the
+   * income change (+/−) or the category change in % here; still honoured.)
    */
   amount: number;
+  /**
+   * income: the new monthly income. category: the new monthly spending in
+   * that category. The change is the difference from today's average.
+   */
+  to?: number;
   startMonth: string;
   /** temporary: how many months it lasts. */
   months?: number;
@@ -83,6 +91,9 @@ export const DEFAULT_BASIS: ScenarioBasis = { period: 6, excluded: [], horizon: 
  * accounts (see ReportsService.getMonthlyCashFlow).
  */
 export const TRANSFERS_OUT = '__transfers_out__';
+
+/** The category key the API uses for money put into savings goals. */
+export const GOAL_SAVINGS = '__goal_savings__';
 
 // ---------------------------------------------------------------------------
 // Months
@@ -167,15 +178,15 @@ export function averageMonth(baseline: Baseline, basis: ScenarioBasis): AverageM
 // Changes
 
 /**
- * The month offset a change starts in. One starting this month counts from
- * the first projected month, as this month's average is already on its way;
- * one that started earlier keeps its real (negative) start, so a loan taken
- * out months ago runs only for the payments it has left and a one-off that
- * already happened is not paid again (a saved scenario grows older).
+ * The month offset a change starts in, relative to the current month (0).
+ * Changes start in a future month; a saved scenario grows older, though, so
+ * a change can be under way or over. Offset 0 and earlier have happened (or
+ * are happening) and are already in today's balance or this month's
+ * remainder, so only offsets from 1 count: a loan taken out months ago runs
+ * just for the payments it has left, and a past one-off is not paid again.
  */
 function startOffset(change: ScenarioChange, currentMonth: string): number {
-  const raw = monthDiff(currentMonth, change.startMonth);
-  return raw === 0 ? 1 : raw;
+  return monthDiff(currentMonth, change.startMonth);
 }
 
 /** Last month offset a change applies to; Infinity when it never ends. */
@@ -195,6 +206,18 @@ export function isActive(change: ScenarioChange, offset: number, currentMonth: s
 }
 
 /**
+ * Where a change stands today: still to come, under way (it started this
+ * month or earlier and is not over) or over (it no longer affects anything).
+ */
+export function changeStatus(
+  change: ScenarioChange,
+  currentMonth: string,
+): 'upcoming' | 'ongoing' | 'over' {
+  if (endOffset(change, currentMonth) < 1) return 'over';
+  return startOffset(change, currentMonth) >= 1 ? 'upcoming' : 'ongoing';
+}
+
+/**
  * What a change does to one month, relative to the average month: extra
  * income, extra spending and per-category adjustments (all signed).
  */
@@ -204,6 +227,14 @@ export interface MonthEffect {
   categories: Record<string, number>;
   /** Payments that are not an existing category (mortgage, loan), by change. */
   payments: Array<{ id: string; name: string; amount: number }>;
+}
+
+/** Of several changes setting the same figure, the one that started last wins. */
+function latest(list: ScenarioChange[]): ScenarioChange | undefined {
+  return list.reduce<ScenarioChange | undefined>(
+    (best, c) => (!best || c.startMonth >= best.startMonth ? c : best),
+    undefined,
+  );
 }
 
 export function monthEffect(
@@ -217,37 +248,54 @@ export function monthEffect(
     effect.categories[category] = (effect.categories[category] ?? 0) + delta;
     effect.spending += delta;
   };
-  // A category a new payment replaces is gone; a % change to it has nothing
-  // left to change.
-  const replaced = new Set(
-    changes
-      .filter((c) => c.kind === 'recurring' && c.category && isActive(c, offset, currentMonth))
-      .map((c) => c.category as string),
-  );
-  for (const c of changes) {
-    if (!isActive(c, offset, currentMonth)) continue;
-    switch (c.kind) {
-      case 'income':
-        effect.income += c.amount;
-        break;
-      case 'recurring':
-      case 'temporary':
-        effect.spending += c.amount;
-        effect.payments.push({ id: c.id, name: c.name, amount: c.amount });
-        if (c.kind === 'recurring' && c.category && avg.categories[c.category]) {
-          adjust(c.category, -avg.categories[c.category]);
-        }
-        break;
-      case 'oneoff':
-        if (c.direction === 'in') effect.income += c.amount;
-        else effect.spending += c.amount;
-        break;
-      case 'category':
-        if (c.category && avg.categories[c.category] && !replaced.has(c.category)) {
-          adjust(c.category, (avg.categories[c.category] * c.amount) / 100);
-        }
-        break;
+  const active = changes.filter((c) => isActive(c, offset, currentMonth));
+
+  // A new payment that replaces a category frees that category's average
+  // once, however many payments name it; a later change to the category has
+  // nothing left to change.
+  const replaced = new Set<string>();
+  for (const c of active) {
+    if (c.kind === 'recurring' && c.category && !replaced.has(c.category)) {
+      replaced.add(c.category);
+      if (avg.categories[c.category]) adjust(c.category, -avg.categories[c.category]);
     }
+  }
+
+  for (const c of active) {
+    if (c.kind === 'recurring' || c.kind === 'temporary') {
+      effect.spending += c.amount;
+      effect.payments.push({ id: c.id, name: c.name, amount: c.amount });
+    } else if (c.kind === 'oneoff') {
+      if (c.direction === 'in') effect.income += c.amount;
+      else effect.spending += c.amount;
+    }
+  }
+
+  // Income: the newest "income becomes X" sets it; old-style +/- changes add.
+  const incomeTarget = latest(active.filter((c) => c.kind === 'income' && c.to !== undefined));
+  if (incomeTarget) effect.income += (incomeTarget.to as number) - avg.income;
+  for (const c of active) {
+    if (c.kind === 'income' && c.to === undefined) effect.income += c.amount;
+  }
+
+  // Categories: the newest "spending becomes X" sets it; old-style % changes
+  // apply to the average, never below nothing.
+  const touched = new Set(
+    active.filter((c) => c.kind === 'category' && c.category).map((c) => c.category as string),
+  );
+  for (const name of touched) {
+    if (replaced.has(name)) continue;
+    const base = avg.categories[name] ?? 0;
+    const target = latest(
+      active.filter((c) => c.kind === 'category' && c.category === name && c.to !== undefined),
+    );
+    let value = target ? Math.max(0, target.to as number) : base;
+    for (const c of active) {
+      if (c.kind === 'category' && c.category === name && c.to === undefined) {
+        value += (base * Math.max(-100, c.amount)) / 100;
+      }
+    }
+    if (value !== base) adjust(name, Math.max(0, value) - base);
   }
   return effect;
 }
@@ -260,7 +308,7 @@ export type GoalOutcome =
   | { kind: 'on_track'; month: string; baseMonth: string | null }
   | { kind: 'late'; month: string; baseMonth: string | null; monthsLate: number }
   | { kind: 'paused'; baseMonth: string | null }
-  /** The target date has passed; not counted against what is left over. */
+  /** The target date has passed. */
   | { kind: 'overdue' };
 
 export interface GoalImpact {
@@ -290,6 +338,8 @@ export interface Projection {
   /** Left over in a typical month at the end of the projection (no one-offs). */
   endNet: number;
   lowest: { value: number; offset: number };
+  /** First month the balance is below zero, or null. */
+  belowZero: number | null;
   /** First month the scenario spends more than it earns, or null. */
   firstShortfall: number | null;
   /** The last month of the projection, line by line. */
@@ -307,6 +357,7 @@ export function project(
   const H = basis.horizon;
   const now = baseline.currentMonth;
   const baseNet = avg.income - avg.spending;
+  const goalSaving = avg.categories[GOAL_SAVINGS] ?? 0;
 
   // Today's balance already holds this month's transactions so far; what an
   // average month would still bring lands by the end of the first projected
@@ -320,7 +371,11 @@ export function project(
   const base = [baseline.balance];
   const scenario = [baseline.balance];
   const scenarioNet = [0];
+  // What could go to savings goals each month: what is left over plus what
+  // already goes to them (both are free money as far as the goals go).
+  const scenarioPool = [0];
   let firstShortfall: number | null = null;
+  let belowZero: number | null = null;
 
   for (let k = 1; k <= H; k++) {
     months.push(addMonths(now, k));
@@ -330,9 +385,11 @@ export function project(
     const net = baseNet + e.income - e.spending;
     scenarioNet.push(net);
     scenario.push(scenario[k - 1] + net + carry);
+    scenarioPool.push(net + goalSaving + (e.categories[GOAL_SAVINGS] ?? 0));
     // A one-off is not a monthly shortfall; only count recurring deficits.
     const recurringNet = net + oneOffSpend(changes, k, now) - oneOffIncome(changes, k, now);
     if (firstShortfall === null && recurringNet < 0) firstShortfall = k;
+    if (belowZero === null && scenario[k] < 0) belowZero = k;
   }
 
   let lowest = { value: scenario[0], offset: 0 };
@@ -360,6 +417,7 @@ export function project(
   }
   const endNet = baseNet + end.income - end.spending;
   rows.push({ key: 'left_over', label: '', base: baseNet, scenario: endNet, upIsGood: true });
+  const endPool = endNet + goalSaving + (end.categories[GOAL_SAVINGS] ?? 0);
 
   return {
     months,
@@ -369,10 +427,16 @@ export function project(
     scenarioNet,
     endNet,
     lowest,
+    belowZero,
     firstShortfall,
     endBreakdown: rows,
     endSpending: avg.spending + end.spending,
-    goals: goalImpacts(baseline, baseNet, scenarioNet, endNet),
+    goals: goalImpacts(
+      baseline,
+      () => baseNet + goalSaving,
+      (k) => (k < scenarioPool.length ? scenarioPool[k] : endPool),
+      H,
+    ),
   };
 }
 
@@ -389,50 +453,80 @@ function oneOffIncome(changes: ScenarioChange[], k: number, now: string): number
 }
 
 /**
- * Each goal with a target date needs (target − saved) / months-left every
- * month. Those needs are paid from what is left over: in full when there is
- * enough, proportionally when there is less, not at all when nothing is left.
+ * Whole months from `from` until `to`, counted the way the Goals screen does
+ * (a month counts only if it ends before the target date).
+ */
+export function fullMonthsUntil(from: Date, to: Date): number {
+  if (to.getTime() <= from.getTime()) return 0;
+  let months =
+    (to.getUTCFullYear() - from.getUTCFullYear()) * 12 + (to.getUTCMonth() - from.getUTCMonth());
+  if (to.getUTCDate() <= from.getUTCDate()) months -= 1;
+  return Math.max(0, months);
+}
+
+/**
+ * Savings goals with a target date, funded together from `poolAt(k)`: each
+ * month every open goal asks for what it still needs spread over the months
+ * it has left (as the Goals screen plans it), gets it in full when there is
+ * enough and a share when there is less. A goal that is done stops asking, so
+ * the others can catch up.
  */
 export function goalImpacts(
   baseline: Baseline,
-  baseNet: number,
-  scenarioNet: number[],
-  lastNet: number,
+  basePool: (k: number) => number,
+  scenarioPool: (k: number) => number,
+  horizon: number,
 ): GoalImpact[] {
   const now = baseline.currentMonth;
-  const goals = baseline.goals.filter((g) => !g.isEvergreen && g.targetDate);
-  const plans = goals.map((g) => {
-    const dueMonth = g.targetDate!.slice(0, 7);
-    const due = monthDiff(now, dueMonth);
-    const remaining = Math.max(0, g.targetAmount - g.savedAmount);
-    return { goal: g, dueMonth, due, remaining, need: due >= 1 ? remaining / due : 0 };
-  });
-  // An overdue goal would need everything at once, which would swamp the
-  // shares of the goals still on schedule; it is reported on its own.
-  const totalNeed = plans.reduce((s, p) => s + p.need, 0);
-  const LIMIT = 120;
+  const today = baseline.today ? new Date(baseline.today) : new Date(`${now}-01T00:00:00Z`);
+  const plans = baseline.goals
+    .filter((g) => !g.isEvergreen && g.targetDate)
+    .map((g) => {
+      const target = new Date(g.targetDate as string);
+      return {
+        goal: g,
+        dueMonth: (g.targetDate as string).slice(0, 7),
+        overdue: target.getTime() < today.getTime(),
+        due: fullMonthsUntil(today, target),
+        remaining: Math.max(0, g.targetAmount - g.savedAmount),
+      };
+    });
+  const open = plans.filter((p) => p.remaining > 0 && !p.overdue);
+  const limit = Math.max(120, ...open.map((p) => p.due + horizon));
 
-  const reach = (need: number, remaining: number, netAt: (k: number) => number) => {
-    let saved = 0;
-    for (let k = 1; k <= LIMIT; k++) {
-      const share = totalNeed > 0 ? Math.max(0, Math.min(1, netAt(k) / totalNeed)) : 0;
-      saved += need * share;
-      if (saved >= remaining - 0.005) return k;
+  const finishMonths = (poolAt: (k: number) => number): Array<number | null> => {
+    const saved = open.map(() => 0);
+    const doneAt: Array<number | null> = open.map(() => null);
+    for (let k = 1; k <= limit && doneAt.some((d) => d === null); k++) {
+      const needs = open.map((p, i) =>
+        doneAt[i] !== null ? 0 : (p.remaining - saved[i]) / Math.max(1, p.due - k + 1),
+      );
+      const total = needs.reduce((a, b) => a + b, 0);
+      if (total <= 0) break;
+      const share = Math.max(0, Math.min(1, poolAt(k) / total));
+      needs.forEach((need, i) => {
+        if (doneAt[i] !== null) return;
+        saved[i] += need * share;
+        if (saved[i] >= open[i].remaining - 0.005) doneAt[i] = k;
+      });
     }
-    return null;
+    return doneAt;
   };
-  const scenarioAt = (k: number) => (k < scenarioNet.length ? scenarioNet[k] : lastNet);
+  const baseDone = finishMonths(basePool);
+  const scenarioDone = finishMonths(scenarioPool);
 
-  return plans.map(({ goal, dueMonth, due, remaining, need }) => {
-    if (remaining <= 0) return { goal, dueMonth, outcome: { kind: 'done' } };
-    if (due < 1) return { goal, dueMonth, outcome: { kind: 'overdue' } };
-    const b = reach(need, remaining, () => baseNet);
-    const s = reach(need, remaining, scenarioAt);
+  return plans.map((p) => {
+    const { goal, dueMonth } = p;
+    if (p.remaining <= 0) return { goal, dueMonth, outcome: { kind: 'done' } };
+    if (p.overdue) return { goal, dueMonth, outcome: { kind: 'overdue' } };
+    const i = open.indexOf(p);
+    const b = baseDone[i];
+    const s = scenarioDone[i];
     const baseMonth = b === null ? null : addMonths(now, b);
     let outcome: GoalOutcome;
     if (s === null) outcome = { kind: 'paused', baseMonth };
-    else if (s <= due) outcome = { kind: 'on_track', month: addMonths(now, s), baseMonth };
-    else outcome = { kind: 'late', month: addMonths(now, s), baseMonth, monthsLate: s - due };
+    else if (s <= p.due) outcome = { kind: 'on_track', month: addMonths(now, s), baseMonth };
+    else outcome = { kind: 'late', month: addMonths(now, s), baseMonth, monthsLate: s - p.due };
     return { goal, dueMonth, outcome };
   });
 }
@@ -441,15 +535,18 @@ export type Verdict = 'comfortable' | 'tight' | 'unsustainable';
 
 /** A one-word read of a projection, used on the comparison cards. */
 export function verdict(p: Projection): Verdict {
-  if (p.firstShortfall !== null && p.endNet < 0) return 'unsustainable';
-  const cushion = p.endSpending > 0 ? p.lowest.value / p.endSpending : Infinity;
-  if (cushion < 3 || p.firstShortfall !== null) return 'tight';
+  if (p.belowZero !== null || (p.firstShortfall !== null && p.endNet < 0)) return 'unsustainable';
+  if (cushionMonths(p) < 3 || p.firstShortfall !== null) return 'tight';
   return 'comfortable';
 }
 
-/** Months of spending the lowest balance would cover. */
+/**
+ * Months of spending the lowest balance would cover: 0 when it goes to zero
+ * or below, Infinity when there is money and no spending to cover.
+ */
 export function cushionMonths(p: Projection): number {
-  return p.endSpending > 0 ? Math.max(0, p.lowest.value) / p.endSpending : 0;
+  if (p.lowest.value <= 0) return 0;
+  return p.endSpending > 0 ? p.lowest.value / p.endSpending : Infinity;
 }
 
 // ---------------------------------------------------------------------------
@@ -492,6 +589,7 @@ export function normalizeChanges(raw: unknown): ScenarioChange[] {
       ...(typeof c.months === 'number' && c.months >= 1 ? { months: Math.round(c.months) } : {}),
       ...(typeof c.category === 'string' && c.category ? { category: c.category } : {}),
       ...(c.direction === 'in' || c.direction === 'out' ? { direction: c.direction } : {}),
+      ...(typeof c.to === 'number' && Number.isFinite(c.to) && c.to >= 0 ? { to: c.to } : {}),
     }];
   });
 }
