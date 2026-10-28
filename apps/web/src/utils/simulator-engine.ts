@@ -16,6 +16,8 @@ export interface BaselineMonth {
   income: number;
   expenses: number;
   categories: Record<string, number>;
+  /** Parent category → subcategory → spend (part of the parent's figure). */
+  subcategories?: Record<string, Record<string, number>>;
 }
 
 export interface BaselineGoal {
@@ -69,6 +71,8 @@ export interface ScenarioChange {
   months?: number;
   /** recurring: the expense category it replaces. category: the one it adjusts. */
   category?: string;
+  /** With `category`: just this subcategory of it is replaced or adjusted. */
+  subcategory?: string;
   /** oneoff: money in or out. */
   direction?: 'in' | 'out';
 }
@@ -128,6 +132,8 @@ export interface AverageMonth {
   spending: number;
   /** Average spend per top-level expense category. */
   categories: Record<string, number>;
+  /** Average spend per subcategory, by parent (part of the parent's figure). */
+  subcategories: Record<string, Record<string, number>>;
   /** The months in the chosen period, oldest first. */
   window: BaselineMonth[];
   /** The months actually averaged (the window minus exclusions). */
@@ -161,6 +167,15 @@ export function averageMonth(baseline: Baseline, basis: ScenarioBasis): AverageM
       categories[name] = (categories[name] ?? 0) + value / n;
     }
   }
+  const subcategories: Record<string, Record<string, number>> = {};
+  for (const m of used) {
+    for (const [parent, subs] of Object.entries(m.subcategories ?? {})) {
+      for (const [name, value] of Object.entries(subs)) {
+        const into = (subcategories[parent] ??= {});
+        into[name] = (into[name] ?? 0) + value / n;
+      }
+    }
+  }
   const income = used.reduce((sum, m) => sum + m.income, 0) / n;
   const spending = Object.values(categories).reduce((sum, v) => sum + v, 0);
 
@@ -171,7 +186,27 @@ export function averageMonth(baseline: Baseline, basis: ScenarioBasis): AverageM
   );
 
   const empty = new Set(window.filter((m) => !hasData(m)).map((m) => m.month));
-  return { income, spending, categories, window, used: used.map((m) => m.month), unusual, empty };
+  return {
+    income,
+    spending,
+    categories,
+    subcategories,
+    window,
+    used: used.map((m) => m.month),
+    unusual,
+    empty,
+  };
+}
+
+/**
+ * What a category (or one of its subcategories) costs in an average month.
+ * A subcategory never counts for more than its parent: refunds elsewhere in
+ * the parent can make the parent's net smaller than one of its parts.
+ */
+export function categoryAverage(avg: AverageMonth, category: string, subcategory?: string): number {
+  const parent = avg.categories[category] ?? 0;
+  if (!subcategory) return parent;
+  return Math.min(parent, avg.subcategories[category]?.[subcategory] ?? 0);
 }
 
 // ---------------------------------------------------------------------------
@@ -227,6 +262,8 @@ export interface MonthEffect {
   categories: Record<string, number>;
   /** Payments that are not an existing category (mortgage, loan), by change. */
   payments: Array<{ id: string; name: string; amount: number }>;
+  /** Subcategories a change touches: parent → subcategory → new monthly cost. */
+  subcategories: Record<string, Record<string, number>>;
 }
 
 /** Of several changes setting the same figure, the one that started last wins. */
@@ -243,23 +280,8 @@ export function monthEffect(
   currentMonth: string,
   avg: AverageMonth,
 ): MonthEffect {
-  const effect: MonthEffect = { income: 0, spending: 0, categories: {}, payments: [] };
-  const adjust = (category: string, delta: number) => {
-    effect.categories[category] = (effect.categories[category] ?? 0) + delta;
-    effect.spending += delta;
-  };
+  const effect: MonthEffect = { income: 0, spending: 0, categories: {}, payments: [], subcategories: {} };
   const active = changes.filter((c) => isActive(c, offset, currentMonth));
-
-  // A new payment that replaces a category frees that category's average
-  // once, however many payments name it; a later change to the category has
-  // nothing left to change.
-  const replaced = new Set<string>();
-  for (const c of active) {
-    if (c.kind === 'recurring' && c.category && !replaced.has(c.category)) {
-      replaced.add(c.category);
-      if (avg.categories[c.category]) adjust(c.category, -avg.categories[c.category]);
-    }
-  }
 
   for (const c of active) {
     if (c.kind === 'recurring' || c.kind === 'temporary') {
@@ -278,24 +300,55 @@ export function monthEffect(
     if (c.kind === 'income' && c.to === undefined) effect.income += c.amount;
   }
 
-  // Categories: the newest "spending becomes X" sets it; old-style % changes
-  // apply to the average, never below nothing.
+  // Categories, one parent at a time:
+  // - a new payment that replaces the whole category leaves nothing of it
+  //   (however many payments name it), and nothing left to change;
+  // - otherwise the newest "spending becomes X" on the category sets it, and
+  //   old-style % changes apply to its average;
+  // - then each subcategory touched moves the category by its own difference:
+  //   replaced (its average goes) or set to a new amount (the newest wins).
+  // The category never costs less than nothing.
   const touched = new Set(
-    active.filter((c) => c.kind === 'category' && c.category).map((c) => c.category as string),
+    active
+      .filter((c) => (c.kind === 'recurring' || c.kind === 'category') && c.category)
+      .map((c) => c.category as string),
   );
-  for (const name of touched) {
-    if (replaced.has(name)) continue;
-    const base = avg.categories[name] ?? 0;
-    const target = latest(
-      active.filter((c) => c.kind === 'category' && c.category === name && c.to !== undefined),
-    );
-    let value = target ? Math.max(0, target.to as number) : base;
-    for (const c of active) {
-      if (c.kind === 'category' && c.category === name && c.to === undefined) {
-        value += (base * Math.max(-100, c.amount)) / 100;
+  for (const parent of touched) {
+    const base = avg.categories[parent] ?? 0;
+    const onParent = active.filter((c) => c.category === parent && !c.subcategory);
+    if (onParent.some((c) => c.kind === 'recurring')) {
+      if (base) {
+        effect.categories[parent] = -base;
+        effect.spending -= base;
       }
+      continue;
     }
-    if (value !== base) adjust(name, Math.max(0, value) - base);
+    let value = base;
+    const target = latest(onParent.filter((c) => c.kind === 'category' && c.to !== undefined));
+    if (target) value = Math.max(0, target.to as number);
+    for (const c of onParent) {
+      if (c.kind === 'category' && c.to === undefined) value += (base * Math.max(-100, c.amount)) / 100;
+    }
+    const subs = new Set(
+      active.filter((c) => c.category === parent && c.subcategory).map((c) => c.subcategory as string),
+    );
+    for (const sub of subs) {
+      const subBase = categoryAverage(avg, parent, sub);
+      const onSub = active.filter((c) => c.category === parent && c.subcategory === sub);
+      let subValue = subBase;
+      if (onSub.some((c) => c.kind === 'recurring')) subValue = 0;
+      else {
+        const subTarget = latest(onSub.filter((c) => c.kind === 'category' && c.to !== undefined));
+        if (subTarget) subValue = Math.max(0, subTarget.to as number);
+      }
+      value += subValue - subBase;
+      (effect.subcategories[parent] ??= {})[sub] = subValue;
+    }
+    value = Math.max(0, value);
+    if (value !== base) {
+      effect.categories[parent] = value - base;
+      effect.spending += value - base;
+    }
   }
   return effect;
 }
@@ -324,6 +377,8 @@ export interface BreakdownRow {
   scenario: number;
   /** For rows where more is better (income, left over). */
   upIsGood: boolean;
+  /** Set on a subcategory row: the category it belongs to. */
+  parent?: string;
 }
 
 export interface Projection {
@@ -411,6 +466,17 @@ export function project(
       scenario: avg.categories[name] + (end.categories[name] ?? 0),
       upIsGood: false,
     });
+    // Subcategories a change touches, under their category.
+    for (const [sub, value] of Object.entries(end.subcategories[name] ?? {})) {
+      rows.push({
+        key: `sub:${name}/${sub}`,
+        label: sub,
+        base: categoryAverage(avg, name, sub),
+        scenario: value,
+        upIsGood: false,
+        parent: name,
+      });
+    }
   }
   for (const p of end.payments) {
     rows.push({ key: `change:${p.id}`, label: p.name, base: 0, scenario: p.amount, upIsGood: false });
@@ -588,6 +654,9 @@ export function normalizeChanges(raw: unknown): ScenarioChange[] {
       startMonth: c.startMonth,
       ...(typeof c.months === 'number' && c.months >= 1 ? { months: Math.round(c.months) } : {}),
       ...(typeof c.category === 'string' && c.category ? { category: c.category } : {}),
+      ...(typeof c.category === 'string' && c.category && typeof c.subcategory === 'string' && c.subcategory
+        ? { subcategory: c.subcategory }
+        : {}),
       ...(c.direction === 'in' || c.direction === 'out' ? { direction: c.direction } : {}),
       ...(typeof c.to === 'number' && Number.isFinite(c.to) && c.to >= 0 ? { to: c.to } : {}),
     }];

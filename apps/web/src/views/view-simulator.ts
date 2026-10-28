@@ -11,6 +11,7 @@ import {
   averageMonth,
   cushionMonths,
   formatMonth,
+  categoryAverage,
   changeStatus,
   GOAL_SAVINGS,
   isActive,
@@ -170,6 +171,42 @@ export class ViewSimulator extends LitElement {
     this.updateBasis({ accounts: next.length === all.length ? [] : next });
   }
 
+  /** "Housing" or "Housing › Rent", for a change's category. */
+  private categoryName(c: { category?: string; subcategory?: string }): string {
+    if (!c.category) return '';
+    const parent = this.categoryLabel(c.category);
+    return c.subcategory ? `${parent} › ${c.subcategory}` : parent;
+  }
+
+  /**
+   * Choices for a category picker: each category with, under it, its
+   * subcategories. The value is JSON [category, subcategory | null].
+   */
+  private categoryOptions(avg: AverageMonth, include: (name: string) => boolean, c: ScenarioChange) {
+    const parents = Object.entries(avg.categories)
+      .filter(([name]) => include(name))
+      .sort((a, b) => b[1] - a[1]);
+    return parents.flatMap(([name, value]) => {
+      const subs = Object.keys(avg.subcategories[name] ?? {})
+        .map((sub) => [sub, categoryAverage(avg, name, sub)] as const)
+        .sort((a, b) => b[1] - a[1]);
+      return [
+        html`<option value="${JSON.stringify([name, null])}" ?selected="${name === c.category && !c.subcategory}">
+          ${i18n.t('simulator.category_avg', { name: this.categoryLabel(name), amount: this.money(value) })}</option>`,
+        ...subs.map(([sub, v]) => html`<option value="${JSON.stringify([name, sub])}" ?selected="${name === c.category && sub === c.subcategory}">
+          ${'\u00a0\u00a0\u00a0'}${i18n.t('simulator.category_avg', { name: `${this.categoryLabel(name)} › ${sub}`, amount: this.money(v) })}</option>`),
+      ];
+    });
+  }
+
+  /** Reads a category picker's value back into category and subcategory. */
+  private pickCategory(e: Event): Partial<ScenarioChange> {
+    const raw = (e.target as HTMLSelectElement).value;
+    if (!raw) return { category: undefined, subcategory: undefined };
+    const [category, sub] = JSON.parse(raw) as [string, string | null];
+    return { category, subcategory: sub ?? undefined };
+  }
+
   /** A category name as shown, translating the API's own keys. */
   private categoryLabel(name: string): string {
     if (name === TRANSFERS_OUT) return i18n.t('simulator.transfers_out');
@@ -296,13 +333,17 @@ export class ViewSimulator extends LitElement {
     const avg = averageMonth(this.baseline, this.draft.basis);
     if (patch.kind && patch.kind !== prev.kind) {
       next.category = undefined;
+      next.subcategory = undefined;
       next.amount = 0;
       // Income starts from what comes in today, to be edited from there.
       next.to = patch.kind === 'income' ? Math.round(avg.income) : undefined;
     }
-    // Picking a category starts its new amount from what it costs today.
-    if (next.kind === 'category' && patch.category !== undefined && patch.category !== prev.category) {
-      next.to = patch.category ? Math.round(avg.categories[patch.category] ?? 0) : undefined;
+    // Picking a category (or a subcategory) starts its new amount from what it
+    // costs today.
+    const picked = 'category' in patch || 'subcategory' in patch;
+    if (next.kind === 'category' && picked &&
+        (next.category !== prev.category || next.subcategory !== prev.subcategory)) {
+      next.to = next.category ? Math.round(categoryAverage(avg, next.category, next.subcategory)) : undefined;
     }
     this.editor = { ...this.editor, change: next };
   }
@@ -328,6 +369,7 @@ export class ViewSimulator extends LitElement {
     if (c.kind !== 'temporary') delete c.months;
     if (c.kind !== 'oneoff') delete c.direction;
     if (c.kind !== 'recurring' && c.kind !== 'category') delete c.category;
+    if (!c.category || !c.subcategory) delete c.subcategory;
     if (c.kind === 'income' || c.kind === 'category') c.amount = 0;
     else delete c.to;
     this.patchDraft({
@@ -359,14 +401,18 @@ export class ViewSimulator extends LitElement {
     const start = this.month(c.startMonth);
     const status = changeStatus(c, now);
     const others = this.draft.changes.filter((x) => x.id !== c.id && x.enabled);
-    // A category replaced by a new payment earlier in the list is not freed
-    // again; one replaced by any payment cannot be changed any more.
-    const replacedBy = (name: string, before: boolean) =>
+    // What another new payment already replaces: the whole category covers
+    // all of its subcategories. A category (or subcategory) replaced earlier
+    // in the list is not freed again; one replaced at all cannot be changed.
+    const replacedBy = (name: string, sub: string | undefined, before: boolean) =>
       others.find(
         (x) =>
           x.kind === 'recurring' &&
           x.category === name &&
-          (!before || this.draft.changes.indexOf(x) < this.draft.changes.indexOf(c)),
+          (!x.subcategory || x.subcategory === sub) &&
+          (!before ||
+            (!x.subcategory && !!sub) ||
+            this.draft.changes.indexOf(x) < this.draft.changes.indexOf(c)),
       );
     // Started before the end of the months being averaged: those months may
     // already include it, so it would count twice.
@@ -382,8 +428,8 @@ export class ViewSimulator extends LitElement {
     const from = status === 'ongoing' ? t('ongoing') : start;
     switch (c.kind) {
       case 'recurring': {
-        const twice = c.category && replacedBy(c.category, true);
-        const freed = c.category && !twice ? avg.categories[c.category] ?? 0 : 0;
+        const twice = c.category && replacedBy(c.category, c.subcategory, true);
+        const freed = c.category && !twice ? categoryAverage(avg, c.category, c.subcategory) : 0;
         const effect = -(c.amount - freed);
         return {
           effect,
@@ -391,7 +437,7 @@ export class ViewSimulator extends LitElement {
           main: t('effect_monthly', { amount: this.money(effect, true), month: from }),
           sub: c.category
             ? twice
-              ? t('sub_replaced_already', { category: this.categoryLabel(c.category), name: twice.name })
+              ? t('sub_replaced_already', { category: this.categoryName(c), name: twice.name })
               : t('sub_replaces', { amount: this.money(c.amount), old: this.money(freed) })
             : t('sub_extra'),
         };
@@ -425,12 +471,12 @@ export class ViewSimulator extends LitElement {
       }
       case 'category': {
         if (!c.category) return { effect: 0, main: t('effect_none'), sub: t('sub_pick_category') };
-        const label = this.categoryLabel(c.category);
-        const by = replacedBy(c.category, false);
+        const label = this.categoryName(c);
+        const by = replacedBy(c.category, c.subcategory, false);
         if (by) {
           return { effect: 0, main: t('effect_none'), sub: t('sub_category_replaced', { category: label, name: by.name }) };
         }
-        const base = avg.categories[c.category] ?? 0;
+        const base = categoryAverage(avg, c.category, c.subcategory);
         const to = c.to ?? Math.max(0, base * (1 + Math.max(-100, c.amount) / 100));
         const effect = base - to;
         return {
@@ -817,9 +863,9 @@ export class ViewSimulator extends LitElement {
             const diff = r.scenario - r.base;
             const rounded = Math.round(diff);
             const good = r.upIsGood ? diff > 0 : diff < 0;
-            const label = r.key === 'income' ? i18n.t('simulator.row_income') : r.key === 'left_over' ? i18n.t('simulator.row_left_over') : this.categoryLabel(r.label);
+            const label = r.key === 'income' ? i18n.t('simulator.row_income') : r.key === 'left_over' ? i18n.t('simulator.row_left_over') : r.parent ? r.label : this.categoryLabel(r.label);
             return html`
-              <div class="tr ${r.key === 'left_over' ? 'total' : ''}" role="row">
+              <div class="tr ${r.key === 'left_over' ? 'total' : ''} ${r.parent ? 'subrow' : ''}" role="row">
                 <span role="cell">${label}</span>
                 <span role="cell" class="mono">${this.money(r.base)}</span>
                 <span role="cell" class="mono">${this.money(r.scenario)}</span>
@@ -889,9 +935,6 @@ export class ViewSimulator extends LitElement {
     const H = this.draft.basis.horizon;
     const starts = Array.from({ length: 36 }, (_, i) => addMonths(now, i + 1));
     if (!starts.includes(c.startMonth)) starts.unshift(c.startMonth);
-    const categories = Object.entries(avg.categories).sort((a, b) => b[1] - a[1]);
-    // A new payment replaces a real category, not money moved out or saved.
-    const replaceable = categories.filter(([name]) => name !== TRANSFERS_OUT && name !== GOAL_SAVINGS);
     const d = this.describe(c, avg);
     const color = this.effectClass(d.effect);
     // Every amount is money, typed as a positive number. Income and category
@@ -902,7 +945,7 @@ export class ViewSimulator extends LitElement {
       : c.kind === 'income'
         ? t('field_new_income', { now: this.money(avg.income) })
         : c.kind === 'category'
-          ? t('field_new_spending', { now: this.money(c.category ? avg.categories[c.category] ?? 0 : 0) })
+          ? t('field_new_spending', { now: this.money(c.category ? categoryAverage(avg, c.category, c.subcategory) : 0) })
           : t('field_amount_month');
     const num = (e: Event) => {
       const v = (e.target as HTMLInputElement).valueAsNumber;
@@ -936,9 +979,9 @@ export class ViewSimulator extends LitElement {
           ${c.kind === 'category' ? html`
             <label class="field">
               <span>${t('field_category')}</span>
-              <select @change="${(e: Event) => this.editChange({ category: (e.target as HTMLSelectElement).value || undefined })}">
+              <select @change="${(e: Event) => this.editChange(this.pickCategory(e))}">
                 <option value="" ?selected="${!c.category}">—</option>
-                ${categories.map(([name, v]) => html`<option value="${name}" ?selected="${name === c.category}">${t('category_avg', { name: this.categoryLabel(name), amount: this.money(v) })}</option>`)}
+                ${this.categoryOptions(avg, () => true, c)}
               </select>
             </label>
           ` : nothing}
@@ -958,9 +1001,10 @@ export class ViewSimulator extends LitElement {
           ${c.kind === 'recurring' ? html`
             <label class="field">
               <span>${t('field_replaces')}</span>
-              <select @change="${(e: Event) => this.editChange({ category: (e.target as HTMLSelectElement).value || undefined })}">
+              <select @change="${(e: Event) => this.editChange(this.pickCategory(e))}">
                 <option value="" ?selected="${!c.category}">${t('replaces_nothing')}</option>
-                ${replaceable.map(([name, v]) => html`<option value="${name}" ?selected="${name === c.category}">${t('category_avg', { name: this.categoryLabel(name), amount: this.money(v) })}</option>`)}
+                <!-- A new payment replaces a real category, not money moved out or saved. -->
+                ${this.categoryOptions(avg, (name) => name !== TRANSFERS_OUT && name !== GOAL_SAVINGS, c)}
               </select>
             </label>
           ` : nothing}
@@ -1199,6 +1243,8 @@ export class ViewSimulator extends LitElement {
     .tr > span:not(:first-child) { text-align: right; }
     .tr > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .tr.th { font-size: 12px; min-height: 28px; color: var(--md-sys-color-on-surface-variant); border-bottom: 1px solid var(--md-sys-color-outline-variant); }
+    .tr.subrow { min-height: 28px; font-size: 13px; color: var(--md-sys-color-on-surface-variant); }
+    .tr.subrow > span:first-child { padding-left: 16px; }
     .tr.total { font-weight: 500; border-top: 1px solid var(--md-sys-color-outline-variant); margin-top: 4px; }
 
     .goal { display: flex; flex-direction: column; gap: 8px; }

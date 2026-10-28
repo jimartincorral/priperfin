@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.31.0 - 2026-10-28
+
+Simulator: changes can now target a subcategory.
+
+- **Subcategories in scenarios.** "Spend more or less" and the "Replaces" option of "New regular payment" list each category's subcategories under it (for example Housing › Utilities), with what each costs a month. Changing or replacing a subcategory moves its category by the same amount.
+- The "A typical month" table shows each subcategory a scenario changes under its category.
+- A new payment that replaces a whole category still overrides any change to its subcategories, and the change says so.
+
 ## v1.30.0 - 2026-10-28
 
 Simulator: a full review of the calculations, and every change is now entered in euros.

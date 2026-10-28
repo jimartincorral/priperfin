@@ -398,6 +398,7 @@ export class ReportsService {
     // every euro (the Simulator): out is skipped below and in counts as income.
     let goalOut = 0;
     let goalIn = 0;
+    const expenseBySubcategory = new Map<string, Map<string, number>>();
     const expenseByCategory = new Map<string, number>();
     const incomeSources = new Map<string, number>();
 
@@ -439,6 +440,13 @@ export class ReportsService {
       let targetName = 'Uncategorized';
       if (category) {
         targetName = category.parent ? category.parent.name : category.name;
+      }
+      // The same line, kept by subcategory under its parent, for callers that
+      // look below the top level (the Simulator).
+      if (category?.parent) {
+        const subs = expenseBySubcategory.get(targetName) ?? new Map();
+        subs.set(category.name, (subs.get(category.name) || 0) - amount);
+        expenseBySubcategory.set(targetName, subs);
       }
       // Outgoing amounts are negative, so subtracting adds to the outflow and a
       // positive refund nets against it.
@@ -483,6 +491,7 @@ export class ReportsService {
       netInflow,
       goalOut,
       goalIn,
+      expenseBySubcategory,
     };
   }
 
@@ -543,6 +552,8 @@ export class ReportsService {
       income: number;
       expenses: number;
       categories: Record<string, number>;
+      /** Parent category → subcategory → spend, for parents with subcategories. */
+      subcategories: Record<string, Record<string, number>>;
     }>
   > {
     const keyOf = (d: Date) =>
@@ -615,8 +626,14 @@ export class ReportsService {
       // Money in on an expense category beyond what it spent (reimbursements,
       // payments received and booked to an expense category) is still money
       // in: the Simulator counts it as income rather than losing it.
-      const { totalIncome, expenseByCategory, netInflow, goalOut, goalIn } =
-        this.aggregateCashFlow(rows);
+      const {
+        totalIncome,
+        expenseByCategory,
+        netInflow,
+        goalOut,
+        goalIn,
+        expenseBySubcategory,
+      } = this.aggregateCashFlow(rows);
       const out = transfersOut.get(month) ?? 0;
       if (out > 0) expenseByCategory.set(TRANSFERS_OUT, out);
       // Savings-goal money is real money moving: net it (a move between two
@@ -630,6 +647,16 @@ export class ReportsService {
         categories[name] = round(val);
         expenses += val;
       });
+      // Spending per subcategory, for the parents that have spending left;
+      // a subcategory refunded more than it cost has nothing to show.
+      const subcategories: Record<string, Record<string, number>> = {};
+      expenseBySubcategory.forEach((subs, parent) => {
+        if (!(parent in categories)) return;
+        subs.forEach((val, name) => {
+          if (val <= 0) return;
+          (subcategories[parent] ??= {})[name] = round(val);
+        });
+      });
       return {
         month,
         income: round(
@@ -641,6 +668,7 @@ export class ReportsService {
         ),
         expenses: round(expenses),
         categories,
+        subcategories,
       };
     });
   }

@@ -403,3 +403,56 @@ describe('review fixes', () => {
     expect(project(due, flat, []).goals[0].outcome.kind).not.toBe('overdue');
   });
 });
+
+describe('subcategories', () => {
+  // Housing 1000 a month: Rent 800 and Utilities 200.
+  const withSubs = () => {
+    const b = makeBaseline();
+    b.months = b.months.map((m) => ({ ...m, subcategories: { Housing: { Rent: 800, Utilities: 200 } } }));
+    return b;
+  };
+  const flat = basis({ excluded: ['2026-06'] });
+
+  it('averages subcategories under their category', () => {
+    const avg = averageMonth(withSubs(), flat);
+    expect(avg.subcategories).toEqual({ Housing: { Rent: 800, Utilities: 200 } });
+  });
+
+  it('changes just one subcategory', () => {
+    const p = project(withSubs(), flat, [
+      change({ kind: 'category', category: 'Housing', subcategory: 'Utilities', amount: 0, to: 300 }),
+    ]);
+    expect(p.endNet).toBe(900);
+    expect(p.endBreakdown.find((r) => r.key === 'cat:Housing')!.scenario).toBe(1100);
+    expect(p.endBreakdown.find((r) => r.key === 'sub:Housing/Utilities')).toMatchObject({
+      base: 200,
+      scenario: 300,
+      parent: 'Housing',
+    });
+  });
+
+  it('replaces just one subcategory with a new payment', () => {
+    // A 1200 mortgage instead of the 800 rent; utilities stay.
+    const p = project(withSubs(), flat, [
+      change({ amount: 1200, category: 'Housing', subcategory: 'Rent' }),
+    ]);
+    expect(p.endNet).toBe(1000 - 400);
+    expect(p.endBreakdown.find((r) => r.key === 'cat:Housing')!.scenario).toBe(200);
+  });
+
+  it('leaves nothing to change once the whole category is replaced', () => {
+    const p = project(withSubs(), flat, [
+      change({ id: 'm', amount: 1500, category: 'Housing' }),
+      change({ id: 'u', kind: 'category', category: 'Housing', subcategory: 'Utilities', amount: 0, to: 500 }),
+    ]);
+    expect(p.endNet).toBe(1000 + 1000 - 1500);
+  });
+
+  it('keeps the subcategory of a saved change', () => {
+    expect(
+      normalizeChanges([
+        { id: 'a', kind: 'category', name: 'x', amount: 0, to: 1, startMonth: '2027-01', category: 'Housing', subcategory: 'Rent' },
+      ])[0],
+    ).toMatchObject({ category: 'Housing', subcategory: 'Rent', to: 1 });
+  });
+});
