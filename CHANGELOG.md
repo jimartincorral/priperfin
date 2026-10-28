@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.29.3 - 2026-10-28
+
+Simulator: money received on an expense category is no longer lost.
+
+- **Income was too low for some accounts.** When more money came in on an expense category than went out (for example payments or reimbursements received and booked to an expense category), the Simulator counted that money nowhere, so the starting point could show far less income than the Expenses screen. It now counts as income, and the Simulator's income minus spending matches the money that actually came in and went out.
+- Reports and the Home Assistant summary are unchanged.
+
 ## v1.29.2 - 2026-10-27
 
 Simulator: corrected calculations.
