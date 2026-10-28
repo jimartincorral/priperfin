@@ -71,6 +71,15 @@ export class ScenarioChangeDto {
   @MaxLength(100)
   category?: string;
 
+  /**
+   * recurring / category: a subcategory of `category`, to replace or change
+   * just that part of it.
+   */
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  subcategory?: string;
+
   @IsOptional()
   @IsIn(['in', 'out'])
   direction?: 'in' | 'out';

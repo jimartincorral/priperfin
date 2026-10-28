@@ -673,13 +673,22 @@ describe('ReportsService', () => {
           income: 3000,
           expenses: 1000.25,
           categories: { Housing: 1000.25 },
+          // Rent is a subcategory of Housing; the 50.25 was booked on Housing.
+          subcategories: { Housing: { Rent: 950 } },
         },
-        { month: '2026-06', income: 0, expenses: 0, categories: {} },
+        {
+          month: '2026-06',
+          income: 0,
+          expenses: 0,
+          categories: {},
+          subcategories: {},
+        },
         {
           month: '2026-07',
           income: 3100,
           expenses: 400,
           categories: { [TRANSFERS_OUT]: 400 },
+          subcategories: {},
         },
       ]);
       expect(prismaMock.transaction.findMany.mock.calls[1][0].where).toEqual({
@@ -743,6 +752,7 @@ describe('ReportsService', () => {
         income: 400,
         expenses: 250,
         categories: { Groceries: 250 },
+        subcategories: {},
       });
       expect(may.income - may.expenses).toBe(500 - 100 - 300 + 50);
     });
@@ -783,6 +793,7 @@ describe('ReportsService', () => {
         income: 3000,
         expenses: 500,
         categories: { [GOAL_SAVINGS]: 500 },
+        subcategories: {},
       });
     });
 
@@ -802,6 +813,7 @@ describe('ReportsService', () => {
         income: 3000,
         expenses: 0,
         categories: {},
+        subcategories: {},
       });
     });
   });
@@ -852,6 +864,7 @@ describe('ReportsService', () => {
         income: 3200,
         expenses: 500,
         categories: { [TRANSFERS_OUT]: 500 },
+        subcategories: {},
       });
     });
   });

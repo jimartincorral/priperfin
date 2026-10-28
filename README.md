@@ -12,7 +12,7 @@ A comprehensive personal finance management system for Home Assistant.
   - Category breakdown charts
   - Sankey diagrams for cash flow visualization
   - Monthly and yearly summaries
-- **Simulator**: Explore what-ifs (a pay cut, a mortgage instead of rent, a loan, a one-off purchase) and see their effect on your balance, monthly surplus and savings goals against your current path; save scenarios and compare them side by side
+- **Simulator**: Explore what-ifs (a pay cut, a mortgage instead of rent, a loan, a one-off purchase, more or less spent on a category or one of its subcategories) and see their effect on your balance, monthly surplus and savings goals against your current path; save scenarios and compare them side by side
 - **CSV Import**: Bulk import transactions from CSV files
 - **Backup & Restore**: Encrypted backup and restore functionality
 - **Bank Sync**: Optional automatic import from European banks via Enable Banking (PSD2), see [Bank sync](#bank-sync-enable-banking)
