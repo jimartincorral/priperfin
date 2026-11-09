@@ -540,12 +540,15 @@ export class ReportsService {
    * counted accounts stays invisible, as usual, but one to or from an account
    * outside them (or to no recorded account at all) is real money in or out:
    * incoming counts as income and outgoing as spending under TRANSFERS_OUT.
+   * `includeUnassigned` adds the transactions recorded without an account to
+   * the selection (without a filter they always count).
    */
   async getMonthlyCashFlow(
     profileId: string,
     from: Date,
     months: number,
     accountIds?: string[],
+    includeUnassigned = false,
   ): Promise<
     Array<{
       month: string;
@@ -561,13 +564,17 @@ export class ReportsService {
     const lt = new Date(
       Date.UTC(from.getUTCFullYear(), from.getUTCMonth() + months, 1),
     );
-    const accountFilter = accountIds ? { accountId: { in: accountIds } } : {};
+    const accountFilter: Prisma.TransactionWhereInput | null = !accountIds
+      ? null
+      : includeUnassigned
+        ? { OR: [{ accountId: { in: accountIds } }, { accountId: null }] }
+        : { accountId: { in: accountIds } };
     const transactions = await this.prisma.transaction.findMany({
       where: {
         profileId,
         isTransfer: false,
         date: { gte: from, lt },
-        ...accountFilter,
+        ...(accountFilter ? { AND: [accountFilter] } : {}),
       },
       select: {
         date: true,
@@ -597,18 +604,22 @@ export class ReportsService {
     // out: with an account filter, those to or from an account outside it;
     // always, a transfer with no counterpart account (flagged as a transfer
     // on import, to an account that is not tracked here).
+    const crossesEdge: Prisma.TransactionWhereInput = {
+      OR: accountIds
+        ? [
+            { transferAccountId: null },
+            { transferAccountId: { notIn: accountIds } },
+          ]
+        : [{ transferAccountId: null }],
+    };
     const crossing = await this.prisma.transaction.findMany({
       where: {
         profileId,
         isTransfer: true,
         date: { gte: from, lt },
-        ...accountFilter,
-        OR: accountIds
-          ? [
-              { transferAccountId: null },
-              { transferAccountId: { notIn: accountIds } },
-            ]
-          : [{ transferAccountId: null }],
+        ...(accountFilter
+          ? { AND: [accountFilter, crossesEdge] }
+          : crossesEdge),
       },
       select: { date: true, amount: true },
     });

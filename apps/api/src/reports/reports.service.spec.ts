@@ -849,14 +849,18 @@ describe('ReportsService', () => {
       const [regular, transfers] = prismaMock.transaction.findMany.mock.calls;
       expect(regular[0].where).toMatchObject({
         isTransfer: false,
-        accountId: { in: ['acc-1'] },
+        AND: [{ accountId: { in: ['acc-1'] } }],
       });
       expect(transfers[0].where).toMatchObject({
         isTransfer: true,
-        accountId: { in: ['acc-1'] },
-        OR: [
-          { transferAccountId: null },
-          { transferAccountId: { notIn: ['acc-1'] } },
+        AND: [
+          { accountId: { in: ['acc-1'] } },
+          {
+            OR: [
+              { transferAccountId: null },
+              { transferAccountId: { notIn: ['acc-1'] } },
+            ],
+          },
         ],
       });
       expect(may).toEqual({
@@ -866,6 +870,24 @@ describe('ReportsService', () => {
         categories: { [TRANSFERS_OUT]: 500 },
         subcategories: {},
       });
+    });
+  });
+
+  describe('getMonthlyCashFlow with transactions that have no account', () => {
+    it('adds them to the selection when asked to', async () => {
+      prismaMock.transaction.findMany
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([]);
+
+      const from = new Date(Date.UTC(2026, 4, 1));
+      await service.getMonthlyCashFlow('profile-1', from, 1, ['acc-1'], true);
+
+      const [regular, transfers] = prismaMock.transaction.findMany.mock.calls;
+      const selection = {
+        OR: [{ accountId: { in: ['acc-1'] } }, { accountId: null }],
+      };
+      expect(regular[0].where.AND).toEqual([selection]);
+      expect(transfers[0].where.AND[0]).toEqual(selection);
     });
   });
 

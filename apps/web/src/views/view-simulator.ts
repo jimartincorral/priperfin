@@ -16,6 +16,7 @@ import {
   GOAL_SAVINGS,
   isActive,
   monthDiff,
+  NO_ACCOUNT,
   normalizeBasis,
   normalizeChanges,
   project,
@@ -101,10 +102,12 @@ export class ViewSimulator extends LitElement {
 
   /** Refetches the starting point when the draft's accounts differ from it. */
   private async syncBaseline() {
+    // Every call supersedes any request still on its way, including one made
+    // for accounts the user has since switched back from.
+    const request = ++this.baselineRequest;
     const wanted = [...this.draft.basis.accounts].sort().join(',');
     const have = [...(this.baseline?.selectedAccountIds ?? [])].sort().join(',');
     if (!this.baseline || wanted === have) return;
-    const request = ++this.baselineRequest;
     try {
       const baseline = await simulatorApi.getBaseline(this.draft.basis.accounts);
       if (request === this.baselineRequest) this.baseline = baseline;
@@ -171,6 +174,22 @@ export class ViewSimulator extends LitElement {
     this.updateBasis({ accounts: next.length === all.length ? [] : next });
   }
 
+  /**
+   * Saved accounts that still exist, or none (meaning all) when that leaves
+   * every one of them. An account deleted since would otherwise show every
+   * account as left out while the API counts them all.
+   */
+  private knownAccounts(ids: string[]): string[] {
+    const all = this.baseline?.accounts.map((a) => a.id) ?? [];
+    const kept = all.filter((id) => ids.includes(id));
+    return kept.length === all.length ? [] : kept;
+  }
+
+  /** An account's name; the part with no account has none of its own. */
+  private accountName(a: { id: string; name: string }): string {
+    return a.id === NO_ACCOUNT ? i18n.t('simulator.no_account') : a.name;
+  }
+
   /** "Housing" or "Housing › Rent", for a change's category. */
   private categoryName(c: { category?: string; subcategory?: string }): string {
     if (!c.category) return '';
@@ -221,9 +240,17 @@ export class ViewSimulator extends LitElement {
   private openScenario(id: string) {
     if (!this.confirmDiscard()) return;
     const s = this.saved.find((x) => x.id === id);
-    this.draft = s
-      ? { id: s.id, name: s.name, changes: normalizeChanges(s.changes), basis: normalizeBasis(s.basis) }
-      : this.newDraft();
+    if (s) {
+      const basis = normalizeBasis(s.basis);
+      this.draft = {
+        id: s.id,
+        name: s.name,
+        changes: normalizeChanges(s.changes),
+        basis: { ...basis, accounts: this.knownAccounts(basis.accounts) },
+      };
+    } else {
+      this.draft = this.newDraft();
+    }
     this.dirty = false;
     this.mode = 'build';
     this.syncBaseline();
@@ -258,6 +285,8 @@ export class ViewSimulator extends LitElement {
       this.saved = this.saved.filter((s) => s.id !== id);
       this.draft = this.newDraft();
       this.dirty = false;
+      // The deleted scenario may have used fewer accounts than a new one.
+      this.syncBaseline();
       this.notify(i18n.t('simulator.deleted'));
     } catch (e: any) {
       this.notify(e?.message ?? String(e));
@@ -633,13 +662,16 @@ export class ViewSimulator extends LitElement {
           const on = all || selected.has(a.id);
           return html`
             <button class="chip ${on ? 'on' : 'off'}" aria-pressed="${on}" @click="${() => this.toggleAccount(a.id)}">
-              <span class="chip-month">${a.name}</span>
+              <span class="chip-month">${this.accountName(a)}</span>
               <span class="mono small">${this.money(a.balance)}</span>
             </button>
           `;
         })}
       </div>
       ${all ? nothing : html`<p class="hint">${i18n.t('simulator.accounts_transfers')}</p>`}
+      ${baseline.accounts.some((a) => a.id === NO_ACCOUNT)
+        ? html`<p class="hint">${i18n.t('simulator.no_account_hint')}</p>`
+        : nothing}
     `;
   }
 

@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException } from '@nestjs/common';
-import { SimulatorService } from './simulator.service';
+import { NO_ACCOUNT, SimulatorService } from './simulator.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { AccountsService } from '../accounts/accounts.service';
 import { ReportsService } from '../reports/reports.service';
@@ -115,12 +115,14 @@ describe('SimulatorService', () => {
         new Date(Date.UTC(2025, 9, 1)),
         12,
         undefined,
+        false,
       );
       expect(reports.getMonthlyCashFlow).toHaveBeenCalledWith(
         'p1',
         new Date(Date.UTC(2026, 9, 1)),
         1,
         undefined,
+        false,
       );
       expect(baseline).toMatchObject({
         currency: 'EUR',
@@ -164,6 +166,7 @@ describe('SimulatorService', () => {
         expect.any(Date),
         12,
         ['a2'],
+        false,
       );
       expect(baseline.balance).toBe(5000);
       expect(baseline.selectedAccountIds).toEqual(['a2']);
@@ -178,6 +181,7 @@ describe('SimulatorService', () => {
         expect.any(Date),
         12,
         undefined,
+        false,
       );
       expect(baseline.balance).toBe(6000);
       expect(baseline.selectedAccountIds).toEqual([]);
@@ -254,10 +258,147 @@ describe('SimulatorService', () => {
         _sum: { amount: true },
       });
       expect(baseline.balance).toBe(2549.75);
+      // What the accounts do not account for is listed as its own part, so
+      // the parts add up to the total.
+      expect(baseline.accounts).toEqual([
+        { id: 'a1', name: 'Main', type: 'DEBIT', balance: 999 },
+        { id: 'a2', name: 'Card', type: 'CREDIT', balance: 999 },
+        { id: NO_ACCOUNT, name: '', type: 'NONE', balance: 551.75 },
+      ]);
 
-      // With an account filter the per-account balances apply instead.
-      const filtered = await service.getBaseline('p1', ['a1']);
+      // With an account filter only the parts picked count.
+      const october = new Date('2026-10-28T10:00:00Z');
+      const filtered = await service.getBaseline('p1', ['a1'], october);
       expect(filtered.balance).toBe(999);
+      const withRest = await service.getBaseline(
+        'p1',
+        ['a1', NO_ACCOUNT],
+        october,
+      );
+      expect(withRest.balance).toBe(1550.75);
+    });
+
+    it('reads the starting balance of a credit card as the amount owed', async () => {
+      // 300 owed when October began, 50 spent on the card since: 350 owed.
+      accounts.findAll.mockResolvedValue([
+        account('a1', 'Main', 'DEBIT', 0),
+        account('a2', 'Card', 'CREDIT', 0),
+      ]);
+      setBalances({
+        a1: { anchor: { month: '2026-10', balance: 2000 }, sum: 100 },
+        a2: { anchor: { month: '2026-10', balance: 300 }, sum: -50 },
+      });
+
+      const baseline = await service.getBaseline(
+        'p1',
+        undefined,
+        new Date('2026-10-28T10:00:00Z'),
+      );
+
+      expect(baseline.accounts).toEqual([
+        { id: 'a1', name: 'Main', type: 'DEBIT', balance: 2100 },
+        { id: 'a2', name: 'Card', type: 'CREDIT', balance: -350 },
+      ]);
+      expect(baseline.balance).toBe(1750);
+    });
+  });
+
+  describe('several accounts at once', () => {
+    beforeEach(() => {
+      reports.getMonthlyCashFlow.mockResolvedValue([]);
+      goals.findAll.mockResolvedValue([]);
+      prismaMock.setting.findUnique.mockResolvedValue(null);
+      accounts.findAll.mockResolvedValue([
+        account('a1', 'Main', 'DEBIT', 1000),
+        account('a2', 'Card', 'CREDIT', 200),
+        account('a3', 'Savings', 'DEBIT', 5000),
+      ]);
+      // Main 1000 + 400, Card 200 owed + 100 spent, Savings 5000 + 600.
+      prismaMock.monthlyBalance.findFirst.mockResolvedValue(null);
+      prismaMock.transaction.aggregate.mockImplementation(({ where }) => {
+        const sums: Record<string, number> = { a1: 400, a2: -100, a3: 600 };
+        // Transactions with no account: 2400 spent over the year.
+        const sum = where.accountId === null ? -2400 : sums[where.accountId];
+        return Promise.resolve({ _sum: { amount: new Decimal(sum) } });
+      });
+      prismaMock.transaction.findFirst.mockResolvedValue({ id: 't1' });
+    });
+
+    const parts = (b: { accounts: Array<{ id: string; balance: number }> }) =>
+      Object.fromEntries(b.accounts.map((a) => [a.id, a.balance]));
+
+    it('lists money with no account as its own part and counts it in the total', async () => {
+      const all = await service.getBaseline('p1');
+
+      expect(parts(all)).toEqual({
+        a1: 1400,
+        a2: -300,
+        a3: 5600,
+        [NO_ACCOUNT]: -2400,
+      });
+      expect(all.balance).toBe(4300);
+      expect(reports.getMonthlyCashFlow).toHaveBeenCalledWith(
+        'p1',
+        expect.any(Date),
+        12,
+        undefined,
+        false,
+      );
+    });
+
+    it('adds up the parts picked, whichever they are', async () => {
+      const all = parts(await service.getBaseline('p1'));
+      const picks = [
+        ['a1', 'a2'],
+        ['a1', 'a3'],
+        ['a2', 'a3'],
+        ['a1', NO_ACCOUNT],
+        ['a3'],
+      ];
+      for (const pick of picks) {
+        const b = await service.getBaseline('p1', pick);
+        const expected = pick.reduce((sum, id) => sum + all[id], 0);
+        expect(b.balance).toBeCloseTo(expected, 2);
+        expect([...b.selectedAccountIds].sort()).toEqual([...pick].sort());
+      }
+    });
+
+    it('passes the transactions with no account on with the parts picked', async () => {
+      await service.getBaseline('p1', ['a1', NO_ACCOUNT]);
+      expect(reports.getMonthlyCashFlow).toHaveBeenLastCalledWith(
+        'p1',
+        expect.any(Date),
+        1,
+        ['a1'],
+        true,
+      );
+
+      await service.getBaseline('p1', ['a1', 'a2', 'a3']);
+      expect(reports.getMonthlyCashFlow).toHaveBeenLastCalledWith(
+        'p1',
+        expect.any(Date),
+        1,
+        ['a1', 'a2', 'a3'],
+        false,
+      );
+    });
+
+    it('treats every part picked as everything', async () => {
+      const b = await service.getBaseline('p1', ['a3', 'a1', NO_ACCOUNT, 'a2']);
+      expect(b.selectedAccountIds).toEqual([]);
+      expect(b.balance).toBe(4300);
+    });
+
+    it('leaves the no-account part out when there is nothing in it', async () => {
+      prismaMock.transaction.aggregate.mockImplementation(({ where }) =>
+        Promise.resolve({
+          _sum: { amount: new Decimal(where.accountId === null ? 0 : 10) },
+        }),
+      );
+      prismaMock.transaction.findFirst.mockResolvedValue(null);
+
+      const b = await service.getBaseline('p1');
+      expect(b.accounts.map((a) => a.id)).toEqual(['a1', 'a2', 'a3']);
     });
 
     it('falls back to the initial balance and every transaction', async () => {

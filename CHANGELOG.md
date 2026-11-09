@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.31.1 - 2026-11-09
+
+Simulator: balances add up when you pick several accounts, and credit cards are tracked as debt.
+
+- **The accounts you pick add up.** With every account, "Balance today" came from the all-accounts starting balance on the Expenses screen; with only some, from each account's own balance. The two rarely matched, so leaving one account out could move the total by far more than that account holds. The total is now always the sum of the accounts shown, and leaving one out takes away exactly its balance.
+- **New "No account" entry.** Transactions recorded without an account, and whatever the all-accounts starting balance holds beyond the sum of your accounts, now show as their own entry next to your accounts. You can leave it out like an account. With everything picked, the total is still the Expenses screen's all-accounts balance. To make the entry go away, assign those transactions to an account and set each account's starting balance. Transactions without an account used to count in the average month but not in today's balance.
+- **Credit cards are tracked as debt.** A card's monthly starting balance is now what is owed on it, like its initial balance. On the Expenses screen, "Set balance from here" on a card asks what is owed after that movement, and the amount owed goes up with purchases and down with payments. If you set a card's balance before this version, set it again once with "Set balance from here", typing what is owed.
+- The starting balance the Expenses screen suggests for a month without one no longer adds the previous month's spending instead of subtracting it.
+- Switching an account off and back on quickly no longer leaves the figures of the wrong accounts on screen. Deleting a scenario limited to some accounts goes back to all of them. A scenario that names an account deleted since no longer shows every account as left out.
+
 ## v1.31.0 - 2026-10-28
 
 Simulator: changes can now target a subcategory.
