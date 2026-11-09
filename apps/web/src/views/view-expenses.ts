@@ -79,6 +79,20 @@ export class ViewExpenses extends LitElement {
   }
 
   /**
+   * A month's closing figure from its starting one and the net of its
+   * transactions. A credit card's figures are the amount owed, so what is
+   * spent on it (negative amounts) adds to them; any other balance is money.
+   */
+  closingBalance(start: number, moved: number): number {
+    return this.isCredit ? start - moved : start + moved;
+  }
+
+  /** The starting figure that `closingBalance` turns into `closing`. */
+  openingBalance(closing: number, moved: number): number {
+    return this.isCredit ? closing + moved : closing - moved;
+  }
+
+  /**
    * Bank-linked accounts covered by the current selection. Open Banking sync
    * overwrites `balance_verified_account_<id>` with the bank's closing balance
    * on every run, so for these accounts the figure is read-only ground truth
@@ -650,17 +664,11 @@ export class ViewExpenses extends LitElement {
         ...(this.selectedAccountId ? { accountId: this.selectedAccountId } : {}),
       });
 
-      let income = 0;
-      let expense = 0;
+      // Everything that moved last month, money in and out alike (amounts
+      // are signed, so spending already counts against the balance).
+      const moved = prevTxs.reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
 
-      prevTxs.forEach((t: any) => {
-        const cat = this.categories.find(c => c.id === t.categoryId);
-        const amount = Number(t.amount);
-        if (cat?.type === 'INCOME' || amount > 0) income += amount;
-        else expense += amount;
-      });
-
-      this.startingBalance = prevStart + income - expense;
+      this.startingBalance = this.closingBalance(prevStart, moved);
       // Auto-save inferred balance? Maybe better to let user confirm. 
       // User request says "suggest". So filling it but not saving is safer until they interact or we decide.
       // But if we don't save, next refresh it will recalc. That's fine.
@@ -699,8 +707,12 @@ export class ViewExpenses extends LitElement {
   }
 
   async setStartingBalanceFromTransaction(tx: any) {
-    const currentPrompt = `${i18n.t('expenses.set_from_movement_prompt')} (${new Date(tx.date).toISOString().split('T')[0]})`;
-    const entered = window.prompt(currentPrompt, (this.verifiedBalance || 0).toFixed(2));
+    // A card is set by what is owed on it, which banks often report as a
+    // negative balance.
+    const promptKey = this.isCredit ? 'expenses.set_from_movement_prompt_credit' : 'expenses.set_from_movement_prompt';
+    const suggested = this.isCredit ? Math.abs(this.verifiedBalance || 0) : this.verifiedBalance || 0;
+    const currentPrompt = `${i18n.t(promptKey)} (${new Date(tx.date).toISOString().split('T')[0]})`;
+    const entered = window.prompt(currentPrompt, suggested.toFixed(2));
     if (entered === null) return;
 
     const anchorBalanceAfter = parseFloat(entered.replace(',', '.'));
@@ -725,7 +737,7 @@ export class ViewExpenses extends LitElement {
       const anchorMonth = this.getMonthKey(tx.date);
       const txUntilAnchorInMonth = sortedTxs.filter((item: any, index: number) => index <= anchorIndex && this.getMonthKey(item.date) === anchorMonth);
       const movementUntilAnchor = txUntilAnchorInMonth.reduce((sum: number, item: any) => sum + Number(item.amount || 0), 0);
-      const anchorMonthStart = anchorBalanceAfter - movementUntilAnchor;
+      const anchorMonthStart = this.openingBalance(anchorBalanceAfter, movementUntilAnchor);
 
       const monthKeys = Array.from(new Set(sortedTxs
         .slice(anchorIndex)
@@ -750,7 +762,7 @@ export class ViewExpenses extends LitElement {
           .filter((item: any) => this.getMonthKey(item.date) === monthKey)
           .reduce((sum: number, item: any) => sum + Number(item.amount || 0), 0);
 
-        rollingMonthStart += monthlyNet;
+        rollingMonthStart = this.closingBalance(rollingMonthStart, monthlyNet);
       }
 
       await this.loadData(true);
@@ -1690,7 +1702,7 @@ export class ViewExpenses extends LitElement {
           })
           .reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0)
         : this.transactions.reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
-      const monthlyEndingBalance = safeStartingBalance + periodNet;
+      const monthlyEndingBalance = this.closingBalance(safeStartingBalance, periodNet);
       this.totalBalance = monthlyEndingBalance;
 
       if (preserveScroll) {
@@ -3254,10 +3266,12 @@ Tables: ${result.tables?.join(', ')}`;
               class="m-amount"
               style="color: ${totalBalance === null
                 ? 'var(--md-sys-color-on-surface-variant)'
-                : totalBalance >= 0 ? 'var(--pf-positive)' : 'var(--md-sys-color-error)'}">
+                : this.isCredit
+                  ? 'var(--md-sys-color-on-surface)'
+                  : totalBalance >= 0 ? 'var(--pf-positive)' : 'var(--md-sys-color-error)'}">
               ${totalBalance === null
                 ? '—'
-                : `${totalBalance >= 0 ? '+' : '−'}${this.money(totalBalance)}`}
+                : this.balanceText(totalBalance)}
             </span>
           </div>
           ${bankSynced ? nothing : html`
@@ -3645,6 +3659,11 @@ Tables: ${result.tables?.join(', ')}`;
   /** `−€1,150.00` / `+€3,240.00`, with a real minus sign. */
   private signedMoney(value: number) {
     return `${value < 0 ? '−' : '+'}${this.money(value)}`;
+  }
+
+  /** The calculated balance: signed money, or for a card the amount owed. */
+  private balanceText(value: number) {
+    return this.isCredit ? `${value < 0 ? '−' : ''}${this.money(value)}` : this.signedMoney(value);
   }
 
   /**
@@ -4184,7 +4203,7 @@ Tables: ${result.tables?.join(', ')}`;
               ${this.isCredit ? i18n.t('expenses.amount_owed') : i18n.t('desktop.system_balance')}
             </div>
             <div class="d-strip-value ${totalBalance === null ? 'muted' : ''}">
-              ${totalBalance === null ? '—' : this.signedMoney(totalBalance)}
+              ${totalBalance === null ? '—' : this.balanceText(totalBalance)}
             </div>
           </div>
         </div>

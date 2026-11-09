@@ -99,6 +99,14 @@ export const TRANSFERS_OUT = '__transfers_out__';
 /** The category key the API uses for money put into savings goals. */
 export const GOAL_SAVINGS = '__goal_savings__';
 
+/**
+ * The id the API gives the part of the balance that belongs to no account:
+ * transactions recorded without one and, once the Expenses screen's
+ * all-accounts starting balance is set, what the accounts do not account for.
+ * Picked and left out like an account.
+ */
+export const NO_ACCOUNT = '__no_account__';
+
 // ---------------------------------------------------------------------------
 // Months
 
