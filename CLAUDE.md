@@ -51,7 +51,7 @@ NestJS modular architecture with these domain modules:
 - **AccountsModule**: Bank accounts with debit/credit types
 - **SavingsGoalsModule**: Savings targets linked to categories
 - **ReportsModule**: Financial analytics and reports
-- **MonthlyBalancesModule**: Account balance tracking
+- **MonthlyBalancesModule**: Account balance tracking. `BalancesService` is the one balance rule shared by the Expenses screen and the Simulator; `GET /api/monthly-balances/opening/:date[?accountId=]` gives the balance at the start of a day (all accounts in money, or one account, a credit card as the amount owed), which the Expenses screen opens each period with
 - **BackupModule**: Data backup/restore functionality
 - **SettingsModule**: App configuration (key-value store)
 - **AdminModule**: Administrative operations

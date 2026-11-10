@@ -3,6 +3,10 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AccountsService } from '../accounts/accounts.service';
 import { ReportsService } from '../reports/reports.service';
 import { SavingsGoalsService } from '../savings-goals/savings-goals.service';
+import {
+  BalancesService,
+  monthKey,
+} from '../monthly-balances/balances.service';
 import { SaveScenarioDto } from './scenario.dto';
 
 /** Complete months of history the Simulator can average over. */
@@ -15,8 +19,6 @@ export const HISTORY_MONTHS = 12;
 export const NO_ACCOUNT = '__no_account__';
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
-const monthKey = (d: Date) =>
-  `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
 
 function parseJson<T>(value: string, fallback: T): T {
   try {
@@ -33,6 +35,7 @@ export class SimulatorService {
     private accounts: AccountsService,
     private reports: ReportsService,
     private goals: SavingsGoalsService,
+    private balances: BalancesService,
   ) {}
 
   /**
@@ -63,31 +66,29 @@ export class SimulatorService {
     );
     const currentMonth = monthKey(now);
     const accounts = await this.accounts.findAll(profileId);
-    const [balances, allStart, unassigned, goals, currencySetting] =
-      await Promise.all([
-        Promise.all(
-          accounts.map((account) =>
-            this.balanceToday(account, profileId, currentMonth),
-          ),
-        ),
-        this.allAccountsBalanceToday(profileId, currentMonth),
-        this.unassignedToday(profileId, from),
+    const [parts, recentUnassigned, goals, currencySetting] = await Promise.all(
+      [
+        this.balances.parts(profileId, accounts, { month: currentMonth }),
+        // Whether any transaction without an account falls in the months
+        // averaged, so its part is listed even when it adds up to nothing.
+        this.prisma.transaction.findFirst({
+          where: { profileId, accountId: null, date: { gte: from } },
+          select: { id: true },
+        }),
         this.goals.findAll(profileId),
         this.prisma.setting.findUnique({ where: { key: 'currency' } }),
-      ]);
+      ],
+    );
 
     const accountRows = accounts.map((a, i) => ({
       id: a.id,
       name: a.name,
       type: a.type as string,
-      balance: round2(balances[i]),
+      balance: parts.accounts[i],
     }));
-    const accountsTotal = accountRows.reduce((sum, a) => sum + a.balance, 0);
-    const noAccount = round2(
-      allStart === null ? unassigned.sum : allStart - accountsTotal,
-    );
+    const noAccount = parts.noAccount;
     const rows =
-      noAccount !== 0 || unassigned.recent
+      noAccount !== 0 || recentUnassigned
         ? [
             ...accountRows,
             { id: NO_ACCOUNT, name: '', type: 'NONE', balance: noAccount },
@@ -147,113 +148,6 @@ export class SimulatorService {
         isEvergreen: g.isEvergreen,
       })),
     };
-  }
-
-  /**
-   * Transactions recorded without an account: what they add up to, and
-   * whether any falls in the months the Simulator looks at.
-   */
-  private async unassignedToday(profileId: string, since: Date) {
-    const [sum, recent] = await Promise.all([
-      this.prisma.transaction.aggregate({
-        where: { profileId, accountId: null },
-        _sum: { amount: true },
-      }),
-      this.prisma.transaction.findFirst({
-        where: { profileId, accountId: null, date: { gte: since } },
-        select: { id: true },
-      }),
-    ]);
-    return { sum: sum?._sum.amount?.toNumber() ?? 0, recent: !!recent };
-  }
-
-  /**
-   * The all-accounts balance the Expenses screen shows with no account picked:
-   * the latest all-accounts starting balance (`starting_balance_all_YYYY-MM`)
-   * up to this month plus every transaction since that month began. Null when
-   * none was ever set.
-   */
-  private async allAccountsBalanceToday(
-    profileId: string,
-    currentMonth: string,
-  ): Promise<number | null> {
-    const prefix = 'starting_balance_all_';
-    const settings = await this.prisma.setting.findMany({
-      where: { key: { startsWith: prefix } },
-    });
-    const latest = settings
-      .map((s) => ({
-        month: s.key.slice(prefix.length),
-        value: Number(s.value),
-      }))
-      .filter(
-        (s) =>
-          /^\d{4}-\d{2}$/.test(s.month) &&
-          s.month <= currentMonth &&
-          Number.isFinite(s.value),
-      )
-      .sort((a, b) => b.month.localeCompare(a.month))[0];
-    if (!latest) return null;
-    const since = new Date(
-      Date.UTC(
-        Number(latest.month.slice(0, 4)),
-        Number(latest.month.slice(5, 7)) - 1,
-        1,
-      ),
-    );
-    const sum = await this.prisma.transaction.aggregate({
-      where: { profileId, date: { gte: since } },
-      _sum: { amount: true },
-    });
-    return latest.value + (sum._sum.amount?.toNumber() ?? 0);
-  }
-
-  /**
-   * An account's balance today, the way the Expenses screen arrives at it:
-   * the latest starting balance set for a month (Monthly Balances) plus every
-   * transaction of the account since that month began. Without one, the
-   * account's initial balance plus all its transactions.
-   *
-   * The result is money: a credit card that is owed comes out negative. A
-   * credit account's figures (its initial balance and its monthly starting
-   * balances) are the amount owed, so they count with the opposite sign and
-   * its spending (negative amounts) adds to what is owed.
-   */
-  private async balanceToday(
-    account: {
-      id: string;
-      type: string;
-      initialBalance: { toNumber(): number };
-    },
-    profileId: string,
-    currentMonth: string,
-  ): Promise<number> {
-    const anchor = await this.prisma.monthlyBalance.findFirst({
-      where: { accountId: account.id, month: { lte: currentMonth } },
-      orderBy: { month: 'desc' },
-    });
-    const since = anchor
-      ? new Date(
-          Date.UTC(
-            Number(anchor.month.slice(0, 4)),
-            Number(anchor.month.slice(5, 7)) - 1,
-            1,
-          ),
-        )
-      : undefined;
-    const sum = await this.prisma.transaction.aggregate({
-      where: {
-        profileId,
-        accountId: account.id,
-        ...(since ? { date: { gte: since } } : {}),
-      },
-      _sum: { amount: true },
-    });
-    const moved = sum._sum.amount?.toNumber() ?? 0;
-    const start = anchor
-      ? anchor.balance.toNumber()
-      : account.initialBalance.toNumber();
-    return account.type === 'CREDIT' ? moved - start : start + moved;
   }
 
   async findAll(profileId: string) {

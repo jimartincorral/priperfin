@@ -538,25 +538,22 @@ export class ViewExpenses extends LitElement {
 
   async loadBalances() {
     this.balanceLoading = true;
-    const { year: balanceYear, month: balanceMonth } = this.getBalanceReferenceMonthYear();
-    const monthKey = `${balanceYear}-${String(balanceMonth).padStart(2, '0')}`;
-    const startBalanceKey = `starting_balance_all_${monthKey}`;
 
     try {
       // One /settings read instead of per-key lookups: the aggregate bank
       // balance needs every linked account's `balance_verified_account_<id>`.
-      const [balData, allSettings, monthlyRecord, allAccountsStartSetting] = await Promise.all([
-        api.get('/transactions/balance', this.selectedAccountId ? { accountId: this.selectedAccountId } : {}),
+      // The opening balance comes from the API, which works it out the way
+      // the Simulator does (starting balances set, else initial balances,
+      // plus every transaction since). Unknown stays unknown: a failed read
+      // shows "—" rather than a balance that starts from zero.
+      const accountParam = this.selectedAccountId ? { accountId: this.selectedAccountId } : {};
+      const [balData, allSettings, opening] = await Promise.all([
+        api.get('/transactions/balance', accountParam),
         api.get('/settings').catch(() => []),
-        this.selectedAccountId
-          ? api.get(
-          `/monthly-balances/${monthKey}`,
-          this.selectedAccountId ? { accountId: this.selectedAccountId } : {},
-        ).catch(() => null)
-          : Promise.resolve(null),
-        !this.selectedAccountId
-          ? api.get(`/settings/${startBalanceKey}`).catch(() => null)
-          : Promise.resolve(null),
+        api.get(`/monthly-balances/opening/${this.getPeriodStartDate()}`, accountParam).catch((e: unknown) => {
+          console.error('Failed to load the opening balance', e);
+          return null;
+        }),
       ]);
 
       this.totalBalance = balData.total ?? balData.balance ?? 0;
@@ -569,17 +566,32 @@ export class ViewExpenses extends LitElement {
         ),
       );
 
-      if (monthlyRecord) {
-        this.startingBalance = Number(monthlyRecord.balance);
-      } else if (allAccountsStartSetting !== null && allAccountsStartSetting !== undefined) {
-        this.startingBalance = Number(allAccountsStartSetting);
-      } else {
-        await this.suggestStartingBalance(balanceMonth, balanceYear);
-      }
+      const balance = Number(opening?.balance);
+      this.startingBalance = Number.isFinite(balance) ? balance : NaN;
     } catch (e) {
       console.error('Failed to load balances', e);
+      this.startingBalance = NaN;
     } finally {
       this.balanceLoading = false;
+    }
+  }
+
+  /**
+   * The first day of what is on screen, which the system balance opens with:
+   * the month, the year, the custom range's start (the very beginning when it
+   * has none) or, for all time, the month of the latest transaction, the only
+   * one that view's balance covers.
+   */
+  getPeriodStartDate(): string {
+    switch (this.dateFilterMode) {
+      case 'year':
+        return `${this.year}-01-01`;
+      case 'custom':
+        return this.customStartDate || '1970-01-01';
+      default: {
+        const { year, month } = this.getBalanceReferenceMonthYear();
+        return `${year}-${String(month).padStart(2, '0')}-01`;
+      }
     }
   }
 
@@ -625,56 +637,6 @@ export class ViewExpenses extends LitElement {
       );
     }
     return this.readVerifiedSetting(settings, this.selectedAccountId || 'all') ?? 0;
-  }
-
-  async suggestStartingBalance(targetMonth = this.month, targetYear = this.year) {
-    // Calculate previous month
-    let prevMonth = targetMonth - 1;
-    let prevYear = targetYear;
-    if (prevMonth === 0) {
-      prevMonth = 12;
-      prevYear--;
-    }
-    const prevKey = `${prevYear}-${String(prevMonth).padStart(2, '0')}`;
-    const prevAllAccountsStartBalanceKey = `starting_balance_all_${prevKey}`;
-
-    try {
-      // Get previous starting balance
-      const [prevRecord, prevAllAccountsStartSetting] = await Promise.all([
-        this.selectedAccountId
-          ? api.get(
-            `/monthly-balances/${prevKey}`,
-            this.selectedAccountId ? { accountId: this.selectedAccountId } : {},
-          ).catch(() => null)
-          : Promise.resolve(null),
-        !this.selectedAccountId
-          ? api.get(`/settings/${prevAllAccountsStartBalanceKey}`).catch(() => null)
-          : Promise.resolve(null),
-      ]);
-      const prevStart = prevRecord
-        ? Number(prevRecord.balance)
-        : (prevAllAccountsStartSetting !== null && prevAllAccountsStartSetting !== undefined
-          ? Number(prevAllAccountsStartSetting)
-          : 0);
-
-      // Get previous transactions to calc net change
-      const prevTxs = await api.get('/transactions', {
-        month: prevMonth,
-        year: prevYear,
-        ...(this.selectedAccountId ? { accountId: this.selectedAccountId } : {}),
-      });
-
-      // Everything that moved last month, money in and out alike (amounts
-      // are signed, so spending already counts against the balance).
-      const moved = prevTxs.reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
-
-      this.startingBalance = this.closingBalance(prevStart, moved);
-      // Auto-save inferred balance? Maybe better to let user confirm. 
-      // User request says "suggest". So filling it but not saving is safer until they interact or we decide.
-      // But if we don't save, next refresh it will recalc. That's fine.
-    } catch (e) {
-      console.warn('Failed to suggest balance', e);
-    }
   }
 
   async handleStartingBalanceChange(e: any) {
@@ -1691,8 +1653,9 @@ export class ViewExpenses extends LitElement {
       }
 
       // Calculate and update totalBalance to match monthly ending balance
-      // This will use the already loaded this.transactions and this.categories
-      const safeStartingBalance = Number.isFinite(this.startingBalance) ? this.startingBalance : 0;
+      // This will use the already loaded this.transactions and this.categories.
+      // An opening balance that could not be worked out (NaN) leaves the total
+      // unknown, shown as "—", instead of the period's net alone.
       const { year: balanceYear, month: balanceMonth } = this.getBalanceReferenceMonthYear();
       const periodNet = this.dateFilterMode === 'all_time'
         ? this.transactions
@@ -1702,7 +1665,7 @@ export class ViewExpenses extends LitElement {
           })
           .reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0)
         : this.transactions.reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
-      const monthlyEndingBalance = this.closingBalance(safeStartingBalance, periodNet);
+      const monthlyEndingBalance = this.closingBalance(this.startingBalance, periodNet);
       this.totalBalance = monthlyEndingBalance;
 
       if (preserveScroll) {
