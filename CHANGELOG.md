@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.31.2 - 2026-11-10
+
+Expenses: the calculated balance starts from your real balance again.
+
+- **The calculated balance no longer starts from zero.** On the Expenses screen, a month with no starting balance set (common with "All accounts") showed only that month's income minus spending as the calculated balance, so it often read negative. Each period now opens from the balance worked out from your starting balances, or from each account's initial balance, plus every transaction since. This is the same rule the Simulator uses, so both screens show the same figure.
+- **Years and custom ranges** open from their first day, instead of from the month that happened to be selected.
+- If the opening balance cannot be worked out, the screen shows "—" instead of a wrong figure.
+- If the calculated balance still differs from your bank, an account's initial or starting balance is missing. Set it once with "Set balance from here".
+
 ## v1.31.1 - 2026-11-09
 
 Simulator: balances add up when you pick several accounts, and credit cards are tracked as debt.

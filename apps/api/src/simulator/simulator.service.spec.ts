@@ -5,6 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AccountsService } from '../accounts/accounts.service';
 import { ReportsService } from '../reports/reports.service';
 import { SavingsGoalsService } from '../savings-goals/savings-goals.service';
+import { BalancesService } from '../monthly-balances/balances.service';
 import { createPrismaMock, PrismaMock } from '../test/prisma-mock.factory';
 import { Prisma } from '../generated/client';
 import { SaveScenarioDto } from './scenario.dto';
@@ -74,6 +75,7 @@ describe('SimulatorService', () => {
         { provide: AccountsService, useValue: accounts },
         { provide: ReportsService, useValue: reports },
         { provide: SavingsGoalsService, useValue: goals },
+        BalancesService,
       ],
     }).compile();
     service = module.get(SimulatorService);

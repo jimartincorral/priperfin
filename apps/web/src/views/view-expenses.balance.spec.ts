@@ -57,3 +57,65 @@ describe('setting a balance from a movement', () => {
     expect(el.closingBalance(900, 300 - 50)).toBe(1150);
   });
 });
+
+describe('the opening balance of what is on screen', () => {
+  beforeEach(() => {
+    api.get.mockReset();
+    api.post.mockReset();
+  });
+
+  async function load(setUp: (el: any) => void, opening: unknown) {
+    await import('./view-expenses');
+    const el = document.createElement('view-expenses') as any;
+    el.accounts = [{ id: 'card', name: 'Card', type: 'CREDIT' }];
+    el.month = 11;
+    el.year = 2026;
+    setUp(el);
+    api.get.mockImplementation((endpoint: string) => {
+      if (endpoint.startsWith('/monthly-balances/opening/')) return Promise.resolve(opening);
+      if (endpoint === '/settings') return Promise.resolve([]);
+      return Promise.resolve({ total: 0 });
+    });
+    await el.loadBalances();
+    const call = api.get.mock.calls.find(([endpoint]: [string]) => endpoint.startsWith('/monthly-balances/opening/'));
+    return { el, endpoint: call[0], params: call[1] };
+  }
+
+  it('opens every account from the start of the month, as worked out by the API', async () => {
+    const { el, endpoint, params } = await load(() => {}, { date: '2026-11-01', balance: 68636.4 });
+
+    expect(endpoint).toBe('/monthly-balances/opening/2026-11-01');
+    expect(params).toEqual({});
+    expect(el.startingBalance).toBe(68636.4);
+    // Spending this month lowers it from there instead of starting at zero.
+    expect(el.closingBalance(el.startingBalance, -3823.8)).toBeCloseTo(64812.6, 2);
+  });
+
+  it('opens a year from January 1st and one account with its own figure', async () => {
+    const { endpoint, params } = await load((el) => {
+      el.dateFilterMode = 'year';
+      el.selectedAccountId = 'card';
+    }, { balance: 400 });
+
+    expect(endpoint).toBe('/monthly-balances/opening/2026-01-01');
+    expect(params).toEqual({ accountId: 'card' });
+  });
+
+  it('opens a custom range from its first day', async () => {
+    const { endpoint } = await load((el) => {
+      el.dateFilterMode = 'custom';
+      el.customStartDate = '2026-10-15';
+      el.customEndDate = '2026-11-10';
+    }, { balance: 1 });
+
+    expect(endpoint).toBe('/monthly-balances/opening/2026-10-15');
+  });
+
+  it('leaves the balance unknown rather than starting from zero', async () => {
+    // An empty answer reaches the view as {}.
+    const { el } = await load(() => {}, {});
+
+    expect(el.startingBalance).toBeNaN();
+    expect(el.closingBalance(el.startingBalance, -3823.8)).toBeNaN();
+  });
+});
