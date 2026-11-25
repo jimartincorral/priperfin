@@ -36,6 +36,16 @@ export function getAppPath(pathname: string, baseURI: string): string {
   return normalizedPathname;
 }
 
+/**
+ * Returns the URL the router can match, or null when the current one already is.
+ *
+ * The router only renders paths under the `<base href>`, and silently renders
+ * nothing for anything else, which leaves an empty screen beside the nav. Two
+ * shapes reach it from Home Assistant:
+ * - Repeated slashes. The panel opens `/api/hassio_ingress/<token>/` followed by
+ *   the add-on's `ingress_entry`, so an entry of "/" opened `…/<token>//`.
+ * - The Ingress root without its trailing slash.
+ */
 export function getCanonicalAppUrl(
   currentUrl: string,
   baseURI: string,
@@ -43,15 +53,15 @@ export function getCanonicalAppUrl(
   const url = new URL(currentUrl);
   const basePath = getAppBasePath(baseURI);
 
-  if (basePath === '/') {
+  let pathname = url.pathname.replace(/\/{2,}/g, '/');
+  if (basePath !== '/' && pathname === basePath.slice(0, -1)) {
+    pathname = basePath;
+  }
+
+  if (pathname === url.pathname) {
     return null;
   }
 
-  const basePathWithoutTrailingSlash = basePath.slice(0, -1);
-  if (url.pathname !== basePathWithoutTrailingSlash) {
-    return null;
-  }
-
-  url.pathname = basePath;
+  url.pathname = pathname;
   return url.toString();
 }

@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.31.3 - 2026-11-25
+
+Home Assistant: the Finance panel opens on Expenses again.
+
+- **No more blank screen when you open the panel.** Opening PriPerFin from the Home Assistant sidebar showed only the menu, and you had to click a tab before anything appeared. The add-on now opens straight on Expenses.
+- Links with a doubled slash in the address (for example an old bookmark) open the right page instead of a blank one.
+
 ## v1.31.2 - 2026-11-10
 
 Expenses: the calculated balance starts from your real balance again.

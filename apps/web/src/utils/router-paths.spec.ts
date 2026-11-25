@@ -52,5 +52,41 @@ describe('router-paths', () => {
         ),
       ).toBeNull();
     });
+    it('does not rewrite the canonical ingress root', () => {
+      expect(
+        getCanonicalAppUrl(
+          'http://homeassistant.local/api/hassio_ingress/token-123/',
+          ingressBase,
+        ),
+      ).toBeNull();
+    });
+    // Home Assistant opens `/api/hassio_ingress/<token>/` + `ingress_entry`;
+    // with an entry of "/" that is `…/<token>//`, which the router left blank.
+    it('collapses the double slash Home Assistant opens the panel with', () => {
+      expect(
+        getCanonicalAppUrl(
+          'http://homeassistant.local/api/hassio_ingress/token-123//',
+          ingressBase,
+        ),
+      ).toBe('http://homeassistant.local/api/hassio_ingress/token-123/');
+    });
+    it('collapses repeated slashes and keeps the query and hash', () => {
+      expect(
+        getCanonicalAppUrl(
+          'http://homeassistant.local/api/hassio_ingress/token-123///reports?mode=year#top',
+          ingressBase,
+        ),
+      ).toBe(
+        'http://homeassistant.local/api/hassio_ingress/token-123/reports?mode=year#top',
+      );
+    });
+    it('collapses repeated slashes outside ingress', () => {
+      expect(
+        getCanonicalAppUrl('http://localhost:3000//reports', 'http://localhost:3000/'),
+      ).toBe('http://localhost:3000/reports');
+      expect(
+        getCanonicalAppUrl('http://localhost:3000/', 'http://localhost:3000/'),
+      ).toBeNull();
+    });
   });
 });
