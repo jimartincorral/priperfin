@@ -380,7 +380,7 @@ export class PriPerFinApp extends LitElement {
       document.baseURI,
     );
     if (canonicalUrl) {
-      console.log('[PriPerFin] Normalizing ingress root URL:', canonicalUrl);
+      console.log('[PriPerFin] Normalizing URL:', canonicalUrl);
       window.history.replaceState(window.history.state, '', canonicalUrl);
     }
 

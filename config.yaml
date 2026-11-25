@@ -10,7 +10,6 @@ arch:
   - amd64
 ingress: true
 ingress_port: 3000
-ingress_entry: "/"
 ingress_stream: false
 panel_icon: "mdi:finance"
 panel_title: "Finance"
