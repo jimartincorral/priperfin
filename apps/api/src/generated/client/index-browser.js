@@ -171,6 +171,7 @@ exports.Prisma.TransactionScalarFieldEnum = {
   transferId: 'transferId',
   transferAccountId: 'transferAccountId',
   externalId: 'externalId',
+  pending: 'pending',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 };

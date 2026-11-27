@@ -4365,8 +4365,8 @@ export namespace Prisma {
       bankAccountUid: string | null
       lastSyncedAt: Date | null
       /**
-       * Date of the oldest transaction the bank still reported as pending at the
-       * last sync; the next sync reaches back to it so the booked version arrives.
+       * Date of the oldest pending transaction on the account after the last
+       * sync; the next sync reaches back to it to see it booked or dropped.
        */
       bankPendingFrom: Date | null
       createdAt: Date
@@ -6515,6 +6515,7 @@ export namespace Prisma {
     transferId: string | null
     transferAccountId: string | null
     externalId: string | null
+    pending: boolean | null
     createdAt: Date | null
     updatedAt: Date | null
   }
@@ -6536,6 +6537,7 @@ export namespace Prisma {
     transferId: string | null
     transferAccountId: string | null
     externalId: string | null
+    pending: boolean | null
     createdAt: Date | null
     updatedAt: Date | null
   }
@@ -6557,6 +6559,7 @@ export namespace Prisma {
     transferId: number
     transferAccountId: number
     externalId: number
+    pending: number
     createdAt: number
     updatedAt: number
     _all: number
@@ -6588,6 +6591,7 @@ export namespace Prisma {
     transferId?: true
     transferAccountId?: true
     externalId?: true
+    pending?: true
     createdAt?: true
     updatedAt?: true
   }
@@ -6609,6 +6613,7 @@ export namespace Prisma {
     transferId?: true
     transferAccountId?: true
     externalId?: true
+    pending?: true
     createdAt?: true
     updatedAt?: true
   }
@@ -6630,6 +6635,7 @@ export namespace Prisma {
     transferId?: true
     transferAccountId?: true
     externalId?: true
+    pending?: true
     createdAt?: true
     updatedAt?: true
     _all?: true
@@ -6738,6 +6744,7 @@ export namespace Prisma {
     transferId: string | null
     transferAccountId: string | null
     externalId: string | null
+    pending: boolean
     createdAt: Date
     updatedAt: Date
     _count: TransactionCountAggregateOutputType | null
@@ -6778,6 +6785,7 @@ export namespace Prisma {
     transferId?: boolean
     transferAccountId?: boolean
     externalId?: boolean
+    pending?: boolean
     createdAt?: boolean
     updatedAt?: boolean
     category?: boolean | Transaction$categoryArgs<ExtArgs>
@@ -6807,6 +6815,7 @@ export namespace Prisma {
     transferId?: boolean
     transferAccountId?: boolean
     externalId?: boolean
+    pending?: boolean
     createdAt?: boolean
     updatedAt?: boolean
     category?: boolean | Transaction$categoryArgs<ExtArgs>
@@ -6834,6 +6843,7 @@ export namespace Prisma {
     transferId?: boolean
     transferAccountId?: boolean
     externalId?: boolean
+    pending?: boolean
     createdAt?: boolean
     updatedAt?: boolean
     category?: boolean | Transaction$categoryArgs<ExtArgs>
@@ -6861,11 +6871,12 @@ export namespace Prisma {
     transferId?: boolean
     transferAccountId?: boolean
     externalId?: boolean
+    pending?: boolean
     createdAt?: boolean
     updatedAt?: boolean
   }
 
-  export type TransactionOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "date" | "amount" | "description" | "categoryId" | "accountId" | "costObjectId" | "profileId" | "notes" | "suggestedCategoryId" | "merchant" | "suggestedByRuleId" | "isTransfer" | "transferId" | "transferAccountId" | "externalId" | "createdAt" | "updatedAt", ExtArgs["result"]["transaction"]>
+  export type TransactionOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "date" | "amount" | "description" | "categoryId" | "accountId" | "costObjectId" | "profileId" | "notes" | "suggestedCategoryId" | "merchant" | "suggestedByRuleId" | "isTransfer" | "transferId" | "transferAccountId" | "externalId" | "pending" | "createdAt" | "updatedAt", ExtArgs["result"]["transaction"]>
   export type TransactionInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     category?: boolean | Transaction$categoryArgs<ExtArgs>
     account?: boolean | Transaction$accountArgs<ExtArgs>
@@ -6921,6 +6932,11 @@ export namespace Prisma {
       transferId: string | null
       transferAccountId: string | null
       externalId: string | null
+      /**
+       * Bank sync: the bank has not booked this yet, so amount and date may still
+       * change. Updated in place once booked; deleted if the bank drops it.
+       */
+      pending: boolean
       createdAt: Date
       updatedAt: Date
     }, ExtArgs["result"]["transaction"]>
@@ -7369,6 +7385,7 @@ export namespace Prisma {
     readonly transferId: FieldRef<"Transaction", 'String'>
     readonly transferAccountId: FieldRef<"Transaction", 'String'>
     readonly externalId: FieldRef<"Transaction", 'String'>
+    readonly pending: FieldRef<"Transaction", 'Boolean'>
     readonly createdAt: FieldRef<"Transaction", 'DateTime'>
     readonly updatedAt: FieldRef<"Transaction", 'DateTime'>
   }
@@ -21824,6 +21841,7 @@ export namespace Prisma {
     transferId: 'transferId',
     transferAccountId: 'transferAccountId',
     externalId: 'externalId',
+    pending: 'pending',
     createdAt: 'createdAt',
     updatedAt: 'updatedAt'
   };
@@ -22391,6 +22409,7 @@ export namespace Prisma {
     transferId?: StringNullableFilter<"Transaction"> | string | null
     transferAccountId?: StringNullableFilter<"Transaction"> | string | null
     externalId?: StringNullableFilter<"Transaction"> | string | null
+    pending?: BoolFilter<"Transaction"> | boolean
     createdAt?: DateTimeFilter<"Transaction"> | Date | string
     updatedAt?: DateTimeFilter<"Transaction"> | Date | string
     category?: XOR<CategoryNullableScalarRelationFilter, CategoryWhereInput> | null
@@ -22419,6 +22438,7 @@ export namespace Prisma {
     transferId?: SortOrderInput | SortOrder
     transferAccountId?: SortOrderInput | SortOrder
     externalId?: SortOrderInput | SortOrder
+    pending?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
     category?: CategoryOrderByWithRelationInput
@@ -22451,6 +22471,7 @@ export namespace Prisma {
     transferId?: StringNullableFilter<"Transaction"> | string | null
     transferAccountId?: StringNullableFilter<"Transaction"> | string | null
     externalId?: StringNullableFilter<"Transaction"> | string | null
+    pending?: BoolFilter<"Transaction"> | boolean
     createdAt?: DateTimeFilter<"Transaction"> | Date | string
     updatedAt?: DateTimeFilter<"Transaction"> | Date | string
     category?: XOR<CategoryNullableScalarRelationFilter, CategoryWhereInput> | null
@@ -22479,6 +22500,7 @@ export namespace Prisma {
     transferId?: SortOrderInput | SortOrder
     transferAccountId?: SortOrderInput | SortOrder
     externalId?: SortOrderInput | SortOrder
+    pending?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
     _count?: TransactionCountOrderByAggregateInput
@@ -22508,6 +22530,7 @@ export namespace Prisma {
     transferId?: StringNullableWithAggregatesFilter<"Transaction"> | string | null
     transferAccountId?: StringNullableWithAggregatesFilter<"Transaction"> | string | null
     externalId?: StringNullableWithAggregatesFilter<"Transaction"> | string | null
+    pending?: BoolWithAggregatesFilter<"Transaction"> | boolean
     createdAt?: DateTimeWithAggregatesFilter<"Transaction"> | Date | string
     updatedAt?: DateTimeWithAggregatesFilter<"Transaction"> | Date | string
   }
@@ -23737,6 +23760,7 @@ export namespace Prisma {
     isTransfer?: boolean
     transferId?: string | null
     externalId?: string | null
+    pending?: boolean
     createdAt?: Date | string
     updatedAt?: Date | string
     category?: CategoryCreateNestedOneWithoutTransactionsInput
@@ -23765,6 +23789,7 @@ export namespace Prisma {
     transferId?: string | null
     transferAccountId?: string | null
     externalId?: string | null
+    pending?: boolean
     createdAt?: Date | string
     updatedAt?: Date | string
     splits?: TransactionSplitUncheckedCreateNestedManyWithoutParentInput
@@ -23781,6 +23806,7 @@ export namespace Prisma {
     isTransfer?: BoolFieldUpdateOperationsInput | boolean
     transferId?: NullableStringFieldUpdateOperationsInput | string | null
     externalId?: NullableStringFieldUpdateOperationsInput | string | null
+    pending?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     category?: CategoryUpdateOneWithoutTransactionsNestedInput
@@ -23809,6 +23835,7 @@ export namespace Prisma {
     transferId?: NullableStringFieldUpdateOperationsInput | string | null
     transferAccountId?: NullableStringFieldUpdateOperationsInput | string | null
     externalId?: NullableStringFieldUpdateOperationsInput | string | null
+    pending?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     splits?: TransactionSplitUncheckedUpdateManyWithoutParentNestedInput
@@ -23831,6 +23858,7 @@ export namespace Prisma {
     transferId?: string | null
     transferAccountId?: string | null
     externalId?: string | null
+    pending?: boolean
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -23846,6 +23874,7 @@ export namespace Prisma {
     isTransfer?: BoolFieldUpdateOperationsInput | boolean
     transferId?: NullableStringFieldUpdateOperationsInput | string | null
     externalId?: NullableStringFieldUpdateOperationsInput | string | null
+    pending?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -23867,6 +23896,7 @@ export namespace Prisma {
     transferId?: NullableStringFieldUpdateOperationsInput | string | null
     transferAccountId?: NullableStringFieldUpdateOperationsInput | string | null
     externalId?: NullableStringFieldUpdateOperationsInput | string | null
+    pending?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -25315,6 +25345,7 @@ export namespace Prisma {
     transferId?: SortOrder
     transferAccountId?: SortOrder
     externalId?: SortOrder
+    pending?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
   }
@@ -25340,6 +25371,7 @@ export namespace Prisma {
     transferId?: SortOrder
     transferAccountId?: SortOrder
     externalId?: SortOrder
+    pending?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
   }
@@ -25361,6 +25393,7 @@ export namespace Prisma {
     transferId?: SortOrder
     transferAccountId?: SortOrder
     externalId?: SortOrder
+    pending?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
   }
@@ -28011,6 +28044,7 @@ export namespace Prisma {
     isTransfer?: boolean
     transferId?: string | null
     externalId?: string | null
+    pending?: boolean
     createdAt?: Date | string
     updatedAt?: Date | string
     account?: AccountCreateNestedOneWithoutTransactionsInput
@@ -28037,6 +28071,7 @@ export namespace Prisma {
     transferId?: string | null
     transferAccountId?: string | null
     externalId?: string | null
+    pending?: boolean
     createdAt?: Date | string
     updatedAt?: Date | string
     splits?: TransactionSplitUncheckedCreateNestedManyWithoutParentInput
@@ -28359,6 +28394,7 @@ export namespace Prisma {
     transferId?: StringNullableFilter<"Transaction"> | string | null
     transferAccountId?: StringNullableFilter<"Transaction"> | string | null
     externalId?: StringNullableFilter<"Transaction"> | string | null
+    pending?: BoolFilter<"Transaction"> | boolean
     createdAt?: DateTimeFilter<"Transaction"> | Date | string
     updatedAt?: DateTimeFilter<"Transaction"> | Date | string
   }
@@ -28582,6 +28618,7 @@ export namespace Prisma {
     isTransfer?: boolean
     transferId?: string | null
     externalId?: string | null
+    pending?: boolean
     createdAt?: Date | string
     updatedAt?: Date | string
     category?: CategoryCreateNestedOneWithoutTransactionsInput
@@ -28608,6 +28645,7 @@ export namespace Prisma {
     transferId?: string | null
     transferAccountId?: string | null
     externalId?: string | null
+    pending?: boolean
     createdAt?: Date | string
     updatedAt?: Date | string
     splits?: TransactionSplitUncheckedCreateNestedManyWithoutParentInput
@@ -28633,6 +28671,7 @@ export namespace Prisma {
     isTransfer?: boolean
     transferId?: string | null
     externalId?: string | null
+    pending?: boolean
     createdAt?: Date | string
     updatedAt?: Date | string
     category?: CategoryCreateNestedOneWithoutTransactionsInput
@@ -28659,6 +28698,7 @@ export namespace Prisma {
     isTransfer?: boolean
     transferId?: string | null
     externalId?: string | null
+    pending?: boolean
     createdAt?: Date | string
     updatedAt?: Date | string
     splits?: TransactionSplitUncheckedCreateNestedManyWithoutParentInput
@@ -28952,6 +28992,7 @@ export namespace Prisma {
     isTransfer?: boolean
     transferId?: string | null
     externalId?: string | null
+    pending?: boolean
     createdAt?: Date | string
     updatedAt?: Date | string
     category?: CategoryCreateNestedOneWithoutTransactionsInput
@@ -28978,6 +29019,7 @@ export namespace Prisma {
     transferId?: string | null
     transferAccountId?: string | null
     externalId?: string | null
+    pending?: boolean
     createdAt?: Date | string
     updatedAt?: Date | string
     splits?: TransactionSplitUncheckedCreateNestedManyWithoutParentInput
@@ -29722,6 +29764,7 @@ export namespace Prisma {
     isTransfer?: boolean
     transferId?: string | null
     externalId?: string | null
+    pending?: boolean
     createdAt?: Date | string
     updatedAt?: Date | string
     category?: CategoryCreateNestedOneWithoutTransactionsInput
@@ -29748,6 +29791,7 @@ export namespace Prisma {
     transferId?: string | null
     transferAccountId?: string | null
     externalId?: string | null
+    pending?: boolean
     createdAt?: Date | string
     updatedAt?: Date | string
     splits?: TransactionSplitUncheckedCreateNestedManyWithoutParentInput
@@ -30059,6 +30103,7 @@ export namespace Prisma {
     isTransfer?: boolean
     transferId?: string | null
     externalId?: string | null
+    pending?: boolean
     createdAt?: Date | string
     updatedAt?: Date | string
     category?: CategoryCreateNestedOneWithoutTransactionsInput
@@ -30086,6 +30131,7 @@ export namespace Prisma {
     transferId?: string | null
     transferAccountId?: string | null
     externalId?: string | null
+    pending?: boolean
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -30185,6 +30231,7 @@ export namespace Prisma {
     isTransfer?: BoolFieldUpdateOperationsInput | boolean
     transferId?: NullableStringFieldUpdateOperationsInput | string | null
     externalId?: NullableStringFieldUpdateOperationsInput | string | null
+    pending?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     category?: CategoryUpdateOneWithoutTransactionsNestedInput
@@ -30212,6 +30259,7 @@ export namespace Prisma {
     transferId?: NullableStringFieldUpdateOperationsInput | string | null
     transferAccountId?: NullableStringFieldUpdateOperationsInput | string | null
     externalId?: NullableStringFieldUpdateOperationsInput | string | null
+    pending?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -30631,6 +30679,7 @@ export namespace Prisma {
     isTransfer?: boolean
     transferId?: string | null
     externalId?: string | null
+    pending?: boolean
     createdAt?: Date | string
     updatedAt?: Date | string
     category?: CategoryCreateNestedOneWithoutTransactionsInput
@@ -30657,6 +30706,7 @@ export namespace Prisma {
     transferId?: string | null
     transferAccountId?: string | null
     externalId?: string | null
+    pending?: boolean
     createdAt?: Date | string
     updatedAt?: Date | string
     splits?: TransactionSplitUncheckedCreateNestedManyWithoutParentInput
@@ -31746,6 +31796,7 @@ export namespace Prisma {
     transferId?: string | null
     transferAccountId?: string | null
     externalId?: string | null
+    pending?: boolean
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -31863,6 +31914,7 @@ export namespace Prisma {
     isTransfer?: BoolFieldUpdateOperationsInput | boolean
     transferId?: NullableStringFieldUpdateOperationsInput | string | null
     externalId?: NullableStringFieldUpdateOperationsInput | string | null
+    pending?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     account?: AccountUpdateOneWithoutTransactionsNestedInput
@@ -31889,6 +31941,7 @@ export namespace Prisma {
     transferId?: NullableStringFieldUpdateOperationsInput | string | null
     transferAccountId?: NullableStringFieldUpdateOperationsInput | string | null
     externalId?: NullableStringFieldUpdateOperationsInput | string | null
+    pending?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     splits?: TransactionSplitUncheckedUpdateManyWithoutParentNestedInput
@@ -31910,6 +31963,7 @@ export namespace Prisma {
     transferId?: NullableStringFieldUpdateOperationsInput | string | null
     transferAccountId?: NullableStringFieldUpdateOperationsInput | string | null
     externalId?: NullableStringFieldUpdateOperationsInput | string | null
+    pending?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -32094,6 +32148,7 @@ export namespace Prisma {
     transferId?: string | null
     transferAccountId?: string | null
     externalId?: string | null
+    pending?: boolean
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -32114,6 +32169,7 @@ export namespace Prisma {
     isTransfer?: boolean
     transferId?: string | null
     externalId?: string | null
+    pending?: boolean
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -32146,6 +32202,7 @@ export namespace Prisma {
     isTransfer?: BoolFieldUpdateOperationsInput | boolean
     transferId?: NullableStringFieldUpdateOperationsInput | string | null
     externalId?: NullableStringFieldUpdateOperationsInput | string | null
+    pending?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     category?: CategoryUpdateOneWithoutTransactionsNestedInput
@@ -32172,6 +32229,7 @@ export namespace Prisma {
     transferId?: NullableStringFieldUpdateOperationsInput | string | null
     transferAccountId?: NullableStringFieldUpdateOperationsInput | string | null
     externalId?: NullableStringFieldUpdateOperationsInput | string | null
+    pending?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     splits?: TransactionSplitUncheckedUpdateManyWithoutParentNestedInput
@@ -32193,6 +32251,7 @@ export namespace Prisma {
     transferId?: NullableStringFieldUpdateOperationsInput | string | null
     transferAccountId?: NullableStringFieldUpdateOperationsInput | string | null
     externalId?: NullableStringFieldUpdateOperationsInput | string | null
+    pending?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -32208,6 +32267,7 @@ export namespace Prisma {
     isTransfer?: BoolFieldUpdateOperationsInput | boolean
     transferId?: NullableStringFieldUpdateOperationsInput | string | null
     externalId?: NullableStringFieldUpdateOperationsInput | string | null
+    pending?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     category?: CategoryUpdateOneWithoutTransactionsNestedInput
@@ -32234,6 +32294,7 @@ export namespace Prisma {
     isTransfer?: BoolFieldUpdateOperationsInput | boolean
     transferId?: NullableStringFieldUpdateOperationsInput | string | null
     externalId?: NullableStringFieldUpdateOperationsInput | string | null
+    pending?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     splits?: TransactionSplitUncheckedUpdateManyWithoutParentNestedInput
@@ -32255,6 +32316,7 @@ export namespace Prisma {
     isTransfer?: BoolFieldUpdateOperationsInput | boolean
     transferId?: NullableStringFieldUpdateOperationsInput | string | null
     externalId?: NullableStringFieldUpdateOperationsInput | string | null
+    pending?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -32326,6 +32388,7 @@ export namespace Prisma {
     transferId?: string | null
     transferAccountId?: string | null
     externalId?: string | null
+    pending?: boolean
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -32351,6 +32414,7 @@ export namespace Prisma {
     isTransfer?: BoolFieldUpdateOperationsInput | boolean
     transferId?: NullableStringFieldUpdateOperationsInput | string | null
     externalId?: NullableStringFieldUpdateOperationsInput | string | null
+    pending?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     category?: CategoryUpdateOneWithoutTransactionsNestedInput
@@ -32377,6 +32441,7 @@ export namespace Prisma {
     transferId?: NullableStringFieldUpdateOperationsInput | string | null
     transferAccountId?: NullableStringFieldUpdateOperationsInput | string | null
     externalId?: NullableStringFieldUpdateOperationsInput | string | null
+    pending?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     splits?: TransactionSplitUncheckedUpdateManyWithoutParentNestedInput
@@ -32398,6 +32463,7 @@ export namespace Prisma {
     transferId?: NullableStringFieldUpdateOperationsInput | string | null
     transferAccountId?: NullableStringFieldUpdateOperationsInput | string | null
     externalId?: NullableStringFieldUpdateOperationsInput | string | null
+    pending?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -32488,6 +32554,7 @@ export namespace Prisma {
     transferId?: string | null
     transferAccountId?: string | null
     externalId?: string | null
+    pending?: boolean
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -32503,6 +32570,7 @@ export namespace Prisma {
     isTransfer?: BoolFieldUpdateOperationsInput | boolean
     transferId?: NullableStringFieldUpdateOperationsInput | string | null
     externalId?: NullableStringFieldUpdateOperationsInput | string | null
+    pending?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     category?: CategoryUpdateOneWithoutTransactionsNestedInput
@@ -32529,6 +32597,7 @@ export namespace Prisma {
     transferId?: NullableStringFieldUpdateOperationsInput | string | null
     transferAccountId?: NullableStringFieldUpdateOperationsInput | string | null
     externalId?: NullableStringFieldUpdateOperationsInput | string | null
+    pending?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     splits?: TransactionSplitUncheckedUpdateManyWithoutParentNestedInput
@@ -32550,6 +32619,7 @@ export namespace Prisma {
     transferId?: NullableStringFieldUpdateOperationsInput | string | null
     transferAccountId?: NullableStringFieldUpdateOperationsInput | string | null
     externalId?: NullableStringFieldUpdateOperationsInput | string | null
+    pending?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -32614,6 +32684,7 @@ export namespace Prisma {
     transferId?: string | null
     transferAccountId?: string | null
     externalId?: string | null
+    pending?: boolean
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -32859,6 +32930,7 @@ export namespace Prisma {
     isTransfer?: BoolFieldUpdateOperationsInput | boolean
     transferId?: NullableStringFieldUpdateOperationsInput | string | null
     externalId?: NullableStringFieldUpdateOperationsInput | string | null
+    pending?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     category?: CategoryUpdateOneWithoutTransactionsNestedInput
@@ -32885,6 +32957,7 @@ export namespace Prisma {
     transferId?: NullableStringFieldUpdateOperationsInput | string | null
     transferAccountId?: NullableStringFieldUpdateOperationsInput | string | null
     externalId?: NullableStringFieldUpdateOperationsInput | string | null
+    pending?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     splits?: TransactionSplitUncheckedUpdateManyWithoutParentNestedInput
@@ -32906,6 +32979,7 @@ export namespace Prisma {
     transferId?: NullableStringFieldUpdateOperationsInput | string | null
     transferAccountId?: NullableStringFieldUpdateOperationsInput | string | null
     externalId?: NullableStringFieldUpdateOperationsInput | string | null
+    pending?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }

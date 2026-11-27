@@ -155,13 +155,19 @@ describe('pickBankBalance', () => {
         { balance_type: 'ITAV', balance_amount: { amount: '90' } },
         { balance_type: 'ITBD', balance_amount: { amount: '100' } },
       ]),
-    ).toBe(100);
+    ).toEqual({ amount: 100, booked: true });
     expect(
       pickBankBalance([
         { balance_type: 'ITBD', balance_amount: { amount: '100' } },
         { balance_type: 'closingBooked', balance_amount: { amount: '120' } },
       ]),
-    ).toBe(120);
+    ).toEqual({ amount: 120, booked: true });
+    expect(
+      pickBankBalance([
+        { balance_type: 'XPCD', balance_amount: { amount: '80' } },
+        { balance_type: 'ITAV', balance_amount: { amount: '90' } },
+      ]),
+    ).toEqual({ amount: 80, booked: false });
   });
 
   it('falls back to the first balance, and to null when there is none', () => {
@@ -169,7 +175,7 @@ describe('pickBankBalance', () => {
       pickBankBalance([
         { balance_type: 'OTHR', balance_amount: { amount: '-5.5' } },
       ]),
-    ).toBe(-5.5);
+    ).toEqual({ amount: -5.5, booked: false });
     expect(pickBankBalance([])).toBeNull();
     expect(pickBankBalance(undefined as any)).toBeNull();
   });

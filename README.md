@@ -325,11 +325,15 @@ code automatically when that address is its own Settings page. So:
   before the newest one instead, so the two overlap rather than leave a gap.
 - **Later syncs** fetch from five days before the previous sync, and anything
   already stored is skipped, so re-syncing never duplicates a transaction.
-- **Only final (booked) transactions are imported.** A card payment the bank
-  still shows as pending can change amount (tips, exchange rates) or be
-  cancelled, so it waits until it is booked. The next sync looks back far
-  enough to collect it, for up to 30 days. Cancelled and rejected transactions
-  are never imported.
+- **Pending transactions come in tagged *Pending*.** A card payment your bank
+  hasn't booked yet can still change amount (tips, exchange rates) or be
+  cancelled. Each sync updates it. Once the bank books it, the same row
+  becomes an ordinary transaction with the final amount and date, keeping any
+  category you set. If the bank drops it, it is removed. Pending transactions
+  count in your totals like any other, and the bank balance shown for a
+  current account includes them so the two compare like for like. They are
+  never paired as transfers automatically until booked. Cancelled and
+  rejected transactions are never imported.
 - Imported rows are described by the other party: the shop or person paid on
   money going out, the payer on money coming in. Any further detail goes in the
   notes, and your categorisation rules run on them like on any other import.

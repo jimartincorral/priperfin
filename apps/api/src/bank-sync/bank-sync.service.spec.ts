@@ -33,6 +33,11 @@ describe('BankSyncService', () => {
         findFirst: jest.fn(),
         findMany: jest.fn(),
         update: jest.fn(),
+        aggregate: jest.fn().mockResolvedValue({
+          _count: { _all: 0 },
+          _sum: { amount: null },
+          _min: { date: null },
+        }),
       },
     };
 
@@ -448,9 +453,34 @@ describe('BankSyncService', () => {
   });
 
   describe('syncTransactions details', () => {
+    const row = (over: any = {}) => ({
+      id: 'row-1',
+      externalId: 'pend-1',
+      date: new Date('2026-11-22'),
+      amount: { toNumber: () => over.value ?? -30 },
+      description: 'Hotel',
+      notes: null,
+      pending: true,
+      transferId: null,
+      ...over,
+    });
+    const pendingAggregate = (count: number, sum: number, min?: Date) =>
+      mockPrismaService.transaction.aggregate.mockResolvedValue({
+        _count: { _all: count },
+        _sum: { amount: count ? sum : null },
+        _min: { date: min ?? null },
+      });
+
     beforeEach(() => {
       credentials();
       mockPrismaService.transaction.findMany.mockResolvedValue([]);
+      mockPrismaService.transaction.aggregate = jest.fn();
+      mockPrismaService.transaction.delete = jest.fn().mockResolvedValue({});
+      mockPrismaService.transaction.updateMany = jest
+        .fn()
+        .mockResolvedValue({});
+      mockPrismaService.transaction.update.mockResolvedValue({});
+      pendingAggregate(0, 0);
       mockPrismaService.account.update.mockResolvedValue({});
       mockEnableBankingService.getAccountBalances.mockResolvedValue({
         balances: [],
@@ -461,7 +491,7 @@ describe('BankSyncService', () => {
       });
     });
 
-    it('imports booked transactions only and remembers the oldest pending one', async () => {
+    it('imports pending transactions flagged, and never cancelled ones', async () => {
       mockPrismaService.account.findMany.mockResolvedValue([linkedAccount()]);
       mockEnableBankingService.getAccountTransactions.mockResolvedValue({
         transactions: [
@@ -481,12 +511,6 @@ describe('BankSyncService', () => {
             creditor: { name: 'Hotel hold' },
           },
           {
-            status: 'PDNG',
-            transaction_date: '2026-11-21',
-            transaction_amount: { amount: '8.00', currency: 'EUR' },
-            credit_debit_indicator: 'DBIT',
-          },
-          {
             status: 'CNCL',
             booking_date: '2026-11-19',
             transaction_amount: { amount: '99.00', currency: 'EUR' },
@@ -494,21 +518,146 @@ describe('BankSyncService', () => {
           },
         ],
       });
+      pendingAggregate(1, -30, new Date('2026-11-22'));
 
       await service.syncTransactions(undefined, 'profile-1');
 
       const inserted = mockTransactionsService.createMany.mock.calls[0][0];
-      expect(inserted).toHaveLength(1);
-      expect(inserted[0]).toMatchObject({
-        description: 'Bakery',
-        amount: -12,
+      expect(inserted).toHaveLength(2);
+      expect(inserted[0]).toMatchObject({ description: 'Bakery', amount: -12 });
+      expect(inserted[0].pending).toBeUndefined();
+      expect(inserted[1]).toMatchObject({
+        description: 'Hotel hold',
+        amount: -30,
+        pending: true,
       });
       expect(mockPrismaService.account.update).toHaveBeenCalledWith({
         where: { id: 'acc-1' },
         data: expect.objectContaining({
-          bankPendingFrom: new Date('2026-11-21'),
+          bankPendingFrom: new Date('2026-11-22'),
         }),
       });
+    });
+
+    it('turns a pending row into the booked transaction in place', async () => {
+      mockPrismaService.account.findMany.mockResolvedValue([linkedAccount()]);
+      // The hold was 30.00; the final charge adds a tip, under a new ID.
+      mockPrismaService.transaction.findMany.mockResolvedValue([row()]);
+      mockTransactionsService.calculateDescriptionSimilarity.mockReturnValue(
+        80,
+      );
+      mockEnableBankingService.getAccountTransactions.mockResolvedValue({
+        transactions: [
+          {
+            entry_reference: 'final-1',
+            status: 'BOOK',
+            booking_date: '2026-11-24',
+            transaction_amount: { amount: '33.00', currency: 'EUR' },
+            credit_debit_indicator: 'DBIT',
+            creditor: { name: 'Hotel' },
+          },
+        ],
+      });
+
+      const result = await service.syncTransactions(undefined, 'profile-1');
+
+      expect(mockPrismaService.transaction.update).toHaveBeenCalledWith({
+        where: { id: 'row-1' },
+        data: expect.objectContaining({
+          amount: -33,
+          externalId: 'final-1',
+          pending: false,
+          date: new Date('2026-11-24'),
+        }),
+      });
+      expect(mockTransactionsService.createMany).not.toHaveBeenCalled();
+      expect(mockPrismaService.transaction.delete).not.toHaveBeenCalled();
+      expect(result.accountsSynced[0]).toMatchObject({ bookedCount: 1 });
+    });
+
+    it('follows a change to a transaction that is still pending', async () => {
+      mockPrismaService.account.findMany.mockResolvedValue([linkedAccount()]);
+      mockPrismaService.transaction.findMany.mockResolvedValue([row()]);
+      mockEnableBankingService.getAccountTransactions.mockResolvedValue({
+        transactions: [
+          {
+            entry_reference: 'pend-1',
+            status: 'PDNG',
+            transaction_date: '2026-11-22',
+            transaction_amount: { amount: '31.50', currency: 'EUR' },
+            credit_debit_indicator: 'DBIT',
+            creditor: { name: 'Hotel' },
+          },
+        ],
+      });
+
+      await service.syncTransactions(undefined, 'profile-1');
+
+      expect(mockPrismaService.transaction.update).toHaveBeenCalledWith({
+        where: { id: 'row-1' },
+        data: expect.objectContaining({ amount: -31.5, pending: true }),
+      });
+      expect(mockPrismaService.transaction.delete).not.toHaveBeenCalled();
+    });
+
+    it('removes a pending row the bank dropped, unlinking any transfer', async () => {
+      mockPrismaService.account.findMany.mockResolvedValue([linkedAccount()]);
+      mockPrismaService.transaction.findMany.mockResolvedValue([
+        row({ transferId: 'xfer-1' }),
+      ]);
+      mockEnableBankingService.getAccountTransactions.mockResolvedValue({
+        transactions: [],
+      });
+
+      const result = await service.syncTransactions(undefined, 'profile-1');
+
+      expect(mockPrismaService.transaction.updateMany).toHaveBeenCalledWith({
+        where: { transferId: 'xfer-1', profileId: 'profile-1' },
+        data: { isTransfer: false, transferId: null, transferAccountId: null },
+      });
+      expect(mockPrismaService.transaction.delete).toHaveBeenCalledWith({
+        where: { id: 'row-1' },
+      });
+      expect(result.accountsSynced[0]).toMatchObject({ removedCount: 1 });
+    });
+
+    it('keeps pending rows when the fetch was cut short', async () => {
+      mockPrismaService.account.findMany.mockResolvedValue([linkedAccount()]);
+      mockPrismaService.transaction.findMany.mockResolvedValue([row()]);
+      // Every page says there is more: the 25-page ceiling stops the fetch.
+      mockEnableBankingService.getAccountTransactions.mockResolvedValue({
+        transactions: [],
+        continuation_key: 'more',
+      });
+
+      await service.syncTransactions(undefined, 'profile-1');
+
+      expect(
+        mockEnableBankingService.getAccountTransactions,
+      ).toHaveBeenCalledTimes(25);
+      expect(mockPrismaService.transaction.delete).not.toHaveBeenCalled();
+    });
+
+    it('adds pending transactions to a booked bank balance', async () => {
+      mockPrismaService.account.findMany.mockResolvedValue([linkedAccount()]);
+      mockEnableBankingService.getAccountTransactions.mockResolvedValue({
+        transactions: [],
+      });
+      mockEnableBankingService.getAccountBalances.mockResolvedValue({
+        balances: [
+          { balance_type: 'CLBD', balance_amount: { amount: '1000.00' } },
+        ],
+      });
+      pendingAggregate(2, -45.1, new Date('2026-11-20'));
+
+      await service.syncTransactions(undefined, 'profile-1');
+
+      expect(mockPrismaService.setting.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { key: 'balance_verified_account_acc-1' },
+          update: { value: '954.9' },
+        }),
+      );
     });
 
     it('reaches back to a pending transaction on the next sync', async () => {

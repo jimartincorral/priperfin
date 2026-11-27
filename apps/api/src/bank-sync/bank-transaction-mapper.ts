@@ -4,9 +4,9 @@ import { CreateTransactionDto } from '../transactions/create-transaction.dto';
 
 /**
  * Statuses that are not final yet but usually become a booked transaction:
- * a card hold, a pending transfer, a scheduled payment. Importing them would
- * store an amount that can still change (tips, exchange rates) under an ID
- * the booked version will not share, so they are left for a later sync.
+ * a card hold, a pending transfer, a scheduled payment. They are imported
+ * flagged as pending, since the amount can still change (tips, exchange
+ * rates) and the booked version may arrive under another ID.
  */
 const NOT_YET_BOOKED = new Set(['PDNG', 'PENDING', 'HOLD', 'SCHD']);
 /** Statuses that will never be booked. */
@@ -117,8 +117,8 @@ export function fallbackTransactionId(
 }
 
 /**
- * Maps a booked bank transaction to a PriPerFin transaction. Returns null for
- * a zero or unreadable amount. Callers filter on `bankTransactionState` first.
+ * Maps a bank transaction to a PriPerFin transaction. Returns null for a zero
+ * or unreadable amount. Callers check `bankTransactionState` first.
  */
 export function mapBankTransaction(
   tx: BankTransaction,
@@ -153,23 +153,28 @@ export function mapBankTransaction(
  * closing booked, interim booked, expected, then the available balances. Codes
  * are ISO 20022; the Berlin Group names some banks send are accepted too.
  */
-const BALANCE_PREFERENCE = [
-  ['CLBD', 'closingBooked'],
-  ['ITBD', 'interimBooked'],
-  ['XPCD', 'expected'],
-  ['ITAV', 'interimAvailable'],
-  ['CLAV', 'closingAvailable'],
+const BALANCE_PREFERENCE: Array<{ names: string[]; booked: boolean }> = [
+  { names: ['CLBD', 'closingBooked'], booked: true },
+  { names: ['ITBD', 'interimBooked'], booked: true },
+  { names: ['XPCD', 'expected'], booked: false },
+  { names: ['ITAV', 'interimAvailable'], booked: false },
+  { names: ['CLAV', 'closingAvailable'], booked: false },
 ];
 
+/**
+ * @returns the amount, and whether it is a booked balance (one that leaves
+ *   out pending transactions), or null when the bank sent none.
+ */
 export function pickBankBalance(
   balances: Array<{
     balance_type?: string;
     balance_amount?: { amount?: string };
   }>,
-): number | null {
+): { amount: number; booked: boolean } | null {
   if (!Array.isArray(balances) || balances.length === 0) return null;
   let chosen = balances[0];
-  for (const names of BALANCE_PREFERENCE) {
+  let booked = false;
+  for (const { names, booked: isBooked } of BALANCE_PREFERENCE) {
     const hit = balances.find((b) =>
       names.some(
         (n) => (b.balance_type || '').toLowerCase() === n.toLowerCase(),
@@ -177,9 +182,10 @@ export function pickBankBalance(
     );
     if (hit) {
       chosen = hit;
+      booked = isBooked;
       break;
     }
   }
   const value = parseFloat(chosen?.balance_amount?.amount ?? '');
-  return Number.isFinite(value) ? value : null;
+  return Number.isFinite(value) ? { amount: value, booked } : null;
 }

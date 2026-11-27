@@ -1043,5 +1043,7 @@ export const en = {
         sync_failed: 'Bank synchronization failed.',
         sync_expired_warning: 'Your bank authorization has expired. Please re-authenticate in Settings.',
         sync_revoked_warning: 'Access to this bank was withdrawn. Connect it again in Settings.',
+        pending: 'Pending',
+        pending_hint: 'Your bank has not booked this yet. The amount can still change, and it updates or disappears with the next sync. Your category stays.',
     },
 };

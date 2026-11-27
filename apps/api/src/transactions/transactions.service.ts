@@ -1052,6 +1052,8 @@ export class TransactionsService {
       where: {
         profileId,
         isTransfer: false,
+        // A pending amount can still change; pair it once the bank books it.
+        pending: false,
         accountId: { not: null },
       },
       orderBy: { date: 'desc' },

@@ -21,11 +21,11 @@ import {
 } from './interfaces/enable-banking.interface';
 import { CreateTransactionDto } from '../transactions/create-transaction.dto';
 import {
-  bankTransactionDate,
   bankTransactionState,
   mapBankTransaction,
   pickBankBalance,
 } from './bank-transaction-mapper';
+import { Prisma } from '../generated/client';
 import * as crypto from 'crypto';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -33,7 +33,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_CONSENT_SECONDS = 90 * 24 * 60 * 60;
 /** Requested a little short of the bank's maximum so clock skew can't exceed it. */
 const CONSENT_MARGIN_SECONDS = 10 * 60;
-/** How far back a sync keeps looking for a pending transaction to be booked. */
+/** How far back a sync keeps following a pending transaction. */
 const PENDING_LOOKBACK_MAX_DAYS = 30;
 
 function safeParseArray(json: string): any[] {
@@ -54,6 +54,21 @@ function ibansOf(accounts: any[]): Set<string> {
     }
   }
   return ibans;
+}
+
+/** A mapped bank transaction, flagged when the bank hasn't booked it yet. */
+type BankDto = CreateTransactionDto & { pending?: boolean };
+
+/** The fields of a stored transaction that bank sync compares against. */
+interface ExistingRow {
+  id: string;
+  externalId: string | null;
+  date: Date;
+  amount: Prisma.Decimal;
+  description: string;
+  notes: string | null;
+  pending: boolean;
+  transferId: string | null;
 }
 
 /** Why a bank connection stopped working. */
@@ -757,10 +772,10 @@ export class BankSyncService {
         if (account.lastSyncedAt) {
           const syncStart = new Date(account.lastSyncedAt);
           syncStart.setDate(syncStart.getDate() - 5); // 5 days safety overlap
-          // Reach back to the oldest transaction that was still pending last
-          // time, so it is picked up once booked even if the bank files it
-          // under its original date. Capped, so a hold that never books
-          // doesn't widen every sync forever.
+          // Reach back to the oldest transaction still pending, so the sync
+          // sees it booked, changed or dropped even if the bank files it under
+          // its original date. Capped, so a hold that never books doesn't
+          // widen every sync forever.
           if (account.bankPendingFrom) {
             const pendingStart = new Date(account.bankPendingFrom);
             pendingStart.setDate(pendingStart.getDate() - 2);
@@ -860,150 +875,163 @@ export class BankSyncService {
           `Received ${rawTransactions.length} raw transactions across ${pageCount} page(s) for ${account.name}`,
         );
 
-        // Only booked transactions are imported. Pending ones are left for
-        // a later sync (see bankPendingFrom); cancelled or rejected ones never.
-        let oldestPending: string | null = null;
-        let pendingCount = 0;
-        const dtos: CreateTransactionDto[] = [];
+        // Booked and pending transactions both come in. Pending ones are
+        // flagged, kept up to date while the bank still lists them, turned
+        // into the booked transaction in place once it is final (so a
+        // category set meanwhile stays), and removed if the bank drops them.
+        // Cancelled and rejected transactions are never imported.
+        const bookedIn: BankDto[] = [];
+        const pendingIn: BankDto[] = [];
         for (const tx of rawTransactions) {
           const state = bankTransactionState(tx);
-          if (state === 'pending') {
-            pendingCount++;
-            const d = tx.transaction_date || bankTransactionDate(tx);
-            if (!oldestPending || d < oldestPending) oldestPending = d;
-            continue;
-          }
           if (state === 'void') continue;
           const dto = mapBankTransaction(tx, account.id);
-          if (dto) dtos.push(dto);
+          if (!dto) continue;
+          if (state === 'pending') pendingIn.push({ ...dto, pending: true });
+          else bookedIn.push(dto);
         }
-        if (pendingCount > 0) {
-          this.logger.log(
-            `Left ${pendingCount} pending transaction(s) on ${account.name} for a later sync`,
-          );
-        }
+        const fetchComplete = !continuationKey;
 
-        // Fetch existing transactions in the relevant date window to detect CSV/manual duplicates
+        // Existing rows the incoming ones may correspond to: everything in
+        // the date window, plus every pending row on the account.
         const windowStart = new Date(dateFrom);
         windowStart.setDate(windowStart.getDate() - 4);
         const windowEnd = new Date(dateTo);
         windowEnd.setDate(windowEnd.getDate() + 4);
+        const rowSelect = {
+          id: true,
+          externalId: true,
+          date: true,
+          amount: true,
+          description: true,
+          notes: true,
+          pending: true,
+          transferId: true,
+        } as const;
+        const pool: ExistingRow[] = await this.prisma.transaction.findMany({
+          where: {
+            accountId: account.id,
+            profileId,
+            OR: [
+              { date: { gte: windowStart, lte: windowEnd } },
+              { pending: true },
+            ],
+          },
+          select: rowSelect,
+        });
 
-        const existingAccountTransactions =
-          await this.prisma.transaction.findMany({
-            where: {
-              accountId: account.id,
-              profileId,
-              date: {
-                gte: windowStart,
-                lte: windowEnd,
-              },
-            },
-            select: {
-              id: true,
-              externalId: true,
-              date: true,
-              amount: true,
-              description: true,
-            },
-          });
-
-        const matchedExistingIds = new Set<string>();
-        const dtosToInsert: CreateTransactionDto[] = [];
+        const matched = new Set<string>();
+        const toInsert: BankDto[] = [];
         let accountDuplicatesCount = 0;
+        let bookedCount = 0;
 
-        for (const dto of dtos) {
-          const dtoTime = new Date(dto.date).getTime();
-          const dtoAmount = dto.amount;
-
-          // Layer 1: Exact externalId match
-          const directMatch = existingAccountTransactions.find(
-            (e) => e.externalId && e.externalId === dto.externalId,
+        // Booked first, so a transaction that became final claims its
+        // pending row before a pending one of the same amount can.
+        for (const dto of bookedIn) {
+          const direct = pool.find(
+            (e) => !matched.has(e.id) && e.externalId === dto.externalId,
           );
-          if (directMatch) {
-            matchedExistingIds.add(directMatch.id);
+          const pendingRow =
+            direct ??
+            this.findPendingMatch(
+              pool.filter((e) => e.pending && !matched.has(e.id)),
+              dto,
+            );
+          if (pendingRow?.pending) {
+            matched.add(pendingRow.id);
+            await this.writeBankFields(pendingRow, dto, false);
+            bookedCount++;
+            continue;
+          }
+          if (direct) {
+            matched.add(direct.id);
             accountDuplicatesCount++;
             continue;
           }
 
-          // Layer 2: Content hash match (e.g. standard CSV hash)
-          const csvHash = this.transactionsService.generateHash(dto);
-          const hashMatch = existingAccountTransactions.find(
-            (e) => !matchedExistingIds.has(e.id) && e.externalId === csvHash,
+          const recorded = this.findRecordedMatch(
+            pool.filter((e) => !e.pending && !matched.has(e.id)),
+            dto,
           );
-          if (hashMatch) {
-            matchedExistingIds.add(hashMatch.id);
-            accountDuplicatesCount++;
-            if (dto.externalId && hashMatch.externalId !== dto.externalId) {
-              await this.prisma.transaction.update({
-                where: { id: hashMatch.id },
-                data: { externalId: dto.externalId },
-              });
-            }
-            continue;
-          }
-
-          // Layer 3: Smart Bank-to-CSV / Manual Match (Date ± 3 days, exact amount, normalized fuzzy description)
-          const candidates = existingAccountTransactions.filter((e) => {
-            if (matchedExistingIds.has(e.id)) return false;
-            const amountDiff = Math.abs(e.amount.toNumber() - dtoAmount);
-            if (amountDiff > 0.01) return false;
-            const daysDiff = Math.abs(
-              (e.date.getTime() - dtoTime) / (1000 * 60 * 60 * 24),
-            );
-            return daysDiff <= 3;
-          });
-
-          let bestMatch: (typeof candidates)[0] | null = null;
-          let bestScore = 0;
-
-          for (const cand of candidates) {
-            const similarity =
-              this.transactionsService.calculateDescriptionSimilarity(
-                cand.description,
-                dto.description,
-              );
-            if (similarity >= 50 && similarity > bestScore) {
-              bestScore = similarity;
-              bestMatch = cand;
-            }
-          }
-
-          // Fallback: If only 1 transaction on this account has that exact amount in a 1-day window
-          if (!bestMatch && candidates.length === 1) {
-            const daysDiff = Math.abs(
-              (candidates[0].date.getTime() - dtoTime) / (1000 * 60 * 60 * 24),
-            );
-            if (daysDiff <= 1) {
-              bestMatch = candidates[0];
-            }
-          }
-
-          if (bestMatch) {
-            matchedExistingIds.add(bestMatch.id);
+          if (recorded) {
+            matched.add(recorded.id);
             accountDuplicatesCount++;
             this.logger.log(
-              `Reconciled bank movement "${dto.description}" (${dto.amount}€) with existing transaction "${bestMatch.description}" (id: ${bestMatch.id})`,
+              `Reconciled bank movement "${dto.description}" (${dto.amount}) with existing transaction "${recorded.description}" (id: ${recorded.id})`,
             );
-            // Promote existing transaction by attaching bank's externalId
-            if (dto.externalId && bestMatch.externalId !== dto.externalId) {
+            // Promote the existing transaction by attaching the bank's ID
+            if (dto.externalId && recorded.externalId !== dto.externalId) {
               await this.prisma.transaction.update({
-                where: { id: bestMatch.id },
+                where: { id: recorded.id },
                 data: { externalId: dto.externalId },
               });
             }
             continue;
           }
 
-          // Genuine new transaction
-          dtosToInsert.push(dto);
+          toInsert.push(dto);
+        }
+
+        for (const dto of pendingIn) {
+          const direct = pool.find(
+            (e) => !matched.has(e.id) && e.externalId === dto.externalId,
+          );
+          if (direct) {
+            matched.add(direct.id);
+            // Still pending: follow any change in amount, date or text.
+            if (direct.pending) await this.writeBankFields(direct, dto, true);
+            continue;
+          }
+          // The same pending transaction under a new ID (banks without a
+          // stable reference, after the amount moved).
+          const earlier = this.findPendingMatch(
+            pool.filter((e) => e.pending && !matched.has(e.id)),
+            dto,
+          );
+          if (earlier) {
+            matched.add(earlier.id);
+            await this.writeBankFields(earlier, dto, true);
+            continue;
+          }
+          // Already recorded by hand or from a file: keep that one. The
+          // booked version will reconcile with it later.
+          const recorded = this.findRecordedMatch(
+            pool.filter((e) => !e.pending && !matched.has(e.id)),
+            dto,
+          );
+          if (recorded) {
+            matched.add(recorded.id);
+            continue;
+          }
+          toInsert.push(dto);
+        }
+
+        // Pending rows the bank no longer lists were cancelled or expired.
+        // Only judged on a complete fetch, never on a truncated one.
+        let removedCount = 0;
+        if (fetchComplete) {
+          for (const row of pool) {
+            if (!row.pending || matched.has(row.id)) continue;
+            if (row.transferId) {
+              await this.prisma.transaction.updateMany({
+                where: { transferId: row.transferId, profileId },
+                data: {
+                  isTransfer: false,
+                  transferId: null,
+                  transferAccountId: null,
+                },
+              });
+            }
+            await this.prisma.transaction.delete({ where: { id: row.id } });
+            removedCount++;
+          }
         }
 
         // Ingest into PriPerFin with automatic deduplication and rule matching
         let resultNewCount = 0;
-        if (dtosToInsert.length > 0) {
+        if (toInsert.length > 0) {
           const result = await this.transactionsService.createMany(
-            dtosToInsert,
+            toInsert,
             false,
             [],
             profileId,
@@ -1012,6 +1040,19 @@ export class BankSyncService {
           resultNewCount = result.newCount;
           accountDuplicatesCount += result.duplicateCount;
         }
+
+        const pendingAfter = await this.prisma.transaction.aggregate({
+          where: { accountId: account.id, profileId, pending: true },
+          _min: { date: true },
+          _sum: { amount: true },
+          _count: { _all: true },
+        });
+        const pendingCount = pendingAfter._count?._all ?? 0;
+        const pendingSum = Number(pendingAfter._sum?.amount ?? 0);
+
+        this.logger.log(
+          `${account.name}: ${resultNewCount} new, ${bookedCount} pending now booked, ${removedCount} pending dropped by the bank, ${pendingCount} still pending`,
+        );
 
         totalNew += resultNewCount;
         totalDuplicates += accountDuplicatesCount;
@@ -1024,8 +1065,15 @@ export class BankSyncService {
             key,
             psu,
           );
-          const balanceAmt = pickBankBalance(balances?.balances);
-          if (balanceAmt !== null) {
+          const picked = pickBankBalance(balances?.balances);
+          if (picked) {
+            // The ledger counts pending transactions, a booked balance does
+            // not: add them so the two compare like for like. Debit accounts
+            // only, until the sign a bank uses for card balances is known.
+            const balanceAmt =
+              picked.booked && account.type !== 'CREDIT'
+                ? Math.round((picked.amount + pendingSum) * 100) / 100
+                : picked.amount;
             await this.prisma.setting.upsert({
               where: { key: `balance_verified_account_${account.id}` },
               update: { value: balanceAmt.toString() },
@@ -1047,7 +1095,7 @@ export class BankSyncService {
           where: { id: account.id },
           data: {
             lastSyncedAt: new Date(),
-            bankPendingFrom: oldestPending ? new Date(oldestPending) : null,
+            bankPendingFrom: pendingAfter._min?.date ?? null,
           },
         });
 
@@ -1057,6 +1105,9 @@ export class BankSyncService {
           status: 'SUCCESS',
           newCount: resultNewCount,
           duplicateCount: accountDuplicatesCount,
+          bookedCount,
+          removedCount,
+          pendingCount,
         });
       } catch (syncErr: any) {
         this.logger.error(`Error syncing account ${account.name}:`, syncErr);
@@ -1134,6 +1185,120 @@ export class BankSyncService {
       duplicateCount: totalDuplicates,
       accountsSynced: accountResults,
     };
+  }
+
+  /**
+   * The pending row an incoming transaction stands for. The final amount can
+   * differ from the hold (tips, exchange rates) and the bank can date it a
+   * few days later, so this is looser than duplicate detection: the same
+   * amount, or within 20% with a similar description, within ten days.
+   */
+  private findPendingMatch(
+    pendingRows: ExistingRow[],
+    dto: BankDto,
+  ): ExistingRow | null {
+    let best: ExistingRow | null = null;
+    let bestScore = -Infinity;
+    const exactCount = pendingRows.filter(
+      (e) => Math.abs(e.amount.toNumber() - dto.amount) <= 0.01,
+    ).length;
+    for (const row of pendingRows) {
+      const amount = row.amount.toNumber();
+      if (amount * dto.amount <= 0) continue; // same direction only
+      const days = Math.abs(
+        (row.date.getTime() - new Date(dto.date).getTime()) / DAY_MS,
+      );
+      if (days > 10) continue;
+      const exact = Math.abs(amount - dto.amount) <= 0.01;
+      const relDiff =
+        Math.abs(amount - dto.amount) /
+        Math.max(Math.abs(amount), Math.abs(dto.amount));
+      const similarity =
+        this.transactionsService.calculateDescriptionSimilarity(
+          row.description,
+          dto.description,
+        );
+      const accept = exact
+        ? similarity >= 30 || exactCount === 1
+        : relDiff <= 0.2 && similarity >= 50;
+      if (!accept) continue;
+      const score = (exact ? 1000 : 0) + similarity - days;
+      if (score > bestScore) {
+        bestScore = score;
+        best = row;
+      }
+    }
+    return best;
+  }
+
+  /**
+   * A transaction already recorded from a file or by hand: the same content
+   * hash, or the same amount within three days and a similar description
+   * (or the only such amount within a day).
+   */
+  private findRecordedMatch(
+    rows: ExistingRow[],
+    dto: BankDto,
+  ): ExistingRow | null {
+    const csvHash = this.transactionsService.generateHash(dto);
+    const hashMatch = rows.find((e) => e.externalId === csvHash);
+    if (hashMatch) return hashMatch;
+
+    const dtoTime = new Date(dto.date).getTime();
+    const candidates = rows.filter((e) => {
+      if (Math.abs(e.amount.toNumber() - dto.amount) > 0.01) return false;
+      return Math.abs((e.date.getTime() - dtoTime) / DAY_MS) <= 3;
+    });
+
+    let best: ExistingRow | null = null;
+    let bestScore = 0;
+    for (const cand of candidates) {
+      const similarity =
+        this.transactionsService.calculateDescriptionSimilarity(
+          cand.description,
+          dto.description,
+        );
+      if (similarity >= 50 && similarity > bestScore) {
+        bestScore = similarity;
+        best = cand;
+      }
+    }
+    if (!best && candidates.length === 1) {
+      const days = Math.abs((candidates[0].date.getTime() - dtoTime) / DAY_MS);
+      if (days <= 1) best = candidates[0];
+    }
+    return best;
+  }
+
+  /**
+   * Copies the bank's view of a transaction onto a pending row: amount, date,
+   * text and ID. Category, cost object, splits and transfer links stay.
+   */
+  private async writeBankFields(
+    row: ExistingRow,
+    dto: BankDto,
+    stillPending: boolean,
+  ): Promise<void> {
+    const date = new Date(dto.date);
+    const changed =
+      row.pending !== stillPending ||
+      row.externalId !== (dto.externalId ?? null) ||
+      Math.abs(row.amount.toNumber() - dto.amount) > 0.001 ||
+      row.date.getTime() !== date.getTime() ||
+      row.description !== dto.description ||
+      (row.notes ?? null) !== (dto.notes ?? null);
+    if (!changed) return;
+    await this.prisma.transaction.update({
+      where: { id: row.id },
+      data: {
+        amount: dto.amount,
+        date,
+        description: dto.description,
+        notes: dto.notes ?? null,
+        externalId: dto.externalId,
+        pending: stillPending,
+      },
+    });
   }
 
   /**

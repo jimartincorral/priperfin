@@ -47,8 +47,8 @@ model Account {
   bankConnection       BankConnection?  @relation(fields: [bankConnectionId], references: [id], onDelete: SetNull)
   bankAccountUid       String?
   lastSyncedAt         DateTime?
-  /// Date of the oldest transaction the bank still reported as pending at the
-  /// last sync; the next sync reaches back to it so the booked version arrives.
+  /// Date of the oldest pending transaction on the account after the last
+  /// sync; the next sync reaches back to it to see it booked or dropped.
   bankPendingFrom      DateTime?
   transactions         Transaction[]
   transferTransactions Transaction[]    @relation("AccountTransferTarget")
@@ -108,6 +108,9 @@ model Transaction {
   transferAccount   Account? @relation("AccountTransferTarget", fields: [transferAccountId], references: [id], onDelete: SetNull)
 
   externalId String? // Import dedup key, unique within a profile
+  /// Bank sync: the bank has not booked this yet, so amount and date may still
+  /// change. Updated in place once booked; deleted if the bank drops it.
+  pending    Boolean            @default(false)
   splits     TransactionSplit[] @relation("TransactionSplits")
   createdAt  DateTime           @default(now())
   updatedAt  DateTime           @updatedAt

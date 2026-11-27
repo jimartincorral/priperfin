@@ -1043,5 +1043,7 @@ export const es = {
         sync_failed: 'Error al sincronizar con el banco.',
         sync_expired_warning: 'La autorización de tu banco ha expirado. Por favor re-autentica en Ajustes.',
         sync_revoked_warning: 'Se retiró el acceso a este banco. Vuelve a conectarlo en Configuración.',
+        pending: 'Pendiente',
+        pending_hint: 'Tu banco aún no lo ha contabilizado. El importe puede cambiar, y se actualiza o desaparece con la próxima sincronización. La categoría se mantiene.',
     },
 };

@@ -1119,6 +1119,24 @@ export class ViewExpenses extends LitElement {
       -webkit-tap-highlight-color: transparent;
     }
     .x-row.highlight { background: var(--md-sys-color-surface-container); }
+    /* Bank sync: not booked by the bank yet */
+    .pending-chip {
+      display: inline-block;
+      vertical-align: 1px;
+      margin-right: 6px;
+      padding: 0 6px;
+      border-radius: 6px;
+      border: 1px dashed var(--md-sys-color-outline);
+      color: var(--md-sys-color-on-surface-variant);
+      font: 500 11px/16px 'Roboto', sans-serif;
+      letter-spacing: 0.02em;
+    }
+    .amount-pending { opacity: 0.7; font-style: italic; }
+    .x-pending-note {
+      margin: 0 0 12px;
+      font: 400 13px/18px 'Roboto', sans-serif;
+      color: var(--md-sys-color-on-surface-variant);
+    }
     .x-row-main { flex: 1; min-width: 0; }
     .x-row-desc {
       font: var(--md-sys-typescale-body-large);
@@ -2471,7 +2489,7 @@ Tables: ${result.tables?.join(', ')}`;
             </span>`}
 
         <div class="x-row-main">
-          <div class="x-row-desc">${tx.description}</div>
+          <div class="x-row-desc">${this.pendingChip(tx)}${tx.description}</div>
           ${suggestionCategory && !this.bulkMode ? html`
             <div class="x-suggestion">
               <span class="x-suggestion-name">${suggestionCategory.name}?</span>
@@ -2492,11 +2510,17 @@ Tables: ${result.tables?.join(', ')}`;
           `}
         </div>
 
-        <span class="m-amount ${amount >= 0 ? 'positive' : ''}">
+        <span class="m-amount ${amount >= 0 ? 'positive' : ''} ${tx.pending ? 'amount-pending' : ''}">
           ${amount < 0 ? '−' : '+'}${Math.abs(amount).toFixed(2)}
         </span>
       </div>
     `;
+  }
+
+  /** "Pending" tag for a bank-synced transaction the bank hasn't booked yet. */
+  private pendingChip(tx: any) {
+    if (!tx.pending) return nothing;
+    return html`<span class="pending-chip" title="${i18n.t('bank_sync.pending_hint')}">${i18n.t('bank_sync.pending')}</span>`;
   }
 
   /** Long-press is the primary way in; the chip row offers a discoverable one. */
@@ -2776,12 +2800,15 @@ Tables: ${result.tables?.join(', ')}`;
                 weekday: 'short', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC',
               })}
               ${account ? html` · ${account.type === 'CREDIT' ? '💳' : '🏦'} ${account.name}` : nothing}
+              ${tx.pending ? html` · ${i18n.t('bank_sync.pending')}` : nothing}
             </div>
           </div>
-          <span class="m-amount ${amount >= 0 ? 'positive' : ''}" style="font-size: 18px">
+          <span class="m-amount ${amount >= 0 ? 'positive' : ''} ${tx.pending ? 'amount-pending' : ''}" style="font-size: 18px">
             ${amount < 0 ? '−' : '+'}${Math.abs(amount).toFixed(2)}
           </span>
         </div>
+
+        ${tx.pending ? html`<p class="x-pending-note">${i18n.t('bank_sync.pending_hint')}</p>` : nothing}
 
         <label class="m-field-with-icon">
           <input
@@ -4508,12 +4535,12 @@ Tables: ${result.tables?.join(', ')}`;
           <div class="d-row-date">${new Date(tx.date).toISOString().split('T')[0]}</div>
 
           <div style="min-width: 0; padding-right: 16px">
-            <div class="d-row-desc" title="${tx.description}">${tx.description}</div>
+            <div class="d-row-desc" title="${tx.description}">${this.pendingChip(tx)}${tx.description}</div>
           </div>
 
           ${this.renderDesktopCategoryCell(tx)}
 
-          <div class="d-row-amount ${amount >= 0 ? 'positive' : ''}">${this.signedMoney(amount)}</div>
+          <div class="d-row-amount ${amount >= 0 ? 'positive' : ''} ${tx.pending ? 'amount-pending' : ''}">${this.signedMoney(amount)}</div>
 
           <div class="d-row-chevron">${icon(open ? 'expand_less' : 'expand_more', 20)}</div>
         </div>
@@ -4823,6 +4850,7 @@ Tables: ${result.tables?.join(', ')}`;
         </div>
 
         ${footnote(tx.externalId ? 'lock' : 'info', provenance)}
+        ${tx.pending ? footnote('schedule', i18n.t('bank_sync.pending_hint')) : nothing}
       </div>
     `;
   }
