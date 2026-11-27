@@ -4139,14 +4139,24 @@ export class ViewSettings extends LitElement {
                         : this.bankConnections.map(conn => this.renderBankConnection(conn))}
                 </div>
 
-                ${this.bankConnections.length > 0 ? html`
-                    <div style="display: flex; gap: 12px">
+                ${configured || this.bankConnections.length > 0 ? html`
+                    <div style="display: flex; gap: 12px; flex-wrap: wrap">
+                        ${this.bankConnections.length > 0 ? html`
+                            <button
+                                class="d-btn-outlined"
+                                ?disabled="${this.bankSyncLoading}"
+                                @click="${() => this.syncBankNow()}">
+                                ${icon('sync', 16)}
+                                <span>${this.bankSyncLoading ? i18n.t('bank_sync.syncing') : i18n.t('bank_sync.sync_all')}</span>
+                            </button>
+                        ` : nothing}
                         <button
                             class="d-btn-outlined"
-                            ?disabled="${this.bankSyncLoading}"
-                            @click="${() => this.syncBankNow()}">
-                            ${icon('sync', 16)}
-                            <span>${this.bankSyncLoading ? i18n.t('bank_sync.syncing') : i18n.t('bank_sync.sync_all')}</span>
+                            ?disabled="${!configured}"
+                            title="${configured ? '' : i18n.t('bank_sync.not_configured')}"
+                            @click="${this.openConnectBankModal}">
+                            ${icon('add', 16)}
+                            <span>${i18n.t('desktop.connect_a_bank')}</span>
                         </button>
                         <button class="d-btn-outlined" @click="${this.promptManualCode}">
                             ${i18n.t('bank_sync.paste_callback_btn')}
@@ -4275,12 +4285,28 @@ export class ViewSettings extends LitElement {
                             })}
                         </div>
                     </div>
-                    <button
-                        class="d-btn-tonal tiny"
-                        ?disabled="${this.bankSyncLoading}"
-                        @click="${() => this.syncBankNow()}">
-                        ${i18n.t('bank_sync.sync_now')}
-                    </button>
+                    ${expired || expiring
+                        ? html`
+                            <button class="d-btn tiny" @click="${() => this.openConnectBankModal()}">
+                                ${icon('autorenew', 16)}
+                                <span>${i18n.t('bank_sync.reauthorize')}</span>
+                            </button>
+                        `
+                        : html`
+                            <button class="d-btn-text" @click="${() => this.openConnectBankModal()}">
+                                ${i18n.t('bank_sync.reauthorize')}
+                            </button>
+                        `}
+                    ${expired
+                        ? nothing
+                        : html`
+                            <button
+                                class="d-btn-tonal tiny"
+                                ?disabled="${this.bankSyncLoading}"
+                                @click="${() => this.syncBankNow()}">
+                                ${i18n.t('bank_sync.sync_now')}
+                            </button>
+                        `}
                     <button
                         class="d-icon-btn small destructive"
                         title="${i18n.t('bank_sync.disconnect')}"
