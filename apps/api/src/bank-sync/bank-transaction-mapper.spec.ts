@@ -119,6 +119,30 @@ describe('mapBankTransaction', () => {
     });
   });
 
+  it("records the other party's IBAN, normalised", () => {
+    const out = mapBankTransaction(
+      tx({
+        credit_debit_indicator: 'DBIT',
+        creditor_account: { iban: 'es76 2077 0024 0031 0257 5766' },
+        debtor_account: { iban: 'ES9121000418450200051332' },
+      }),
+      'acc-1',
+    );
+    expect(out?.counterpartyIban).toBe('ES7620770024003102575766');
+
+    const incoming = mapBankTransaction(
+      tx({
+        credit_debit_indicator: 'CRDT',
+        creditor_account: { iban: 'ES9121000418450200051332' },
+        debtor_account: { iban: 'ES7620770024003102575766' },
+      }),
+      'acc-1',
+    );
+    expect(incoming?.counterpartyIban).toBe('ES7620770024003102575766');
+
+    expect(mapBankTransaction(tx({}), 'acc-1')?.counterpartyIban).toBeNull();
+  });
+
   it('returns null for a zero amount', () => {
     expect(
       mapBankTransaction(

@@ -107,13 +107,17 @@ model Transaction {
   transferAccountId String?
   transferAccount   Account? @relation("AccountTransferTarget", fields: [transferAccountId], references: [id], onDelete: SetNull)
 
-  externalId String? // Import dedup key, unique within a profile
+  externalId       String? // Import dedup key, unique within a profile
   /// Bank sync: the bank has not booked this yet, so amount and date may still
   /// change. Updated in place once booked; deleted if the bank drops it.
-  pending    Boolean            @default(false)
-  splits     TransactionSplit[] @relation("TransactionSplits")
-  createdAt  DateTime           @default(now())
-  updatedAt  DateTime           @updatedAt
+  pending          Boolean            @default(false)
+  /// Bank sync: the other party's IBAN (who was paid, or who paid). When it is
+  /// the IBAN of another of the profile's linked accounts, the transaction is
+  /// one leg of a transfer between the user's own accounts.
+  counterpartyIban String?
+  splits           TransactionSplit[] @relation("TransactionSplits")
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
 
   @@unique([profileId, externalId])
   @@index([profileId])

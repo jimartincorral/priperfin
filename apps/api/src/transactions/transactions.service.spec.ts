@@ -904,6 +904,7 @@ describe('TransactionsService', () => {
       });
 
       prismaMock.transaction.findMany.mockResolvedValue([txA, txB]);
+      prismaMock.account.findMany.mockResolvedValue([]);
 
       const matches = await service.findTransferMatches('profile-1');
 
@@ -911,6 +912,121 @@ describe('TransactionsService', () => {
       expect(matches[0].source.id).toBe('tx-1');
       expect(matches[0].target.id).toBe('tx-2');
       expect(matches[0].confidence).toBeGreaterThan(70);
+      expect(matches[0].ibanConfirmed).toBe(false);
+    });
+
+    describe('with IBANs from bank sync', () => {
+      const IBAN_1 = 'ES9121000418450200051332';
+      const IBAN_2 = 'ES7620770024003102575766';
+      const OUTSIDE = 'DE89370400440532013000';
+
+      beforeEach(() => {
+        // acc-1 and acc-2 are linked to bank accounts with known IBANs.
+        prismaMock.account.findMany.mockResolvedValue([
+          {
+            id: 'acc-1',
+            bankAccountUid: 'uid-1',
+            bankConnection: {
+              accountsJson: JSON.stringify([
+                { uid: 'uid-1', account_id: { iban: IBAN_1 } },
+              ]),
+            },
+          },
+          {
+            id: 'acc-2',
+            bankAccountUid: 'uid-2',
+            bankConnection: {
+              accountsJson: JSON.stringify([
+                {
+                  uid: 'uid-2',
+                  account_id: { iban: 'ES76 2077 0024 0031 0257 5766' },
+                },
+              ]),
+            },
+          },
+        ]);
+      });
+
+      const leg = (over: any) =>
+        createMockTransaction({ isTransfer: false, ...over } as any);
+
+      it('confirms a pair whose IBAN names the other account, five days apart', async () => {
+        prismaMock.transaction.findMany.mockResolvedValue([
+          leg({
+            id: 'in',
+            accountId: 'acc-2',
+            amount: new Decimal(500),
+            date: new Date('2026-09-10'),
+          }),
+          leg({
+            id: 'out',
+            accountId: 'acc-1',
+            amount: new Decimal(-500),
+            date: new Date('2026-09-05'),
+            counterpartyIban: IBAN_2,
+          }),
+        ]);
+
+        const matches = await service.findTransferMatches('profile-1');
+
+        expect(matches).toHaveLength(1);
+        expect(matches[0]).toMatchObject({
+          confidence: 100,
+          ibanConfirmed: true,
+        });
+        expect(matches[0].source.id).toBe('out');
+      });
+
+      it('rules out a same-day pair when the money went to someone else', async () => {
+        prismaMock.transaction.findMany.mockResolvedValue([
+          leg({
+            id: 'out',
+            accountId: 'acc-1',
+            amount: new Decimal(-50),
+            date: new Date('2026-09-05'),
+            counterpartyIban: OUTSIDE,
+          }),
+          leg({
+            id: 'in',
+            accountId: 'acc-2',
+            amount: new Decimal(50),
+            date: new Date('2026-09-05'),
+          }),
+        ]);
+
+        expect(await service.findTransferMatches('profile-1')).toHaveLength(0);
+      });
+
+      it('prefers the IBAN-confirmed leg over a closer guess', async () => {
+        prismaMock.transaction.findMany.mockResolvedValue([
+          leg({
+            id: 'out',
+            accountId: 'acc-1',
+            amount: new Decimal(-80),
+            date: new Date('2026-09-05'),
+            counterpartyIban: IBAN_2,
+          }),
+          leg({
+            id: 'guess',
+            accountId: 'acc-3',
+            amount: new Decimal(80),
+            date: new Date('2026-09-05'),
+          }),
+          leg({
+            id: 'real',
+            accountId: 'acc-2',
+            amount: new Decimal(80),
+            date: new Date('2026-09-07'),
+            counterpartyIban: IBAN_1,
+          }),
+        ]);
+
+        const matches = await service.findTransferMatches('profile-1');
+
+        expect(matches).toHaveLength(1);
+        expect(matches[0].target.id).toBe('real');
+        expect(matches[0].ibanConfirmed).toBe(true);
+      });
     });
   });
 

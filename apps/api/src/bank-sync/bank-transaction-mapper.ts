@@ -1,6 +1,13 @@
 import * as crypto from 'crypto';
 import { BankTransaction } from './interfaces/enable-banking.interface';
 import { CreateTransactionDto } from '../transactions/create-transaction.dto';
+import { normalizeIban } from './iban';
+
+/** A mapped bank transaction, with the fields only bank sync sets. */
+export type BankDto = CreateTransactionDto & {
+  pending?: boolean;
+  counterpartyIban?: string | null;
+};
 
 /**
  * Statuses that are not final yet but usually become a booked transaction:
@@ -123,13 +130,12 @@ export function fallbackTransactionId(
 export function mapBankTransaction(
   tx: BankTransaction,
   accountId: string,
-): CreateTransactionDto | null {
+): BankDto | null {
   const rawAmount = parseFloat(tx.transaction_amount?.amount || '0');
   if (isNaN(rawAmount) || rawAmount === 0) return null;
 
-  const amount = isDebitTransaction(tx)
-    ? -Math.abs(rawAmount)
-    : Math.abs(rawAmount);
+  const debit = isDebitTransaction(tx);
+  const amount = debit ? -Math.abs(rawAmount) : Math.abs(rawAmount);
   const date = bankTransactionDate(tx);
   const { description, notes } = describeBankTransaction(tx);
 
@@ -138,14 +144,20 @@ export function mapBankTransaction(
     tx.transaction_id ||
     fallbackTransactionId(accountId, date, amount, legacyDescription(tx));
 
+  // The other party's account: where money went, or where it came from.
+  const counterpartyIban = normalizeIban(
+    debit ? tx.creditor_account?.iban : tx.debtor_account?.iban,
+  );
+
   return {
     date: new Date(date).toISOString(),
     amount,
     description,
     accountId,
-    notes,
+    notes: notes ?? undefined,
     externalId,
-  } as CreateTransactionDto;
+    counterpartyIban,
+  };
 }
 
 /**

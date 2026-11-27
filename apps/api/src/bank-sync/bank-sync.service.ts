@@ -19,12 +19,13 @@ import {
   PsuContext,
   TransactionsResponse,
 } from './interfaces/enable-banking.interface';
-import { CreateTransactionDto } from '../transactions/create-transaction.dto';
 import {
   bankTransactionState,
   mapBankTransaction,
   pickBankBalance,
+  BankDto,
 } from './bank-transaction-mapper';
+import { ibanOfBankAccount, parseBankAccounts } from './iban';
 import { Prisma } from '../generated/client';
 import * as crypto from 'crypto';
 
@@ -36,28 +37,14 @@ const CONSENT_MARGIN_SECONDS = 10 * 60;
 /** How far back a sync keeps following a pending transaction. */
 const PENDING_LOOKBACK_MAX_DAYS = 30;
 
-function safeParseArray(json: string): any[] {
-  try {
-    const parsed = JSON.parse(json);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
 function ibansOf(accounts: any[]): Set<string> {
   const ibans = new Set<string>();
   for (const a of accounts) {
-    const iban = a?.account_id?.iban || a?.iban;
-    if (typeof iban === 'string' && iban) {
-      ibans.add(iban.replace(/\s+/g, '').toUpperCase());
-    }
+    const iban = ibanOfBankAccount(a);
+    if (iban) ibans.add(iban);
   }
   return ibans;
 }
-
-/** A mapped bank transaction, flagged when the bank hasn't booked it yet. */
-type BankDto = CreateTransactionDto & { pending?: boolean };
 
 /** The fields of a stored transaction that bank sync compares against. */
 interface ExistingRow {
@@ -69,6 +56,7 @@ interface ExistingRow {
   notes: string | null;
   pending: boolean;
   transferId: string | null;
+  counterpartyIban: string | null;
 }
 
 /** Why a bank connection stopped working. */
@@ -476,7 +464,7 @@ export class BankSyncService {
         // account) is a separate connection, not a renewal: leave it alone.
         // Renewal is recognised by a shared IBAN, or assumed when the old one
         // has expired or either side lists no IBANs to compare.
-        const oldIbans = ibansOf(safeParseArray(oldConn.accountsJson));
+        const oldIbans = ibansOf(parseBankAccounts(oldConn.accountsJson));
         const expired = new Date(oldConn.validUntil) < new Date();
         const overlaps = [...oldIbans].some((iban) => newIbans.has(iban));
         if (!expired && !overlaps && oldIbans.size > 0 && newIbans.size > 0) {
@@ -739,6 +727,7 @@ export class BankSyncService {
     }
 
     let totalNew = 0;
+    let totalBooked = 0;
     let totalDuplicates = 0;
     const accountResults = [];
     // One session lookup per connection per run, however many accounts fail.
@@ -907,6 +896,7 @@ export class BankSyncService {
           notes: true,
           pending: true,
           transferId: true,
+          counterpartyIban: true,
         } as const;
         const pool: ExistingRow[] = await this.prisma.transaction.findMany({
           where: {
@@ -959,11 +949,19 @@ export class BankSyncService {
             this.logger.log(
               `Reconciled bank movement "${dto.description}" (${dto.amount}) with existing transaction "${recorded.description}" (id: ${recorded.id})`,
             );
-            // Promote the existing transaction by attaching the bank's ID
+            // Promote the existing transaction by attaching the bank's ID,
+            // and the other party's IBAN for transfer matching.
+            const attach: Prisma.TransactionUpdateInput = {};
             if (dto.externalId && recorded.externalId !== dto.externalId) {
+              attach.externalId = dto.externalId;
+            }
+            if (dto.counterpartyIban && !recorded.counterpartyIban) {
+              attach.counterpartyIban = dto.counterpartyIban;
+            }
+            if (Object.keys(attach).length > 0) {
               await this.prisma.transaction.update({
                 where: { id: recorded.id },
-                data: { externalId: dto.externalId },
+                data: attach,
               });
             }
             continue;
@@ -1055,6 +1053,7 @@ export class BankSyncService {
         );
 
         totalNew += resultNewCount;
+        totalBooked += bookedCount;
         totalDuplicates += accountDuplicatesCount;
 
         // Try updating verified bank balance if available
@@ -1153,12 +1152,16 @@ export class BankSyncService {
       }
     }
 
-    if (totalNew > 0) {
+    // Pair transfers between the user's own accounts. Matches confirmed by
+    // IBAN come back at confidence 100; amount-and-date guesses need 85.
+    let transfersLinked = 0;
+    if (totalNew > 0 || totalBooked > 0) {
       try {
         const transferMatches =
           await this.transactionsService.findTransferMatches(profileId);
         for (const match of transferMatches) {
-          if (match.confidence >= 85) {
+          if (match.confidence < 85) continue;
+          try {
             await this.transactionsService.linkAsTransfer(
               {
                 transactionAId: match.source.id,
@@ -1166,8 +1169,14 @@ export class BankSyncService {
               },
               profileId,
             );
+            transfersLinked++;
             this.logger.log(
-              `[BankSync] Auto-linked transfer between ${match.source.account?.name} and ${match.target.account?.name} (${match.source.amount})`,
+              `[BankSync] Auto-linked transfer between ${match.source.account?.name} and ${match.target.account?.name} (${match.source.amount}, ${match.ibanConfirmed ? 'IBAN' : 'amount and date'})`,
+            );
+          } catch (linkErr) {
+            this.logger.warn(
+              `[BankSync] Could not link transfer ${match.source.id} / ${match.target.id}`,
+              linkErr,
             );
           }
         }
@@ -1183,6 +1192,7 @@ export class BankSyncService {
       syncedCount: linkedAccounts.length,
       newCount: totalNew,
       duplicateCount: totalDuplicates,
+      transfersLinked,
       accountsSynced: accountResults,
     };
   }
@@ -1286,7 +1296,8 @@ export class BankSyncService {
       Math.abs(row.amount.toNumber() - dto.amount) > 0.001 ||
       row.date.getTime() !== date.getTime() ||
       row.description !== dto.description ||
-      (row.notes ?? null) !== (dto.notes ?? null);
+      (row.notes ?? null) !== (dto.notes ?? null) ||
+      (row.counterpartyIban ?? null) !== (dto.counterpartyIban ?? null);
     if (!changed) return;
     await this.prisma.transaction.update({
       where: { id: row.id },
@@ -1297,6 +1308,7 @@ export class BankSyncService {
         notes: dto.notes ?? null,
         externalId: dto.externalId,
         pending: stillPending,
+        counterpartyIban: dto.counterpartyIban ?? null,
       },
     });
   }

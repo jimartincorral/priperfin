@@ -56,6 +56,8 @@ describe('BankSyncService', () => {
       createMany: jest.fn(),
       generateHash: jest.fn().mockReturnValue('mock-hash'),
       calculateDescriptionSimilarity: jest.fn().mockReturnValue(0),
+      findTransferMatches: jest.fn().mockResolvedValue([]),
+      linkAsTransfer: jest.fn().mockResolvedValue({}),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -352,7 +354,7 @@ describe('BankSyncService', () => {
       });
       mockEnableBankingService.getAccountDetails.mockResolvedValue({
         uid: 'uid-new',
-        account_id: { iban: 'ES11 1111' },
+        account_id: { iban: 'ES91 2100 0418 4502 0005 1332' },
       });
       mockPrismaService.bankConnection.upsert.mockResolvedValue({
         id: 'conn-new',
@@ -371,7 +373,10 @@ describe('BankSyncService', () => {
           sessionId: 'session-old',
           validUntil: future,
           accountsJson: JSON.stringify([
-            { uid: 'uid-old', account_id: { iban: 'ES111111' } },
+            {
+              uid: 'uid-old',
+              account_id: { iban: 'ES9121000418450200051332' },
+            },
           ]),
           accounts: [{ id: 'acc-1', name: 'Main', bankAccountUid: 'uid-old' }],
         },
@@ -401,7 +406,10 @@ describe('BankSyncService', () => {
           sessionId: 'session-joint',
           validUntil: future,
           accountsJson: JSON.stringify([
-            { uid: 'uid-joint', account_id: { iban: 'ES22222' } },
+            {
+              uid: 'uid-joint',
+              account_id: { iban: 'ES7620770024003102575766' },
+            },
           ]),
           accounts: [
             { id: 'acc-2', name: 'Joint', bankAccountUid: 'uid-joint' },
@@ -658,6 +666,38 @@ describe('BankSyncService', () => {
           update: { value: '954.9' },
         }),
       );
+    });
+
+    it('stores the IBAN and links confirmed transfers, carrying on past a failure', async () => {
+      mockPrismaService.account.findMany.mockResolvedValue([linkedAccount()]);
+      mockEnableBankingService.getAccountTransactions.mockResolvedValue({
+        transactions: [
+          {
+            entry_reference: 'out-1',
+            booking_date: '2026-11-20',
+            transaction_amount: { amount: '500.00', currency: 'EUR' },
+            credit_debit_indicator: 'DBIT',
+            creditor: { name: 'Savings' },
+            creditor_account: { iban: 'ES76 2077 0024 0031 0257 5766' },
+          },
+        ],
+      });
+      mockTransactionsService.findTransferMatches.mockResolvedValue([
+        { source: { id: 'a' }, target: { id: 'b' }, confidence: 100 },
+        { source: { id: 'c' }, target: { id: 'd' }, confidence: 100 },
+        { source: { id: 'e' }, target: { id: 'f' }, confidence: 70 },
+      ]);
+      mockTransactionsService.linkAsTransfer
+        .mockRejectedValueOnce(new Error('already linked'))
+        .mockResolvedValueOnce({});
+
+      const result = await service.syncTransactions(undefined, 'profile-1');
+
+      expect(
+        mockTransactionsService.createMany.mock.calls[0][0][0],
+      ).toMatchObject({ counterpartyIban: 'ES7620770024003102575766' });
+      expect(mockTransactionsService.linkAsTransfer).toHaveBeenCalledTimes(2);
+      expect(result.transfersLinked).toBe(1);
     });
 
     it('reaches back to a pending transaction on the next sync', async () => {

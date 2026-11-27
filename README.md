@@ -334,6 +334,14 @@ code automatically when that address is its own Settings page. So:
   current account includes them so the two compare like for like. They are
   never paired as transfers automatically until booked. Cancelled and
   rejected transactions are never imported.
+- **Transfers between your own accounts are paired automatically.** The bank
+  reports the other side's IBAN. When money leaves one linked account for the
+  IBAN of another linked account, the two movements are linked as one
+  transfer, even if the receiving bank books it up to five days later.
+  Movements to or from anyone else's IBAN are never paired as a transfer, even
+  when an equal amount happens to arrive on another account the same day.
+  Accounts that aren't linked to a bank have no known IBAN, so for them
+  pairing still goes by amount and date.
 - Imported rows are described by the other party: the shop or person paid on
   money going out, the payer on money coming in. Any further detail goes in the
   notes, and your categorisation rules run on them like on any other import.
