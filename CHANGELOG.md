@@ -1,5 +1,20 @@
 # Changelog
 
+## v1.32.0 - 2026-11-27
+
+Bank sync: pending transactions, transfers between your own accounts, merchant codes, and longer bank access.
+
+- **Pending card payments show up straight away, tagged *Pending*.** Each sync keeps them up to date. When the bank books one, the same transaction takes the final amount and date and keeps the category you gave it. If the bank cancels it, it disappears. Pending transactions count in totals, reports and budgets, and the bank balance shown for a current account includes them, so the two still agree.
+- **Transfers between your own accounts are paired by IBAN.** The bank reports where money went or came from. When that is another of your linked accounts, both sides are linked as one transfer, even if the other bank books it a few days later. Money to or from anyone else is no longer mistaken for a transfer because an equal amount arrived elsewhere the same day.
+- **Rules can use the merchant category code** that card payments carry (5411 supermarkets, 5812 restaurants), exactly or as a range. Rule suggestions offer such a rule once a code reliably lands in one category. The code shows on the transaction.
+- **Bank access lasts as long as your bank allows**, 180 days at many banks instead of always 90.
+- **Manual syncs no longer use up the daily limit** banks put on background access, at banks that honour it, because PriPerFin now tells the bank you started them.
+- **Incoming payments are named after the payer**, not after you.
+- **Connected banks show their logo**, and each bank account is marked as a current account, savings or card. **+ New account** creates and links an account for a bank account in one step; a card becomes a credit-card account.
+- **Disconnecting a bank also withdraws access at the bank.** If you withdraw access from your bank's own app, the next sync says so instead of failing.
+- Connecting a second login at the same bank (a joint or business account) no longer replaces the first connection.
+- The balance read from the bank prefers the booked balance; bank-sync messages are translated.
+
 ## v1.31.3 - 2026-11-25
 
 Home Assistant: the Finance panel opens on Expenses again.
