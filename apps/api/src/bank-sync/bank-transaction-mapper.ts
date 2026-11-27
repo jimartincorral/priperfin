@@ -7,7 +7,16 @@ import { normalizeIban } from './iban';
 export type BankDto = CreateTransactionDto & {
   pending?: boolean;
   counterpartyIban?: string | null;
+  merchantCategoryCode?: string | null;
 };
+
+/** A merchant category code as four digits ("742" → "0742"), or null. */
+export function normalizeMcc(value: unknown): string | null {
+  if (typeof value !== 'string' && typeof value !== 'number') return null;
+  const digits = String(value).trim();
+  if (!/^\d{1,4}$/.test(digits)) return null;
+  return digits.padStart(4, '0');
+}
 
 /**
  * Statuses that are not final yet but usually become a booked transaction:
@@ -157,6 +166,7 @@ export function mapBankTransaction(
     notes: notes ?? undefined,
     externalId,
     counterpartyIban,
+    merchantCategoryCode: normalizeMcc(tx.merchant_category_code),
   };
 }
 

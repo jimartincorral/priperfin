@@ -116,6 +116,9 @@ model Transaction {
   /// the IBAN of another of the profile's linked accounts, the transaction is
   /// one leg of a transfer between the user's own accounts.
   counterpartyIban String?
+  /// Bank sync: the card network's merchant category code (ISO 18245, four
+  /// digits, e.g. 5411 for supermarkets). Rules can match on it.
+  merchantCategoryCode String?
   splits       TransactionSplit[] @relation("TransactionSplits")
   createdAt    DateTime           @default(now())
   updatedAt    DateTime           @updatedAt

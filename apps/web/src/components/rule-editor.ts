@@ -186,6 +186,18 @@ export class RuleEditor extends LitElement {
       if (field === 'field') {
         const newField = value;
         const currentCond = newConditions[index];
+
+        // Merchant category codes: exact code or a numeric range of codes.
+        if (newField === 'mcc' && currentCond.field !== 'mcc') {
+          newConditions[index] = { ...currentCond, field: newField, value: '', operator: 'equals' };
+          this.conditions = newConditions;
+          return;
+        }
+        if (currentCond.field === 'mcc' && newField !== 'mcc' && newField !== 'amount') {
+          newConditions[index] = { ...currentCond, field: newField, value: '', operator: 'contains' };
+          this.conditions = newConditions;
+          return;
+        }
         
         // If switching TO amount field
         if (newField === 'amount' && currentCond.field !== 'amount') {
@@ -325,10 +337,14 @@ export class RuleEditor extends LitElement {
                                 <option value="amount">${i18n.t('rules.fields.amount')}</option>
                                 <option value="merchant">${i18n.t('rules.fields.merchant')}</option>
                                 <option value="notes">${i18n.t('rules.fields.notes')}</option>
+                                <option value="mcc" title="${i18n.t('rules.mcc_hint')}">${i18n.t('rules.fields.mcc')}</option>
                             </select>
                             
                             <select .value="${cond.operator}" @change="${(e: any) => this.updateCondition(index, 'operator', e.target.value)}" style="width: 150px;">
-                                ${cond.field === 'amount' ? html`
+                                ${cond.field === 'mcc' ? html`
+                                    <option value="equals">${i18n.t('rules.operators.equals')}</option>
+                                    <option value="between">${i18n.t('rules.operators.between')}</option>
+                                ` : cond.field === 'amount' ? html`
                                     <option value="equals">${i18n.t('rules.operators.equals')}</option>
                                     <option value="greaterThan">${i18n.t('rules.operators.greaterThan')} (&gt;)</option>
                                     <option value="lessThan">${i18n.t('rules.operators.lessThan')} (&lt;)</option>
@@ -370,9 +386,12 @@ export class RuleEditor extends LitElement {
                             ` : html`
                                 <input type="${cond.field === 'amount' ? 'number' : 'text'}" 
                                     step="${cond.field === 'amount' ? '0.01' : 'any'}"
+                                    inputmode="${cond.field === 'mcc' ? 'numeric' : 'text'}"
+                                    maxlength="${cond.field === 'mcc' ? 4 : 500}"
                                     .value="${cond.value}" 
                                     @input="${(e: any) => this.updateCondition(index, 'value', cond.field === 'amount' ? parseFloat(e.target.value) || 0 : e.target.value)}" 
-                                    placeholder="${i18n.t('rules.value')}"
+                                    placeholder="${cond.field === 'mcc' ? '5411' : i18n.t('rules.value')}"
+                                    title="${cond.field === 'mcc' ? i18n.t('rules.mcc_hint') : ''}"
                                 />
                             `}
                             

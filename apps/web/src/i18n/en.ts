@@ -229,6 +229,7 @@ export const en = {
         choose_category: 'Choose category',
         create_rule_from_this: 'Create rule from this',
         imported_from: 'Imported from {source}',
+        merchant_category: 'Merchant category code {code}',
         manual_entry: 'Added by hand. Editing this keeps every rule attached to it.',
         imported_edit_confirm: 'This transaction came from your bank. Change the date or amount anyway?',
         range: '{from}\u2013{to} of {total}',
@@ -932,7 +933,9 @@ export const en = {
             notes: 'Notes',
             account: 'Account',
             date: 'Date',
+            mcc: 'Merchant category code',
         },
+        mcc_hint: 'Four-digit code the card network gives each kind of shop, sent by banks connected through bank sync (e.g. 5411 supermarkets, 5812 restaurants).',
         
         operators: {
             contains: 'Contains',

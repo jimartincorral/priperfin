@@ -345,6 +345,13 @@ code automatically when that address is its own Settings page. So:
 - Imported rows are described by the other party: the shop or person paid on
   money going out, the payer on money coming in. Any further detail goes in the
   notes, and your categorisation rules run on them like on any other import.
+- **Card payments carry a merchant category code** when the bank sends one: a
+  four-digit code for the kind of shop (5411 supermarkets, 5541 fuel, 5812
+  restaurants). It shows on the transaction. Rules can match on it, exactly or
+  as a range (5811 to 5814 covers every kind of restaurant). Once five or more
+  transactions with the same code sit almost all in one category, the rule
+  suggestions offer a rule for it. Codes spread over several categories, such
+  as 5999 (miscellaneous shops), are never suggested.
 
 ### Consent expiry
 

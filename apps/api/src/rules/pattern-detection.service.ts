@@ -3,7 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { Transaction } from '../generated/client';
 
 export interface RuleSuggestionResult {
-  patternType: 'merchant' | 'description' | 'amount' | 'combined';
+  patternType: 'merchant' | 'description' | 'amount' | 'combined' | 'mcc';
   conditions: any;
   categoryId: string;
   confidence: number;
@@ -86,10 +86,63 @@ export class PatternDetectionService {
       suggestions.push(...combinedSuggestions);
     }
 
+    // 4. Merchant category codes (bank sync), judged across all categories
+    suggestions.push(...this.detectMccPatterns(transactions));
+
     // Filter duplicates, filter by 90% confidence threshold, and sort by confidence
     return this.deduplicateSuggestions(suggestions)
       .filter((s) => s.confidence >= 90) // Only suggest rules with 90%+ confidence
       .sort((a, b) => b.confidence - a.confidence);
+  }
+
+  /**
+   * A merchant category code that almost always ends up in one category
+   * (supermarkets, fuel, pharmacies) is a good rule. Codes shared by several
+   * categories (5999, miscellaneous retail) are not, so this looks across all
+   * categories: at least five transactions with the code, and 90% of them in
+   * the same category.
+   */
+  detectMccPatterns(
+    transactions: Array<
+      Pick<Transaction, 'id' | 'categoryId' | 'merchantCategoryCode'> & {
+        isTransfer?: boolean;
+      }
+    >,
+  ): RuleSuggestionResult[] {
+    const results: RuleSuggestionResult[] = [];
+    const byMcc = new Map<string, typeof transactions>();
+    for (const tx of transactions) {
+      if (!tx.merchantCategoryCode || !tx.categoryId || tx.isTransfer) continue;
+      const list = byMcc.get(tx.merchantCategoryCode) ?? [];
+      list.push(tx);
+      byMcc.set(tx.merchantCategoryCode, list);
+    }
+
+    for (const [mcc, group] of byMcc) {
+      if (group.length < 5) continue;
+      const byCategory = this.groupBy(group, 'categoryId');
+      const [categoryId, inCategory] = Object.entries(byCategory).sort(
+        (a, b) => b[1].length - a[1].length,
+      )[0];
+      const share = inCategory.length / group.length;
+      if (share < 0.9) continue;
+      results.push({
+        patternType: 'mcc',
+        conditions: {
+          operator: 'AND',
+          conditions: [{ field: 'mcc', operator: 'equals', value: mcc }],
+        },
+        categoryId,
+        // 90% share → 90; a clean, well-used code reaches 99.
+        confidence: Math.min(
+          99,
+          Math.round(share * 100 - 1 + Math.min(inCategory.length, 10) / 10),
+        ),
+        sampleTxIds: inCategory.map((t) => t.id).slice(0, 10),
+        matchCount: inCategory.length,
+      });
+    }
+    return results;
   }
 
   private detectMerchantPatterns(

@@ -173,6 +173,7 @@ exports.Prisma.TransactionScalarFieldEnum = {
   externalId: 'externalId',
   pending: 'pending',
   counterpartyIban: 'counterpartyIban',
+  merchantCategoryCode: 'merchantCategoryCode',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 };

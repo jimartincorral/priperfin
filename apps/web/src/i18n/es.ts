@@ -229,6 +229,7 @@ export const es = {
         choose_category: 'Elegir categoría',
         create_rule_from_this: 'Crear regla a partir de esto',
         imported_from: 'Importado de {source}',
+        merchant_category: 'Código de categoría de comercio {code}',
         manual_entry: 'Añadido a mano. Al editarlo se mantienen las reglas asociadas.',
         imported_edit_confirm: 'Este movimiento viene de tu banco. ¿Cambiar la fecha o el importe de todos modos?',
         range: '{from}\u2013{to} de {total}',
@@ -932,7 +933,9 @@ export const es = {
             notes: 'Notas',
             account: 'Cuenta',
             date: 'Fecha',
+            mcc: 'Código de categoría de comercio',
         },
+        mcc_hint: 'Código de cuatro cifras que la red de tarjetas asigna a cada tipo de comercio, enviado por los bancos conectados con la sincronización bancaria (p. ej. 5411 supermercados, 5812 restaurantes).',
         
         operators: {
             contains: 'Contiene',

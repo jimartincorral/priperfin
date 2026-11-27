@@ -4851,6 +4851,7 @@ Tables: ${result.tables?.join(', ')}`;
 
         ${footnote(tx.externalId ? 'lock' : 'info', provenance)}
         ${tx.pending ? footnote('schedule', i18n.t('bank_sync.pending_hint')) : nothing}
+        ${tx.merchantCategoryCode ? footnote('storefront', i18n.t('desktop.merchant_category', { code: tx.merchantCategoryCode })) : nothing}
       </div>
     `;
   }

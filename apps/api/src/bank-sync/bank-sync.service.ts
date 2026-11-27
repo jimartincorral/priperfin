@@ -57,6 +57,7 @@ interface ExistingRow {
   pending: boolean;
   transferId: string | null;
   counterpartyIban: string | null;
+  merchantCategoryCode: string | null;
 }
 
 /** Why a bank connection stopped working. */
@@ -897,6 +898,7 @@ export class BankSyncService {
           pending: true,
           transferId: true,
           counterpartyIban: true,
+          merchantCategoryCode: true,
         } as const;
         const pool: ExistingRow[] = await this.prisma.transaction.findMany({
           where: {
@@ -957,6 +959,9 @@ export class BankSyncService {
             }
             if (dto.counterpartyIban && !recorded.counterpartyIban) {
               attach.counterpartyIban = dto.counterpartyIban;
+            }
+            if (dto.merchantCategoryCode && !recorded.merchantCategoryCode) {
+              attach.merchantCategoryCode = dto.merchantCategoryCode;
             }
             if (Object.keys(attach).length > 0) {
               await this.prisma.transaction.update({
@@ -1297,7 +1302,8 @@ export class BankSyncService {
       row.date.getTime() !== date.getTime() ||
       row.description !== dto.description ||
       (row.notes ?? null) !== (dto.notes ?? null) ||
-      (row.counterpartyIban ?? null) !== (dto.counterpartyIban ?? null);
+      (row.counterpartyIban ?? null) !== (dto.counterpartyIban ?? null) ||
+      (row.merchantCategoryCode ?? null) !== (dto.merchantCategoryCode ?? null);
     if (!changed) return;
     await this.prisma.transaction.update({
       where: { id: row.id },
@@ -1309,6 +1315,7 @@ export class BankSyncService {
         externalId: dto.externalId,
         pending: stillPending,
         counterpartyIban: dto.counterpartyIban ?? null,
+        merchantCategoryCode: dto.merchantCategoryCode ?? null,
       },
     });
   }

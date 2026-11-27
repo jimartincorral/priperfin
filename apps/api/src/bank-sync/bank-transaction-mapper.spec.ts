@@ -143,6 +143,21 @@ describe('mapBankTransaction', () => {
     expect(mapBankTransaction(tx({}), 'acc-1')?.counterpartyIban).toBeNull();
   });
 
+  it('records the merchant category code as four digits', () => {
+    expect(
+      mapBankTransaction(tx({ merchant_category_code: '5411' }), 'acc-1')
+        ?.merchantCategoryCode,
+    ).toBe('5411');
+    expect(
+      mapBankTransaction(tx({ merchant_category_code: '742' }), 'acc-1')
+        ?.merchantCategoryCode,
+    ).toBe('0742');
+    expect(
+      mapBankTransaction(tx({ merchant_category_code: 'n/a' }), 'acc-1')
+        ?.merchantCategoryCode,
+    ).toBeNull();
+  });
+
   it('returns null for a zero amount', () => {
     expect(
       mapBankTransaction(
