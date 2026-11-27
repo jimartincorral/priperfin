@@ -5,6 +5,7 @@ import {
   ConditionGroup,
   RuleConditions,
 } from './interfaces/rule-condition.interface';
+import { normalizeMcc } from '../bank-sync/bank-transaction-mapper';
 
 type TransactionWithAccount = Transaction & { account?: Account | null };
 
@@ -82,10 +83,16 @@ export class RuleEvaluatorService {
       return false;
     }
 
+    // "742" and "0742" are the same code.
+    const expected =
+      condition.field === 'mcc' && condition.operator === 'equals'
+        ? (normalizeMcc(condition.value) ?? condition.value)
+        : condition.value;
+
     const isMatch = this.compare(
       txValue,
       condition.operator,
-      condition.value,
+      expected,
       condition.caseSensitive,
     );
 
@@ -120,6 +127,8 @@ export class RuleEvaluatorService {
         return transaction.account?.name;
       case 'date':
         return transaction.date;
+      case 'mcc':
+        return transaction.merchantCategoryCode;
       default:
         return null;
     }

@@ -139,6 +139,7 @@ exports.Prisma.AccountScalarFieldEnum = {
   bankConnectionId: 'bankConnectionId',
   bankAccountUid: 'bankAccountUid',
   lastSyncedAt: 'lastSyncedAt',
+  bankPendingFrom: 'bankPendingFrom',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 };
@@ -170,6 +171,9 @@ exports.Prisma.TransactionScalarFieldEnum = {
   transferId: 'transferId',
   transferAccountId: 'transferAccountId',
   externalId: 'externalId',
+  pending: 'pending',
+  counterpartyIban: 'counterpartyIban',
+  merchantCategoryCode: 'merchantCategoryCode',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 };

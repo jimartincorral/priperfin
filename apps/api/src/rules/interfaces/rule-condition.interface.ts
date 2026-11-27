@@ -1,5 +1,13 @@
 export interface RuleCondition {
-  field: 'description' | 'merchant' | 'amount' | 'notes' | 'account' | 'date';
+  field:
+    | 'description'
+    | 'merchant'
+    | 'amount'
+    | 'notes'
+    | 'account'
+    | 'date'
+    /** Merchant category code from bank sync, four digits. */
+    | 'mcc';
   operator:
     | 'contains'
     | 'equals'

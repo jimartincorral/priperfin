@@ -138,4 +138,54 @@ describe('RuleEvaluatorService', () => {
 
     expect(service.matches(tx, rule)).toBe(true);
   });
+
+  describe('merchant category code', () => {
+    const rule = (condition: object) =>
+      createRule(JSON.stringify({ operator: 'AND', conditions: [condition] }));
+
+    it('matches a code, ignoring missing leading zeros', () => {
+      const vet = mockTransaction({ merchantCategoryCode: '0742' } as any);
+      expect(
+        service.matches(
+          vet,
+          rule({ field: 'mcc', operator: 'equals', value: '742' }),
+        ),
+      ).toBe(true);
+      expect(
+        service.matches(
+          mockTransaction({ merchantCategoryCode: '5411' } as any),
+          rule({ field: 'mcc', operator: 'equals', value: '5411' }),
+        ),
+      ).toBe(true);
+    });
+
+    it('matches a range of codes', () => {
+      const r = rule({
+        field: 'mcc',
+        operator: 'between',
+        value: { min: 5811, max: 5814 },
+      });
+      expect(
+        service.matches(
+          mockTransaction({ merchantCategoryCode: '5812' } as any),
+          r,
+        ),
+      ).toBe(true);
+      expect(
+        service.matches(
+          mockTransaction({ merchantCategoryCode: '5411' } as any),
+          r,
+        ),
+      ).toBe(false);
+    });
+
+    it('never matches a transaction without a code', () => {
+      expect(
+        service.matches(
+          mockTransaction(),
+          rule({ field: 'mcc', operator: 'equals', value: '5411' }),
+        ),
+      ).toBe(false);
+    });
+  });
 });

@@ -16,6 +16,7 @@ import {
   utcYearRange,
 } from './date-ranges';
 import { RulesService } from '../rules/rules.service';
+import { ownIbanMap } from '../bank-sync/iban';
 import { RuleMode } from '../generated/client';
 import * as crypto from 'crypto';
 import { Prisma } from '../generated/client';
@@ -1047,22 +1048,54 @@ export class TransactionsService {
     return { success: true };
   }
 
+  /**
+   * Pairs of transactions on two different accounts that look like the two
+   * legs of one transfer: equal and opposite amounts, close in date.
+   *
+   * Bank-synced transactions carry the other party's IBAN. When it is the IBAN
+   * of the other leg's account, the pair is confirmed (confidence 100, up to
+   * five days apart, as some banks book the receiving side later). When it
+   * points anywhere else, the pair is ruled out, however well amount and date
+   * agree: that money went to, or came from, someone else.
+   */
   async findTransferMatches(profileId: string) {
-    const candidateTransactions = await this.prisma.transaction.findMany({
-      where: {
-        profileId,
-        isTransfer: false,
-        accountId: { not: null },
-      },
-      orderBy: { date: 'desc' },
-      take: 200,
-      include: { account: true },
-    });
+    const [candidateTransactions, linkedAccounts] = await Promise.all([
+      this.prisma.transaction.findMany({
+        where: {
+          profileId,
+          isTransfer: false,
+          // A pending amount can still change; pair it once the bank books it.
+          pending: false,
+          accountId: { not: null },
+        },
+        orderBy: { date: 'desc' },
+        take: 200,
+        include: { account: true },
+      }),
+      this.prisma.account.findMany({
+        where: { profileId, bankAccountUid: { not: null } },
+        select: {
+          id: true,
+          bankAccountUid: true,
+          bankConnection: { select: { accountsJson: true } },
+        },
+      }),
+    ]);
+    const ownIbans = ownIbanMap(linkedAccounts);
+
+    /** confirm: a's IBAN names b's account; rule out: it names another one. */
+    const ibanSays = (a: any, b: any): 'confirm' | 'rule-out' | null => {
+      if (!a.counterpartyIban) return null;
+      return ownIbans.get(a.counterpartyIban) === b.accountId
+        ? 'confirm'
+        : 'rule-out';
+    };
 
     const matches: Array<{
       source: any;
       target: any;
       confidence: number;
+      ibanConfirmed: boolean;
     }> = [];
 
     const matchedIds = new Set<string>();
@@ -1070,6 +1103,13 @@ export class TransactionsService {
     for (let i = 0; i < candidateTransactions.length; i++) {
       const a = candidateTransactions[i];
       if (matchedIds.has(a.id)) continue;
+
+      let best: {
+        b: any;
+        confidence: number;
+        days: number;
+        ibanConfirmed: boolean;
+      } | null = null;
 
       for (let j = i + 1; j < candidateTransactions.length; j++) {
         const b = candidateTransactions[j];
@@ -1081,24 +1121,39 @@ export class TransactionsService {
         if (Math.abs(Math.abs(amtA) - Math.abs(amtB)) > 0.001) continue;
         if (amtA * amtB >= 0) continue; // Must be opposite signs
 
-        const diffDays = Math.abs(
+        const verdicts = [ibanSays(a, b), ibanSays(b, a)];
+        if (verdicts.includes('rule-out')) continue;
+        const ibanConfirmed = verdicts.includes('confirm');
+
+        const days = Math.abs(
           (a.date.getTime() - b.date.getTime()) / (1000 * 60 * 60 * 24),
         );
-        if (diffDays <= 3) {
-          const source = amtA < 0 ? a : b;
-          const target = amtA < 0 ? b : a;
-          matches.push({
-            source,
-            target,
-            confidence:
-              diffDays === 0
-                ? 95
-                : Math.max(70, Math.round(95 - diffDays * 10)),
-          });
-          matchedIds.add(a.id);
-          matchedIds.add(b.id);
-          break;
+        if (days > (ibanConfirmed ? 5 : 3)) continue;
+
+        const confidence = ibanConfirmed
+          ? 100
+          : days === 0
+            ? 95
+            : Math.max(70, Math.round(95 - days * 10));
+        if (
+          !best ||
+          confidence > best.confidence ||
+          (confidence === best.confidence && days < best.days)
+        ) {
+          best = { b, confidence, days, ibanConfirmed };
         }
+      }
+
+      if (best) {
+        const amtA = a.amount.toNumber();
+        matches.push({
+          source: amtA < 0 ? a : best.b,
+          target: amtA < 0 ? best.b : a,
+          confidence: best.confidence,
+          ibanConfirmed: best.ibanConfirmed,
+        });
+        matchedIds.add(a.id);
+        matchedIds.add(best.b.id);
       }
     }
 

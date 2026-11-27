@@ -822,7 +822,12 @@ export class ViewSettings extends LitElement {
       justify-content: center;
       font: 500 13px/1 'Roboto', sans-serif;
       flex-shrink: 0;
+      overflow: hidden;
     }
+    /* A logo sits on white whatever the theme: bank logos assume it. */
+    .ds-bank-tile.has-logo { background: #fff; border: 1px solid var(--md-sys-color-outline-variant); }
+    .ds-bank-tile img, .bank-logo { width: 100%; height: 100%; object-fit: contain; padding: 4px; box-sizing: border-box; }
+    .bank-logo { width: 28px; height: 28px; padding: 2px; border-radius: 6px; background: #fff; }
     .ds-linking { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
     .ds-linking-row {
       display: flex;
@@ -1580,10 +1585,46 @@ export class ViewSettings extends LitElement {
         }
     }
 
-    async handleLinkAccount(accountId: string, bankAccountUid: string, connectionId: string) {
+    /** Card / current account / savings, from the bank's cash account type. */
+    private bankAccountKind(bankAcc: any): string {
+        const type = String((typeof bankAcc === 'object' && bankAcc?.cash_account_type) || '').toUpperCase();
+        if (type === 'CARD') return i18n.t('bank_sync.bank_card');
+        if (type === 'CACC') return i18n.t('bank_sync.bank_current_account');
+        if (type === 'SVGS') return i18n.t('bank_sync.bank_savings');
+        return '';
+    }
+
+    /** Mirrors the API's describeBankAccount, for the option label. */
+    private suggestedAccountName(bankAcc: any, bankName: string): string {
+        const entry = typeof bankAcc === 'object' && bankAcc ? bankAcc : {};
+        const base = [entry.name, entry.product, entry.details]
+            .map((v: unknown) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim() : ''))
+            .find(Boolean) || bankName;
+        const iban = String(entry.account_id?.iban || entry.iban || '').replace(/\s+/g, '');
+        return iban.length >= 8 ? `${base} ··${iban.slice(-4)}` : base;
+    }
+
+    async handleCreateLinkedAccount(connectionId: string, bankAccountUid: string) {
+        try {
+            const account = await bankSyncApi.createLinkedAccount(connectionId, bankAccountUid);
+            this.notify(i18n.t('bank_sync.account_created_linked', { name: account?.name ?? '' }));
+            await this.loadData();
+        } catch (e: any) {
+            console.error('Failed to create linked account', e);
+            this.notify('Failed to link account: ' + (e.message || 'Unknown error'));
+        }
+    }
+
+    async handleLinkAccount(accountId: string, bankAccountUid: string, connectionId: string, bankAcc?: any) {
         try {
             await bankSyncApi.linkAccount(accountId, bankAccountUid, connectionId);
-            this.notify(i18n.t('bank_sync.account_linked'));
+            const account = this.accounts.find(a => a.id === accountId);
+            const isCard = String(bankAcc?.cash_account_type || '').toUpperCase() === 'CARD';
+            this.notify(
+                isCard && account && account.type !== 'CREDIT'
+                    ? i18n.t('bank_sync.card_type_hint', { account: account.name })
+                    : i18n.t('bank_sync.account_linked'),
+            );
             await this.loadData();
         } catch (e: any) {
             console.error('Failed to link account', e);
@@ -1610,9 +1651,9 @@ export class ViewSettings extends LitElement {
             const errorAcc = result?.accountsSynced?.find((a: any) => a.status === 'ERROR');
 
             if (expiredAcc) {
-                this.notify(`⚠️ ${expiredAcc.accountName}: ${expiredAcc.message || 'La sesión del banco ha expirado. Por favor, haz clic en "Re-autenticar" en Configuración.'}`);
+                this.notify(`⚠️ ${expiredAcc.accountName}: ${i18n.t(expiredAcc.reason === 'REVOKED' ? 'bank_sync.sync_revoked_warning' : 'bank_sync.sync_expired_warning')}`);
             } else if (errorAcc && (result?.newCount ?? 0) === 0 && (result?.duplicateCount ?? 0) === 0) {
-                this.notify(`⚠️ ${errorAcc.accountName}: ${errorAcc.message || 'Error al sincronizar con el banco.'}`);
+                this.notify(`⚠️ ${errorAcc.accountName}: ${errorAcc.message || i18n.t('bank_sync.sync_failed')}`);
             } else {
                 const msg = i18n.t('bank_sync.sync_success')
                     .replace('{newCount}', String(result?.newCount || '0'))
@@ -3026,11 +3067,22 @@ export class ViewSettings extends LitElement {
                                       <div class="bank-card">
                                           <div class="bank-header">
                                               <div class="bank-title">
-                                                  <span>🏛️</span>
+                                                  ${conn.logoUrl
+                                                      ? html`<img
+                                                            class="bank-logo"
+                                                            src="${conn.logoUrl}"
+                                                            alt=""
+                                                            referrerpolicy="no-referrer"
+                                                            loading="lazy"
+                                                            @error="${(e: Event) => {
+                                                                (e.target as HTMLElement).replaceWith('🏛️');
+                                                            }}"
+                                                        />`
+                                                      : html`<span>🏛️</span>`}
                                                   <span>${conn.aspspName}</span>
                                                   <span
                                                       style="font-size: 0.8rem; font-weight: normal; color: var(--md-sys-color-on-surface-variant);"
-                                                      >(${conn.country})</span
+                                                      >(${conn.aspspCountry})</span
                                                   >
                                               </div>
                                               <div style="display: flex; align-items: center; gap: 8px;">
@@ -3064,7 +3116,7 @@ export class ViewSettings extends LitElement {
                                                   ? html`<p
                                                         style="font-size: 0.8rem; color: var(--md-sys-color-on-surface-variant); margin: 0;"
                                                     >
-                                                        No account IDs returned yet.
+                                                        ${i18n.t('bank_sync.no_bank_accounts')}
                                                     </p>`
                                                   : html`
                                                         <div style="display: flex; flex-direction: column; gap: 8px;">
@@ -3077,10 +3129,14 @@ export class ViewSettings extends LitElement {
                                                                     typeof bankAcc === 'object' && bankAcc
                                                                         ? (bankAcc.account_id?.iban || bankAcc.iban || bankAcc.name || uid)
                                                                         : String(bankAcc);
-                                                                const subInfo =
+                                                                const kind = this.bankAccountKind(bankAcc);
+                                                                const subInfo = [
                                                                     typeof bankAcc === 'object' && bankAcc?.name && (bankAcc.account_id?.iban || bankAcc.iban)
-                                                                        ? `${bankAcc.name} (${bankAcc.currency || 'EUR'})`
-                                                                        : (typeof bankAcc === 'object' && bankAcc?.cash_account_type ? `${bankAcc.cash_account_type} (${bankAcc.currency || 'EUR'})` : '');
+                                                                        ? bankAcc.name
+                                                                        : '',
+                                                                    kind,
+                                                                    typeof bankAcc === 'object' && bankAcc?.currency ? bankAcc.currency : '',
+                                                                ].filter(Boolean).join(' · ');
                                                                 const linkedAccount = this.accounts.find(
                                                                     (a) => a.bankAccountUid === uid,
                                                                 );
@@ -3102,12 +3158,12 @@ export class ViewSettings extends LitElement {
                                                                                 style="font-size: 0.75rem; color: var(--md-sys-color-on-surface-variant);"
                                                                             >
                                                                                 ${linkedAccount
-                                                                                    ? html`✓ Vinculada a:
+                                                                                    ? html`✓ ${i18n.t('bank_sync.linked_to')}:
                                                                                           <strong
                                                                                               >${linkedAccount.name}</strong
                                                                                           >`
                                                                                     : html`<span style="color: #f59e0b;"
-                                                                                          >Sin vincular a PriPerFin</span
+                                                                                          >${i18n.t('bank_sync.not_linked')}</span
                                                                                       >`}
                                                                             </div>
                                                                         </div>
@@ -3136,11 +3192,14 @@ export class ViewSettings extends LitElement {
                                                                                           @change="${(e: any) => {
                                                                                               const accId =
                                                                                                   e.target.value;
-                                                                                              if (accId) {
+                                                                                              if (accId === '__new__') {
+                                                                                                  this.handleCreateLinkedAccount(conn.id, uid);
+                                                                                              } else if (accId) {
                                                                                                   this.handleLinkAccount(
                                                                                                       accId,
                                                                                                       uid,
                                                                                                       conn.id,
+                                                                                                      bankAcc,
                                                                                                   );
                                                                                               }
                                                                                           }}"
@@ -3149,6 +3208,11 @@ export class ViewSettings extends LitElement {
                                                                                               ${i18n.t(
                                                                                                   'bank_sync.select_account_placeholder',
                                                                                               )}
+                                                                                          </option>
+                                                                                          <option value="__new__">
+                                                                                              ${i18n.t('bank_sync.create_account_option', {
+                                                                                                  name: this.suggestedAccountName(bankAcc, conn.aspspName),
+                                                                                              })}
                                                                                           </option>
                                                                                           ${this.accounts.map(
                                                                                               (a) =>
@@ -4178,7 +4242,20 @@ export class ViewSettings extends LitElement {
         return html`
             <div class="ds-connection">
                 <div class="ds-connection-head">
-                    <span class="ds-bank-tile">${initials}</span>
+                    <span class="ds-bank-tile ${conn.logoUrl ? 'has-logo' : ''}">
+                        ${conn.logoUrl
+                            ? html`<img
+                                src="${conn.logoUrl}"
+                                alt=""
+                                referrerpolicy="no-referrer"
+                                loading="lazy"
+                                @error="${(e: Event) => {
+                                    const tile = (e.target as HTMLElement).parentElement!;
+                                    tile.classList.remove('has-logo');
+                                    tile.textContent = initials;
+                                }}" />`
+                            : initials}
+                    </span>
                     <div style="flex: 1; min-width: 0">
                         <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
                             <span class="ds-row-label">${conn.aspspName}</span>
@@ -4224,10 +4301,12 @@ export class ViewSettings extends LitElement {
                                 ? (bankAcc.account_id?.iban || bankAcc.iban || bankAcc.name || uid)
                                 : String(bankAcc);
                             const linked = this.accounts.find(a => a.bankAccountUid === uid);
+                            const kind = this.bankAccountKind(bankAcc);
 
                             return html`
                                 <div class="ds-linking-row">
                                     <span class="ds-linking-name">${label}</span>
+                                    ${kind ? html`<span class="d-tag">${kind}</span>` : nothing}
                                     ${linked
                                         ? html`
                                             <span class="d-tag positive">${linked.name}</span>
@@ -4243,10 +4322,14 @@ export class ViewSettings extends LitElement {
                                                 style="width: 180px; height: 32px"
                                                 @change="${(e: any) => {
                                                     const accountId = e.target.value;
-                                                    if (accountId) this.handleLinkAccount(accountId, uid, conn.id);
+                                                    if (accountId === '__new__') this.handleCreateLinkedAccount(conn.id, uid);
+                                                    else if (accountId) this.handleLinkAccount(accountId, uid, conn.id, bankAcc);
                                                 }}">
                                                 <option value="">
                                                     ${i18n.t('bank_sync.select_account_placeholder')}
+                                                </option>
+                                                <option value="__new__">
+                                                    ${i18n.t('bank_sync.create_account_option', { name: this.suggestedAccountName(bankAcc, conn.aspspName) })}
                                                 </option>
                                                 ${this.accounts.map(a => html`
                                                     <option value="${a.id}">${a.name}</option>

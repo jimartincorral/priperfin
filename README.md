@@ -291,9 +291,13 @@ transactions; it cannot move money.
    the address. If that URL is PriPerFin's own Settings page, the connection
    completes by itself. Otherwise copy the full address from the browser's
    address bar, go back to Settings, click **Paste Callback**, and paste it.
-5. The bank now appears under **Connected Banks** with the accounts it
-   exposed. For each one, choose the PriPerFin account it should feed and click
-   **Link Account**. Create the PriPerFin account first if it does not exist.
+5. The bank now appears under **Connected Banks**, with its logo and the
+   accounts it exposed, each marked as a current account, savings or card. For
+   each one, choose the PriPerFin account it should feed. Or pick **+ New
+   account** to create one named after the bank account. A card becomes a
+   credit-card account, so its balance counts as money owed. If you link a card
+   to an existing account that isn't a credit-card account, PriPerFin reminds
+   you to change its type.
 
 ### Choosing the redirect URL
 
@@ -325,19 +329,50 @@ code automatically when that address is its own Settings page. So:
   before the newest one instead, so the two overlap rather than leave a gap.
 - **Later syncs** fetch from five days before the previous sync, and anything
   already stored is skipped, so re-syncing never duplicates a transaction.
-- Imported rows get the bank's description, with any further detail in the
+- **Pending transactions come in tagged *Pending*.** A card payment your bank
+  hasn't booked yet can still change amount (tips, exchange rates) or be
+  cancelled. Each sync updates it. Once the bank books it, the same row
+  becomes an ordinary transaction with the final amount and date, keeping any
+  category you set. If the bank drops it, it is removed. Pending transactions
+  count in your totals like any other, and the bank balance shown for a
+  current account includes them so the two compare like for like. They are
+  never paired as transfers automatically until booked. Cancelled and
+  rejected transactions are never imported.
+- **Transfers between your own accounts are paired automatically.** The bank
+  reports the other side's IBAN. When money leaves one linked account for the
+  IBAN of another linked account, the two movements are linked as one
+  transfer, even if the receiving bank books it up to five days later.
+  Movements to or from anyone else's IBAN are never paired as a transfer, even
+  when an equal amount happens to arrive on another account the same day.
+  Accounts that aren't linked to a bank have no known IBAN, so for them
+  pairing still goes by amount and date.
+- Imported rows are described by the other party: the shop or person paid on
+  money going out, the payer on money coming in. Any further detail goes in the
   notes, and your categorisation rules run on them like on any other import.
+- **Card payments carry a merchant category code** when the bank sends one: a
+  four-digit code for the kind of shop (5411 supermarkets, 5541 fuel, 5812
+  restaurants). It shows on the transaction. Rules can match on it, exactly or
+  as a range (5811 to 5814 covers every kind of restaurant). Once five or more
+  transactions with the same code sit almost all in one category, the rule
+  suggestions offer a rule for it. Codes spread over several categories, such
+  as 5999 (miscellaneous shops), are never suggested.
 
 ### Consent expiry
 
-Bank access under PSD2 is granted for **90 days**. The connection card shows
-*Active*, then *Expiring Soon* during the last 14 days, then *Expired*; an
-expired connection stops syncing and the Expenses screen warns you. Click
+Bank access under PSD2 is granted for a limited time. PriPerFin asks for the
+longest your bank allows: **180 days** at many banks, **90 days** at others,
+and 90 days when the bank doesn't say. The connection card shows when it ends.
+It shows *Active*, then *Expiring Soon* during the last 14 days, then
+*Expired*. An expired connection stops syncing and the Expenses screen warns
+you. If you withdraw access from your bank's own app or website, the next sync
+notices and asks you to connect again. Click
 **Re-authenticate** to go through the bank approval again. The accounts you
 linked are moved to the renewed connection automatically, matched by bank
-account, and their history is kept.
-**Disconnect** removes the bank connection; the PriPerFin accounts and the
-transactions already imported stay.
+account, and their history is kept. Connecting a second login at the same
+bank (a joint or business account) adds a separate connection and leaves the
+first one alone.
+**Disconnect** withdraws PriPerFin's access at the bank and removes the
+connection. The PriPerFin accounts and the transactions already imported stay.
 
 ### Where the credentials live, and what is not backed up
 
@@ -353,9 +388,12 @@ transactions already imported stay.
   credentials and connect the banks again. The transactions themselves are in
   the backup.
 - A profile with a connected bank can only ever read its own accounts.
-  Enable Banking's own terms limit how often an unattended sync may run; the
-  daily schedule stays well inside that limit, and manual syncs count too, so
-  avoid clicking **Sync Now** repeatedly.
+- Banks limit how often PriPerFin may read an account while you're away
+  (typically four times a day). The daily sync is one of those reads.
+  **Sync Now** and **Sync Bank** send the bank your browser's address and
+  name so the bank knows you started them. That way they don't count as reads
+  while you're away. Some banks still count them, or reject the details and
+  get a plain request instead, so there's no point clicking repeatedly.
 
 ## Configuration
 

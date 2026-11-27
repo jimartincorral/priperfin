@@ -281,7 +281,10 @@ export class RulesService {
         const created = await this.prisma.ruleSuggestion.create({
           data: {
             profileId,
-            name: `${s.patternType === 'merchant' ? 'Merchant' : 'Description'} matches "${s.conditions.conditions[0].value}"`,
+            name:
+              s.patternType === 'mcc'
+                ? `Merchant category code is ${s.conditions.conditions[0].value}`
+                : `${s.patternType === 'merchant' ? 'Merchant' : 'Description'} matches "${s.conditions.conditions[0].value}"`,
             conditionsJson: JSON.stringify(s.conditions),
             categoryId: s.categoryId,
             confidence: s.confidence,
