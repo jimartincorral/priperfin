@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.32.1 - 2026-11-27
+
+Bank sync: renew access from the bank list on wide screens.
+
+- **Re-authenticate is back on wide screens and in the desktop app.** Only the phone layout had it. Each connected bank now has its own button, filled when access has expired or is about to, and Sync Now is hidden while a bank is expired.
+- **Connect a bank sits next to Paste Callback** under the bank list, as well as at the top of the panel.
+- **Paste Callback shows as soon as your credentials are saved**, so a first connection can be finished on a wide screen too.
+
 ## v1.32.0 - 2026-11-27
 
 Bank sync: pending transactions, transfers between your own accounts, merchant codes, and longer bank access.
