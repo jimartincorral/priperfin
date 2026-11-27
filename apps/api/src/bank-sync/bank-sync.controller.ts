@@ -113,6 +113,18 @@ export class BankSyncController {
     );
   }
 
+  @Post('create-account')
+  createLinkedAccount(
+    @Body() body: { connectionId: string; bankAccountUid: string },
+    @CurrentProfile() profile: Profile,
+  ) {
+    return this.bankSyncService.createLinkedAccount(
+      body.connectionId,
+      body.bankAccountUid,
+      profile.id,
+    );
+  }
+
   @Post('unlink-account')
   unlinkAccount(
     @Body() body: { accountId: string },

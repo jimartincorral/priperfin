@@ -14,6 +14,7 @@ import { TransactionsService } from '../transactions/transactions.service';
 import {
   BankSyncSettingsDto,
   BankSyncSettingsResponse,
+  Aspsp,
   BankAccountDetails,
   BankTransaction,
   PsuContext,
@@ -25,7 +26,11 @@ import {
   pickBankBalance,
   BankDto,
 } from './bank-transaction-mapper';
-import { ibanOfBankAccount, parseBankAccounts } from './iban';
+import {
+  describeBankAccount,
+  ibanOfBankAccount,
+  parseBankAccounts,
+} from './iban';
 import { Prisma } from '../generated/client';
 import * as crypto from 'crypto';
 
@@ -329,16 +334,7 @@ export class BankSyncService {
     key: string,
   ): Promise<number> {
     try {
-      const { aspsps } = await this.enableBankingService.getBanks(
-        country,
-        appId,
-        key,
-      );
-      const bank = (aspsps || []).find(
-        (a) =>
-          a.name === aspspName &&
-          (a.country || '').toUpperCase() === country.toUpperCase(),
-      );
+      const bank = await this.findAspsp(aspspName, country, appId, key);
       const max = Number(bank?.maximum_consent_validity);
       if (Number.isFinite(max) && max > CONSENT_MARGIN_SECONDS * 2) {
         return max;
@@ -350,6 +346,27 @@ export class BankSyncService {
       );
     }
     return DEFAULT_CONSENT_SECONDS;
+  }
+
+  /** A bank's entry in Enable Banking's list for its country. */
+  private async findAspsp(
+    aspspName: string,
+    country: string,
+    appId: string,
+    key: string,
+  ): Promise<Aspsp | null> {
+    const { aspsps } = await this.enableBankingService.getBanks(
+      country,
+      appId,
+      key,
+    );
+    return (
+      (aspsps || []).find(
+        (a) =>
+          a.name === aspspName &&
+          (a.country || '').toUpperCase() === country.toUpperCase(),
+      ) ?? null
+    );
   }
 
   /** Withdraws a session at Enable Banking. Best effort: never throws. */
@@ -428,12 +445,31 @@ export class BankSyncService {
       ? new Date(session.access.valid_until)
       : new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
 
+    // The bank's logo, for the connection card. Cosmetic: never fails the
+    // connection.
+    let aspspLogoUrl: string | null = null;
+    try {
+      const bank = await this.findAspsp(
+        session.aspsp?.name || '',
+        session.aspsp?.country || 'ES',
+        appId,
+        key,
+      );
+      aspspLogoUrl =
+        typeof bank?.logo === 'string' && /^https:\/\//.test(bank.logo)
+          ? bank.logo
+          : null;
+    } catch {
+      this.logger.debug('Could not read the bank list for the logo');
+    }
+
     // Save or update BankConnection
     const connection = await this.prisma.bankConnection.upsert({
       where: { sessionId: session.session_id },
       update: {
         aspspName: session.aspsp?.name || 'Bank',
         aspspCountry: session.aspsp?.country || 'ES',
+        aspspLogoUrl,
         validUntil,
         accountsJson: JSON.stringify(accountsDetails),
         profileId,
@@ -442,6 +478,7 @@ export class BankSyncService {
         sessionId: session.session_id,
         aspspName: session.aspsp?.name || 'Bank',
         aspspCountry: session.aspsp?.country || 'ES',
+        aspspLogoUrl,
         validUntil,
         accountsJson: JSON.stringify(accountsDetails),
         profileId,
@@ -580,6 +617,7 @@ export class BankSyncService {
         id: conn.id,
         aspspName: conn.aspspName,
         aspspCountry: conn.aspspCountry,
+        logoUrl: conn.aspspLogoUrl,
         validUntil: conn.validUntil,
         isExpired,
         daysRemaining,
@@ -662,6 +700,50 @@ export class BankSyncService {
     });
 
     return updated;
+  }
+
+  /**
+   * Creates a PriPerFin account for a bank account and links it: named after
+   * the bank's account name or product plus the last IBAN digits, and a
+   * credit account when the bank reports a card.
+   */
+  async createLinkedAccount(
+    connectionId: string,
+    bankAccountUid: string,
+    profileId: string,
+  ) {
+    const connection = await this.prisma.bankConnection.findFirst({
+      where: { id: connectionId, profileId },
+    });
+    if (!connection) {
+      throw new NotFoundException('Bank connection not found');
+    }
+    const entry = parseBankAccounts(connection.accountsJson).find(
+      (e) => e?.uid === bankAccountUid,
+    );
+    if (!entry) {
+      throw new BadRequestException('Bank account not found on connection');
+    }
+    const already = await this.prisma.account.findFirst({
+      where: { profileId, bankAccountUid },
+    });
+    if (already) {
+      throw new BadRequestException(
+        `This bank account is already linked to "${already.name}"`,
+      );
+    }
+
+    const { name, type } = describeBankAccount(entry, connection.aspspName);
+    return this.prisma.account.create({
+      data: {
+        name,
+        type,
+        initialBalance: 0,
+        profileId,
+        bankConnectionId: connection.id,
+        bankAccountUid,
+      },
+    });
   }
 
   async unlinkAccount(accountId: string, profileId: string) {

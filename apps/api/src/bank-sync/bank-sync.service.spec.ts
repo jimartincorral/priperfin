@@ -28,6 +28,7 @@ describe('BankSyncService', () => {
         findMany: jest.fn(),
         update: jest.fn(),
         updateMany: jest.fn(),
+        create: jest.fn(),
       },
       transaction: {
         findFirst: jest.fn(),
@@ -202,7 +203,21 @@ describe('BankSyncService', () => {
         validUntil: new Date('2026-11-30T00:00:00Z'),
       });
 
+      mockEnableBankingService.getBanks.mockResolvedValue({
+        aspsps: [
+          {
+            name: 'Abanca',
+            country: 'ES',
+            logo: 'https://enablebanking.com/brands/ES/Abanca/',
+          },
+        ],
+      });
+
       const result = await service.handleCallback('code-xyz', 'profile-1');
+      expect(
+        mockPrismaService.bankConnection.upsert.mock.calls[0][0].create
+          .aspspLogoUrl,
+      ).toBe('https://enablebanking.com/brands/ES/Abanca/');
       expect(result.connectionId).toBe('conn-1');
       expect(result.aspspName).toBe('Abanca');
       expect(result.accounts.length).toBe(1);
@@ -422,6 +437,52 @@ describe('BankSyncService', () => {
       expect(mockPrismaService.account.update).not.toHaveBeenCalled();
       expect(mockEnableBankingService.deleteSession).not.toHaveBeenCalled();
       expect(mockPrismaService.bankConnection.delete).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('createLinkedAccount', () => {
+    const connection = {
+      id: 'conn-1',
+      aspspName: 'Abanca',
+      accountsJson: JSON.stringify([
+        {
+          uid: 'card-uid',
+          product: 'Visa Oro',
+          cash_account_type: 'CARD',
+          account_id: { iban: 'ES9121000418450200051332' },
+        },
+      ]),
+    };
+
+    it('creates a credit account for a card and links it', async () => {
+      mockPrismaService.bankConnection.findFirst.mockResolvedValue(connection);
+      mockPrismaService.account.findFirst.mockResolvedValue(null);
+      mockPrismaService.account.create.mockResolvedValue({ id: 'acc-new' });
+
+      await service.createLinkedAccount('conn-1', 'card-uid', 'profile-1');
+
+      expect(mockPrismaService.account.create).toHaveBeenCalledWith({
+        data: {
+          name: 'Visa Oro ··1332',
+          type: 'CREDIT',
+          initialBalance: 0,
+          profileId: 'profile-1',
+          bankConnectionId: 'conn-1',
+          bankAccountUid: 'card-uid',
+        },
+      });
+    });
+
+    it('refuses a bank account that is already linked or unknown', async () => {
+      mockPrismaService.bankConnection.findFirst.mockResolvedValue(connection);
+      mockPrismaService.account.findFirst.mockResolvedValue({ name: 'Visa' });
+      await expect(
+        service.createLinkedAccount('conn-1', 'card-uid', 'profile-1'),
+      ).rejects.toThrow('already linked');
+      await expect(
+        service.createLinkedAccount('conn-1', 'other-uid', 'profile-1'),
+      ).rejects.toThrow('not found');
+      expect(mockPrismaService.account.create).not.toHaveBeenCalled();
     });
   });
 

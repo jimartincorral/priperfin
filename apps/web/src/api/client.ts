@@ -371,6 +371,10 @@ export const bankSyncApi = {
         return api.post('/bank-sync/link-account', { accountId, bankAccountUid, connectionId });
     },
 
+    async createLinkedAccount(connectionId: string, bankAccountUid: string) {
+        return api.post('/bank-sync/create-account', { connectionId, bankAccountUid });
+    },
+
     async unlinkAccount(accountId: string) {
         return api.post('/bank-sync/unlink-account', { accountId });
     },

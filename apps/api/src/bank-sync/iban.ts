@@ -10,6 +10,26 @@ export function ibanOfBankAccount(entry: any): string | null {
   return normalizeIban(entry?.account_id?.iban ?? entry?.iban);
 }
 
+/**
+ * A name and account type for a bank account: the bank's own name for it
+ * (or product, or the bank's name) with the last four IBAN digits, and
+ * CREDIT when the bank reports a card (ISO 20022 cash account type CARD).
+ */
+export function describeBankAccount(
+  entry: any,
+  bankName: string,
+): { name: string; type: 'DEBIT' | 'CREDIT' } {
+  const card = String(entry?.cash_account_type || '').toUpperCase() === 'CARD';
+  const base =
+    [entry?.name, entry?.product, entry?.details]
+      .map((v) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim() : ''))
+      .find(Boolean) || bankName;
+  const iban = ibanOfBankAccount(entry);
+  const tail = iban ? ` ··${iban.slice(-4)}` : '';
+  const name = `${base}${tail}`.slice(0, 80);
+  return { name, type: card ? 'CREDIT' : 'DEBIT' };
+}
+
 export function parseBankAccounts(json: string | null | undefined): any[] {
   if (!json) return [];
   try {

@@ -291,9 +291,13 @@ transactions; it cannot move money.
    the address. If that URL is PriPerFin's own Settings page, the connection
    completes by itself. Otherwise copy the full address from the browser's
    address bar, go back to Settings, click **Paste Callback**, and paste it.
-5. The bank now appears under **Connected Banks** with the accounts it
-   exposed. For each one, choose the PriPerFin account it should feed and click
-   **Link Account**. Create the PriPerFin account first if it does not exist.
+5. The bank now appears under **Connected Banks**, with its logo and the
+   accounts it exposed, each marked as a current account, savings or card. For
+   each one, choose the PriPerFin account it should feed. Or pick **+ New
+   account** to create one named after the bank account. A card becomes a
+   credit-card account, so its balance counts as money owed. If you link a card
+   to an existing account that isn't a credit-card account, PriPerFin reminds
+   you to change its type.
 
 ### Choosing the redirect URL
 
