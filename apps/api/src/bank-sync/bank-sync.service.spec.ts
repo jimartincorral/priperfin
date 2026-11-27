@@ -17,6 +17,7 @@ describe('BankSyncService', () => {
         upsert: jest.fn(),
       },
       bankConnection: {
+        update: jest.fn().mockResolvedValue({}),
         upsert: jest.fn(),
         findMany: jest.fn(),
         findFirst: jest.fn(),
@@ -42,6 +43,8 @@ describe('BankSyncService', () => {
       getAccountDetails: jest.fn(),
       getAccountBalances: jest.fn(),
       getAccountTransactions: jest.fn(),
+      getSession: jest.fn(),
+      deleteSession: jest.fn(),
     };
 
     mockTransactionsService = {
@@ -263,6 +266,327 @@ describe('BankSyncService', () => {
         'profile-1',
         true,
       );
+    });
+  });
+
+  const credentials = () =>
+    mockPrismaService.setting.findUnique.mockImplementation(
+      ({ where }: any) => {
+        if (where.key === 'enable_banking_app_id')
+          return Promise.resolve({ value: 'my-app-id' });
+        if (where.key === 'enable_banking_key')
+          return Promise.resolve({ value: 'my-key' });
+        if (where.key === 'enable_banking_redirect_url')
+          return Promise.resolve({ value: 'https://example.com/callback' });
+        return Promise.resolve(null);
+      },
+    );
+
+  const linkedAccount = (over: any = {}) => ({
+    id: 'acc-1',
+    name: 'Main Checking',
+    bankAccountUid: 'uid-1',
+    bankConnectionId: 'conn-1',
+    lastSyncedAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
+    bankPendingFrom: null,
+    bankConnection: {
+      id: 'conn-1',
+      sessionId: 'session-1',
+      validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+    },
+    ...over,
+  });
+
+  describe('consent length', () => {
+    it("asks for the bank's maximum consent", async () => {
+      credentials();
+      mockEnableBankingService.getBanks.mockResolvedValue({
+        aspsps: [
+          { name: 'Other', country: 'ES', maximum_consent_validity: 1 },
+          {
+            name: 'Abanca',
+            country: 'ES',
+            maximum_consent_validity: 180 * 24 * 3600,
+          },
+        ],
+      });
+      mockEnableBankingService.startAuth.mockResolvedValue({ url: 'u' });
+
+      await service.startAuth('Abanca', 'ES');
+      const validUntil = new Date(
+        mockEnableBankingService.startAuth.mock.calls[0][0].access.valid_until,
+      );
+      const days = (validUntil.getTime() - Date.now()) / 86400000;
+      expect(days).toBeGreaterThan(179.9);
+      expect(days).toBeLessThan(180);
+    });
+
+    it('falls back to 90 days when the bank list cannot be read', async () => {
+      credentials();
+      mockEnableBankingService.getBanks.mockRejectedValue(new Error('down'));
+      mockEnableBankingService.startAuth.mockResolvedValue({ url: 'u' });
+
+      await service.startAuth('Abanca', 'ES');
+      const validUntil = new Date(
+        mockEnableBankingService.startAuth.mock.calls[0][0].access.valid_until,
+      );
+      const days = (validUntil.getTime() - Date.now()) / 86400000;
+      expect(days).toBeGreaterThan(89.9);
+      expect(days).toBeLessThan(90);
+    });
+  });
+
+  describe('re-authentication', () => {
+    const newSession = () => {
+      credentials();
+      mockEnableBankingService.createSession.mockResolvedValue({
+        session_id: 'session-new',
+        aspsp: { name: 'Abanca', country: 'ES' },
+        access: { valid_until: '2027-05-01T00:00:00Z' },
+        accounts: ['uid-new'],
+      });
+      mockEnableBankingService.getAccountDetails.mockResolvedValue({
+        uid: 'uid-new',
+        account_id: { iban: 'ES11 1111' },
+      });
+      mockPrismaService.bankConnection.upsert.mockResolvedValue({
+        id: 'conn-new',
+        aspspName: 'Abanca',
+        validUntil: new Date('2027-05-01T00:00:00Z'),
+      });
+      mockPrismaService.bankConnection.delete.mockResolvedValue({});
+    };
+    const future = new Date(Date.now() + 30 * 86400000);
+
+    it('replaces and revokes the connection it renews', async () => {
+      newSession();
+      mockPrismaService.bankConnection.findMany.mockResolvedValue([
+        {
+          id: 'conn-old',
+          sessionId: 'session-old',
+          validUntil: future,
+          accountsJson: JSON.stringify([
+            { uid: 'uid-old', account_id: { iban: 'ES111111' } },
+          ]),
+          accounts: [{ id: 'acc-1', name: 'Main', bankAccountUid: 'uid-old' }],
+        },
+      ]);
+
+      await service.handleCallback('code', 'profile-1');
+
+      expect(mockPrismaService.account.update).toHaveBeenCalledWith({
+        where: { id: 'acc-1' },
+        data: { bankConnectionId: 'conn-new', bankAccountUid: 'uid-new' },
+      });
+      expect(mockEnableBankingService.deleteSession).toHaveBeenCalledWith(
+        'session-old',
+        'my-app-id',
+        'my-key',
+      );
+      expect(mockPrismaService.bankConnection.delete).toHaveBeenCalledWith({
+        where: { id: 'conn-old' },
+      });
+    });
+
+    it('keeps a second, unrelated login at the same bank', async () => {
+      newSession();
+      mockPrismaService.bankConnection.findMany.mockResolvedValue([
+        {
+          id: 'conn-joint',
+          sessionId: 'session-joint',
+          validUntil: future,
+          accountsJson: JSON.stringify([
+            { uid: 'uid-joint', account_id: { iban: 'ES22222' } },
+          ]),
+          accounts: [
+            { id: 'acc-2', name: 'Joint', bankAccountUid: 'uid-joint' },
+          ],
+        },
+      ]);
+
+      await service.handleCallback('code', 'profile-1');
+
+      expect(mockPrismaService.account.update).not.toHaveBeenCalled();
+      expect(mockEnableBankingService.deleteSession).not.toHaveBeenCalled();
+      expect(mockPrismaService.bankConnection.delete).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('deleteConnection', () => {
+    it('revokes the session at Enable Banking before removing it', async () => {
+      credentials();
+      mockPrismaService.bankConnection.findFirst.mockResolvedValue({
+        id: 'conn-1',
+        sessionId: 'session-1',
+      });
+      mockPrismaService.bankConnection.delete.mockResolvedValue({});
+
+      await service.deleteConnection('conn-1', 'profile-1');
+      expect(mockEnableBankingService.deleteSession).toHaveBeenCalledWith(
+        'session-1',
+        'my-app-id',
+        'my-key',
+      );
+      expect(mockPrismaService.bankConnection.delete).toHaveBeenCalled();
+    });
+
+    it('still removes the connection when revoking fails', async () => {
+      credentials();
+      mockPrismaService.bankConnection.findFirst.mockResolvedValue({
+        id: 'conn-1',
+        sessionId: 'session-1',
+      });
+      mockEnableBankingService.deleteSession.mockRejectedValue(
+        new Error('already gone'),
+      );
+      mockPrismaService.bankConnection.delete.mockResolvedValue({});
+
+      await expect(
+        service.deleteConnection('conn-1', 'profile-1'),
+      ).resolves.toEqual({ success: true });
+    });
+  });
+
+  describe('syncTransactions details', () => {
+    beforeEach(() => {
+      credentials();
+      mockPrismaService.transaction.findMany.mockResolvedValue([]);
+      mockPrismaService.account.update.mockResolvedValue({});
+      mockEnableBankingService.getAccountBalances.mockResolvedValue({
+        balances: [],
+      });
+      mockTransactionsService.createMany.mockResolvedValue({
+        newCount: 1,
+        duplicateCount: 0,
+      });
+    });
+
+    it('imports booked transactions only and remembers the oldest pending one', async () => {
+      mockPrismaService.account.findMany.mockResolvedValue([linkedAccount()]);
+      mockEnableBankingService.getAccountTransactions.mockResolvedValue({
+        transactions: [
+          {
+            entry_reference: 'booked-1',
+            status: 'BOOK',
+            booking_date: '2026-11-20',
+            transaction_amount: { amount: '12.00', currency: 'EUR' },
+            credit_debit_indicator: 'DBIT',
+            creditor: { name: 'Bakery' },
+          },
+          {
+            status: 'PDNG',
+            transaction_date: '2026-11-22',
+            transaction_amount: { amount: '30.00', currency: 'EUR' },
+            credit_debit_indicator: 'DBIT',
+            creditor: { name: 'Hotel hold' },
+          },
+          {
+            status: 'PDNG',
+            transaction_date: '2026-11-21',
+            transaction_amount: { amount: '8.00', currency: 'EUR' },
+            credit_debit_indicator: 'DBIT',
+          },
+          {
+            status: 'CNCL',
+            booking_date: '2026-11-19',
+            transaction_amount: { amount: '99.00', currency: 'EUR' },
+            credit_debit_indicator: 'DBIT',
+          },
+        ],
+      });
+
+      await service.syncTransactions(undefined, 'profile-1');
+
+      const inserted = mockTransactionsService.createMany.mock.calls[0][0];
+      expect(inserted).toHaveLength(1);
+      expect(inserted[0]).toMatchObject({
+        description: 'Bakery',
+        amount: -12,
+      });
+      expect(mockPrismaService.account.update).toHaveBeenCalledWith({
+        where: { id: 'acc-1' },
+        data: expect.objectContaining({
+          bankPendingFrom: new Date('2026-11-21'),
+        }),
+      });
+    });
+
+    it('reaches back to a pending transaction on the next sync', async () => {
+      const pendingFrom = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000);
+      mockPrismaService.account.findMany.mockResolvedValue([
+        linkedAccount({ bankPendingFrom: pendingFrom }),
+      ]);
+      mockEnableBankingService.getAccountTransactions.mockResolvedValue({
+        transactions: [],
+      });
+
+      await service.syncTransactions(undefined, 'profile-1');
+
+      const dateFrom =
+        mockEnableBankingService.getAccountTransactions.mock.calls[0][3];
+      const expected = new Date(pendingFrom);
+      expected.setDate(expected.getDate() - 2);
+      expect(dateFrom).toBe(expected.toISOString().split('T')[0]);
+      expect(mockPrismaService.account.update).toHaveBeenCalledWith({
+        where: { id: 'acc-1' },
+        data: expect.objectContaining({ bankPendingFrom: null }),
+      });
+    });
+
+    it('passes who started the sync on to every bank call', async () => {
+      mockPrismaService.account.findMany.mockResolvedValue([linkedAccount()]);
+      mockEnableBankingService.getAccountTransactions.mockResolvedValue({
+        transactions: [],
+      });
+      const psu = { ipAddress: '203.0.113.7', userAgent: 'Firefox' };
+
+      await service.syncTransactions(undefined, 'profile-1', psu);
+
+      expect(
+        mockEnableBankingService.getAccountTransactions.mock.calls[0][6],
+      ).toBe(psu);
+      expect(mockEnableBankingService.getAccountBalances.mock.calls[0][3]).toBe(
+        psu,
+      );
+    });
+
+    it('reports consent withdrawn at the bank as REVOKED', async () => {
+      mockPrismaService.account.findMany.mockResolvedValue([linkedAccount()]);
+      mockEnableBankingService.getAccountTransactions.mockRejectedValue(
+        new Error('Forbidden'),
+      );
+      mockEnableBankingService.getSession.mockResolvedValue({
+        status: 'REVOKED',
+      });
+
+      const result = await service.syncTransactions(undefined, 'profile-1');
+
+      expect(result.accountsSynced[0]).toMatchObject({
+        status: 'EXPIRED',
+        reason: 'REVOKED',
+      });
+      expect(mockPrismaService.bankConnection.update).toHaveBeenCalledWith({
+        where: { id: 'conn-1' },
+        data: { validUntil: expect.any(Date) },
+      });
+    });
+
+    it('leaves an authorized connection alone on an ordinary error', async () => {
+      mockPrismaService.account.findMany.mockResolvedValue([linkedAccount()]);
+      mockEnableBankingService.getAccountTransactions.mockRejectedValue(
+        new Error('Bank timeout'),
+      );
+      mockEnableBankingService.getSession.mockResolvedValue({
+        status: 'AUTHORIZED',
+      });
+
+      const result = await service.syncTransactions(undefined, 'profile-1');
+
+      expect(result.accountsSynced[0]).toMatchObject({
+        status: 'ERROR',
+        message: 'Bank timeout',
+      });
+      expect(mockPrismaService.bankConnection.update).not.toHaveBeenCalled();
     });
   });
 });

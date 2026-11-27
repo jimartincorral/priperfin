@@ -4054,6 +4054,7 @@ export namespace Prisma {
     bankConnectionId: string | null
     bankAccountUid: string | null
     lastSyncedAt: Date | null
+    bankPendingFrom: Date | null
     createdAt: Date | null
     updatedAt: Date | null
   }
@@ -4067,6 +4068,7 @@ export namespace Prisma {
     bankConnectionId: string | null
     bankAccountUid: string | null
     lastSyncedAt: Date | null
+    bankPendingFrom: Date | null
     createdAt: Date | null
     updatedAt: Date | null
   }
@@ -4080,6 +4082,7 @@ export namespace Prisma {
     bankConnectionId: number
     bankAccountUid: number
     lastSyncedAt: number
+    bankPendingFrom: number
     createdAt: number
     updatedAt: number
     _all: number
@@ -4103,6 +4106,7 @@ export namespace Prisma {
     bankConnectionId?: true
     bankAccountUid?: true
     lastSyncedAt?: true
+    bankPendingFrom?: true
     createdAt?: true
     updatedAt?: true
   }
@@ -4116,6 +4120,7 @@ export namespace Prisma {
     bankConnectionId?: true
     bankAccountUid?: true
     lastSyncedAt?: true
+    bankPendingFrom?: true
     createdAt?: true
     updatedAt?: true
   }
@@ -4129,6 +4134,7 @@ export namespace Prisma {
     bankConnectionId?: true
     bankAccountUid?: true
     lastSyncedAt?: true
+    bankPendingFrom?: true
     createdAt?: true
     updatedAt?: true
     _all?: true
@@ -4229,6 +4235,7 @@ export namespace Prisma {
     bankConnectionId: string | null
     bankAccountUid: string | null
     lastSyncedAt: Date | null
+    bankPendingFrom: Date | null
     createdAt: Date
     updatedAt: Date
     _count: AccountCountAggregateOutputType | null
@@ -4261,6 +4268,7 @@ export namespace Prisma {
     bankConnectionId?: boolean
     bankAccountUid?: boolean
     lastSyncedAt?: boolean
+    bankPendingFrom?: boolean
     createdAt?: boolean
     updatedAt?: boolean
     profile?: boolean | ProfileDefaultArgs<ExtArgs>
@@ -4281,6 +4289,7 @@ export namespace Prisma {
     bankConnectionId?: boolean
     bankAccountUid?: boolean
     lastSyncedAt?: boolean
+    bankPendingFrom?: boolean
     createdAt?: boolean
     updatedAt?: boolean
     profile?: boolean | ProfileDefaultArgs<ExtArgs>
@@ -4296,6 +4305,7 @@ export namespace Prisma {
     bankConnectionId?: boolean
     bankAccountUid?: boolean
     lastSyncedAt?: boolean
+    bankPendingFrom?: boolean
     createdAt?: boolean
     updatedAt?: boolean
     profile?: boolean | ProfileDefaultArgs<ExtArgs>
@@ -4311,11 +4321,12 @@ export namespace Prisma {
     bankConnectionId?: boolean
     bankAccountUid?: boolean
     lastSyncedAt?: boolean
+    bankPendingFrom?: boolean
     createdAt?: boolean
     updatedAt?: boolean
   }
 
-  export type AccountOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "name" | "initialBalance" | "type" | "profileId" | "bankConnectionId" | "bankAccountUid" | "lastSyncedAt" | "createdAt" | "updatedAt", ExtArgs["result"]["account"]>
+  export type AccountOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "name" | "initialBalance" | "type" | "profileId" | "bankConnectionId" | "bankAccountUid" | "lastSyncedAt" | "bankPendingFrom" | "createdAt" | "updatedAt", ExtArgs["result"]["account"]>
   export type AccountInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     profile?: boolean | ProfileDefaultArgs<ExtArgs>
     bankConnection?: boolean | Account$bankConnectionArgs<ExtArgs>
@@ -4353,6 +4364,11 @@ export namespace Prisma {
       bankConnectionId: string | null
       bankAccountUid: string | null
       lastSyncedAt: Date | null
+      /**
+       * Date of the oldest transaction the bank still reported as pending at the
+       * last sync; the next sync reaches back to it so the booked version arrives.
+       */
+      bankPendingFrom: Date | null
       createdAt: Date
       updatedAt: Date
     }, ExtArgs["result"]["account"]>
@@ -4792,6 +4808,7 @@ export namespace Prisma {
     readonly bankConnectionId: FieldRef<"Account", 'String'>
     readonly bankAccountUid: FieldRef<"Account", 'String'>
     readonly lastSyncedAt: FieldRef<"Account", 'DateTime'>
+    readonly bankPendingFrom: FieldRef<"Account", 'DateTime'>
     readonly createdAt: FieldRef<"Account", 'DateTime'>
     readonly updatedAt: FieldRef<"Account", 'DateTime'>
   }
@@ -21769,6 +21786,7 @@ export namespace Prisma {
     bankConnectionId: 'bankConnectionId',
     bankAccountUid: 'bankAccountUid',
     lastSyncedAt: 'lastSyncedAt',
+    bankPendingFrom: 'bankPendingFrom',
     createdAt: 'createdAt',
     updatedAt: 'updatedAt'
   };
@@ -22192,6 +22210,7 @@ export namespace Prisma {
     bankConnectionId?: StringNullableFilter<"Account"> | string | null
     bankAccountUid?: StringNullableFilter<"Account"> | string | null
     lastSyncedAt?: DateTimeNullableFilter<"Account"> | Date | string | null
+    bankPendingFrom?: DateTimeNullableFilter<"Account"> | Date | string | null
     createdAt?: DateTimeFilter<"Account"> | Date | string
     updatedAt?: DateTimeFilter<"Account"> | Date | string
     profile?: XOR<ProfileScalarRelationFilter, ProfileWhereInput>
@@ -22211,6 +22230,7 @@ export namespace Prisma {
     bankConnectionId?: SortOrderInput | SortOrder
     bankAccountUid?: SortOrderInput | SortOrder
     lastSyncedAt?: SortOrderInput | SortOrder
+    bankPendingFrom?: SortOrderInput | SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
     profile?: ProfileOrderByWithRelationInput
@@ -22233,6 +22253,7 @@ export namespace Prisma {
     bankConnectionId?: StringNullableFilter<"Account"> | string | null
     bankAccountUid?: StringNullableFilter<"Account"> | string | null
     lastSyncedAt?: DateTimeNullableFilter<"Account"> | Date | string | null
+    bankPendingFrom?: DateTimeNullableFilter<"Account"> | Date | string | null
     createdAt?: DateTimeFilter<"Account"> | Date | string
     updatedAt?: DateTimeFilter<"Account"> | Date | string
     profile?: XOR<ProfileScalarRelationFilter, ProfileWhereInput>
@@ -22252,6 +22273,7 @@ export namespace Prisma {
     bankConnectionId?: SortOrderInput | SortOrder
     bankAccountUid?: SortOrderInput | SortOrder
     lastSyncedAt?: SortOrderInput | SortOrder
+    bankPendingFrom?: SortOrderInput | SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
     _count?: AccountCountOrderByAggregateInput
@@ -22273,6 +22295,7 @@ export namespace Prisma {
     bankConnectionId?: StringNullableWithAggregatesFilter<"Account"> | string | null
     bankAccountUid?: StringNullableWithAggregatesFilter<"Account"> | string | null
     lastSyncedAt?: DateTimeNullableWithAggregatesFilter<"Account"> | Date | string | null
+    bankPendingFrom?: DateTimeNullableWithAggregatesFilter<"Account"> | Date | string | null
     createdAt?: DateTimeWithAggregatesFilter<"Account"> | Date | string
     updatedAt?: DateTimeWithAggregatesFilter<"Account"> | Date | string
   }
@@ -23521,6 +23544,7 @@ export namespace Prisma {
     type?: $Enums.AccountType
     bankAccountUid?: string | null
     lastSyncedAt?: Date | string | null
+    bankPendingFrom?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     profile: ProfileCreateNestedOneWithoutAccountsInput
@@ -23540,6 +23564,7 @@ export namespace Prisma {
     bankConnectionId?: string | null
     bankAccountUid?: string | null
     lastSyncedAt?: Date | string | null
+    bankPendingFrom?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     transactions?: TransactionUncheckedCreateNestedManyWithoutAccountInput
@@ -23555,6 +23580,7 @@ export namespace Prisma {
     type?: EnumAccountTypeFieldUpdateOperationsInput | $Enums.AccountType
     bankAccountUid?: NullableStringFieldUpdateOperationsInput | string | null
     lastSyncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    bankPendingFrom?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     profile?: ProfileUpdateOneRequiredWithoutAccountsNestedInput
@@ -23574,6 +23600,7 @@ export namespace Prisma {
     bankConnectionId?: NullableStringFieldUpdateOperationsInput | string | null
     bankAccountUid?: NullableStringFieldUpdateOperationsInput | string | null
     lastSyncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    bankPendingFrom?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     transactions?: TransactionUncheckedUpdateManyWithoutAccountNestedInput
@@ -23591,6 +23618,7 @@ export namespace Prisma {
     bankConnectionId?: string | null
     bankAccountUid?: string | null
     lastSyncedAt?: Date | string | null
+    bankPendingFrom?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -23602,6 +23630,7 @@ export namespace Prisma {
     type?: EnumAccountTypeFieldUpdateOperationsInput | $Enums.AccountType
     bankAccountUid?: NullableStringFieldUpdateOperationsInput | string | null
     lastSyncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    bankPendingFrom?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -23615,6 +23644,7 @@ export namespace Prisma {
     bankConnectionId?: NullableStringFieldUpdateOperationsInput | string | null
     bankAccountUid?: NullableStringFieldUpdateOperationsInput | string | null
     lastSyncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    bankPendingFrom?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -25132,6 +25162,7 @@ export namespace Prisma {
     bankConnectionId?: SortOrder
     bankAccountUid?: SortOrder
     lastSyncedAt?: SortOrder
+    bankPendingFrom?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
   }
@@ -25149,6 +25180,7 @@ export namespace Prisma {
     bankConnectionId?: SortOrder
     bankAccountUid?: SortOrder
     lastSyncedAt?: SortOrder
+    bankPendingFrom?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
   }
@@ -25162,6 +25194,7 @@ export namespace Prisma {
     bankConnectionId?: SortOrder
     bankAccountUid?: SortOrder
     lastSyncedAt?: SortOrder
+    bankPendingFrom?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
   }
@@ -29115,6 +29148,7 @@ export namespace Prisma {
     type?: $Enums.AccountType
     bankAccountUid?: string | null
     lastSyncedAt?: Date | string | null
+    bankPendingFrom?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     profile: ProfileCreateNestedOneWithoutAccountsInput
@@ -29133,6 +29167,7 @@ export namespace Prisma {
     bankConnectionId?: string | null
     bankAccountUid?: string | null
     lastSyncedAt?: Date | string | null
+    bankPendingFrom?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     transferTransactions?: TransactionUncheckedCreateNestedManyWithoutTransferAccountInput
@@ -29257,6 +29292,7 @@ export namespace Prisma {
     type?: $Enums.AccountType
     bankAccountUid?: string | null
     lastSyncedAt?: Date | string | null
+    bankPendingFrom?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     profile: ProfileCreateNestedOneWithoutAccountsInput
@@ -29275,6 +29311,7 @@ export namespace Prisma {
     bankConnectionId?: string | null
     bankAccountUid?: string | null
     lastSyncedAt?: Date | string | null
+    bankPendingFrom?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     transactions?: TransactionUncheckedCreateNestedManyWithoutAccountInput
@@ -29381,6 +29418,7 @@ export namespace Prisma {
     type?: EnumAccountTypeFieldUpdateOperationsInput | $Enums.AccountType
     bankAccountUid?: NullableStringFieldUpdateOperationsInput | string | null
     lastSyncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    bankPendingFrom?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     profile?: ProfileUpdateOneRequiredWithoutAccountsNestedInput
@@ -29399,6 +29437,7 @@ export namespace Prisma {
     bankConnectionId?: NullableStringFieldUpdateOperationsInput | string | null
     bankAccountUid?: NullableStringFieldUpdateOperationsInput | string | null
     lastSyncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    bankPendingFrom?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     transferTransactions?: TransactionUncheckedUpdateManyWithoutTransferAccountNestedInput
@@ -29547,6 +29586,7 @@ export namespace Prisma {
     type?: EnumAccountTypeFieldUpdateOperationsInput | $Enums.AccountType
     bankAccountUid?: NullableStringFieldUpdateOperationsInput | string | null
     lastSyncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    bankPendingFrom?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     profile?: ProfileUpdateOneRequiredWithoutAccountsNestedInput
@@ -29565,6 +29605,7 @@ export namespace Prisma {
     bankConnectionId?: NullableStringFieldUpdateOperationsInput | string | null
     bankAccountUid?: NullableStringFieldUpdateOperationsInput | string | null
     lastSyncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    bankPendingFrom?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     transactions?: TransactionUncheckedUpdateManyWithoutAccountNestedInput
@@ -30512,6 +30553,7 @@ export namespace Prisma {
     type?: $Enums.AccountType
     bankAccountUid?: string | null
     lastSyncedAt?: Date | string | null
+    bankPendingFrom?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     bankConnection?: BankConnectionCreateNestedOneWithoutAccountsInput
@@ -30529,6 +30571,7 @@ export namespace Prisma {
     bankConnectionId?: string | null
     bankAccountUid?: string | null
     lastSyncedAt?: Date | string | null
+    bankPendingFrom?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     transactions?: TransactionUncheckedCreateNestedManyWithoutAccountInput
@@ -30908,6 +30951,7 @@ export namespace Prisma {
     bankConnectionId?: StringNullableFilter<"Account"> | string | null
     bankAccountUid?: StringNullableFilter<"Account"> | string | null
     lastSyncedAt?: DateTimeNullableFilter<"Account"> | Date | string | null
+    bankPendingFrom?: DateTimeNullableFilter<"Account"> | Date | string | null
     createdAt?: DateTimeFilter<"Account"> | Date | string
     updatedAt?: DateTimeFilter<"Account"> | Date | string
   }
@@ -31319,6 +31363,7 @@ export namespace Prisma {
     type?: $Enums.AccountType
     bankAccountUid?: string | null
     lastSyncedAt?: Date | string | null
+    bankPendingFrom?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     profile: ProfileCreateNestedOneWithoutAccountsInput
@@ -31336,6 +31381,7 @@ export namespace Prisma {
     profileId: string
     bankAccountUid?: string | null
     lastSyncedAt?: Date | string | null
+    bankPendingFrom?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     transactions?: TransactionUncheckedCreateNestedManyWithoutAccountInput
@@ -31511,6 +31557,7 @@ export namespace Prisma {
     type?: $Enums.AccountType
     bankAccountUid?: string | null
     lastSyncedAt?: Date | string | null
+    bankPendingFrom?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     profile: ProfileCreateNestedOneWithoutAccountsInput
@@ -31529,6 +31576,7 @@ export namespace Prisma {
     bankConnectionId?: string | null
     bankAccountUid?: string | null
     lastSyncedAt?: Date | string | null
+    bankPendingFrom?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     transactions?: TransactionUncheckedCreateNestedManyWithoutAccountInput
@@ -31559,6 +31607,7 @@ export namespace Prisma {
     type?: EnumAccountTypeFieldUpdateOperationsInput | $Enums.AccountType
     bankAccountUid?: NullableStringFieldUpdateOperationsInput | string | null
     lastSyncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    bankPendingFrom?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     profile?: ProfileUpdateOneRequiredWithoutAccountsNestedInput
@@ -31577,6 +31626,7 @@ export namespace Prisma {
     bankConnectionId?: NullableStringFieldUpdateOperationsInput | string | null
     bankAccountUid?: NullableStringFieldUpdateOperationsInput | string | null
     lastSyncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    bankPendingFrom?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     transactions?: TransactionUncheckedUpdateManyWithoutAccountNestedInput
@@ -31591,6 +31641,7 @@ export namespace Prisma {
     type?: $Enums.AccountType
     bankAccountUid?: string | null
     lastSyncedAt?: Date | string | null
+    bankPendingFrom?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     profile: ProfileCreateNestedOneWithoutAccountsInput
@@ -31609,6 +31660,7 @@ export namespace Prisma {
     bankConnectionId?: string | null
     bankAccountUid?: string | null
     lastSyncedAt?: Date | string | null
+    bankPendingFrom?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     transactions?: TransactionUncheckedCreateNestedManyWithoutAccountInput
@@ -31639,6 +31691,7 @@ export namespace Prisma {
     type?: EnumAccountTypeFieldUpdateOperationsInput | $Enums.AccountType
     bankAccountUid?: NullableStringFieldUpdateOperationsInput | string | null
     lastSyncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    bankPendingFrom?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     profile?: ProfileUpdateOneRequiredWithoutAccountsNestedInput
@@ -31657,6 +31710,7 @@ export namespace Prisma {
     bankConnectionId?: NullableStringFieldUpdateOperationsInput | string | null
     bankAccountUid?: NullableStringFieldUpdateOperationsInput | string | null
     lastSyncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    bankPendingFrom?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     transactions?: TransactionUncheckedUpdateManyWithoutAccountNestedInput
@@ -32530,6 +32584,7 @@ export namespace Prisma {
     bankConnectionId?: string | null
     bankAccountUid?: string | null
     lastSyncedAt?: Date | string | null
+    bankPendingFrom?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -32722,6 +32777,7 @@ export namespace Prisma {
     type?: EnumAccountTypeFieldUpdateOperationsInput | $Enums.AccountType
     bankAccountUid?: NullableStringFieldUpdateOperationsInput | string | null
     lastSyncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    bankPendingFrom?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     bankConnection?: BankConnectionUpdateOneWithoutAccountsNestedInput
@@ -32739,6 +32795,7 @@ export namespace Prisma {
     bankConnectionId?: NullableStringFieldUpdateOperationsInput | string | null
     bankAccountUid?: NullableStringFieldUpdateOperationsInput | string | null
     lastSyncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    bankPendingFrom?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     transactions?: TransactionUncheckedUpdateManyWithoutAccountNestedInput
@@ -32755,6 +32812,7 @@ export namespace Prisma {
     bankConnectionId?: NullableStringFieldUpdateOperationsInput | string | null
     bankAccountUid?: NullableStringFieldUpdateOperationsInput | string | null
     lastSyncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    bankPendingFrom?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -33086,6 +33144,7 @@ export namespace Prisma {
     profileId: string
     bankAccountUid?: string | null
     lastSyncedAt?: Date | string | null
+    bankPendingFrom?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -33097,6 +33156,7 @@ export namespace Prisma {
     type?: EnumAccountTypeFieldUpdateOperationsInput | $Enums.AccountType
     bankAccountUid?: NullableStringFieldUpdateOperationsInput | string | null
     lastSyncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    bankPendingFrom?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     profile?: ProfileUpdateOneRequiredWithoutAccountsNestedInput
@@ -33114,6 +33174,7 @@ export namespace Prisma {
     profileId?: StringFieldUpdateOperationsInput | string
     bankAccountUid?: NullableStringFieldUpdateOperationsInput | string | null
     lastSyncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    bankPendingFrom?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     transactions?: TransactionUncheckedUpdateManyWithoutAccountNestedInput
@@ -33130,6 +33191,7 @@ export namespace Prisma {
     profileId?: StringFieldUpdateOperationsInput | string
     bankAccountUid?: NullableStringFieldUpdateOperationsInput | string | null
     lastSyncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    bankPendingFrom?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }

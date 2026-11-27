@@ -1023,7 +1023,7 @@ export const en = {
         expires_in: 'Expires in {days} days',
         reauthorize: 'Re-authenticate',
         disconnect: 'Disconnect',
-        disconnect_confirm: 'Are you sure you want to disconnect {bank}? Linked accounts will remain but will stop syncing.',
+        disconnect_confirm: 'Are you sure you want to disconnect {bank}? This also withdraws PriPerFin\'s access at your bank. Linked accounts and their transactions stay, but stop syncing.',
         
         link_account_title: 'Link to PriPerFin Account',
         discovered_accounts: 'Discovered Bank Accounts',
@@ -1042,5 +1042,6 @@ export const en = {
         sync_success: 'Sync completed: {newCount} new transaction(s) imported, {duplicateCount} duplicates skipped.',
         sync_failed: 'Bank synchronization failed.',
         sync_expired_warning: 'Your bank authorization has expired. Please re-authenticate in Settings.',
+        sync_revoked_warning: 'Access to this bank was withdrawn. Connect it again in Settings.',
     },
 };

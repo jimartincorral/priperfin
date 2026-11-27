@@ -325,19 +325,31 @@ code automatically when that address is its own Settings page. So:
   before the newest one instead, so the two overlap rather than leave a gap.
 - **Later syncs** fetch from five days before the previous sync, and anything
   already stored is skipped, so re-syncing never duplicates a transaction.
-- Imported rows get the bank's description, with any further detail in the
+- **Only final (booked) transactions are imported.** A card payment the bank
+  still shows as pending can change amount (tips, exchange rates) or be
+  cancelled, so it waits until it is booked. The next sync looks back far
+  enough to collect it, for up to 30 days. Cancelled and rejected transactions
+  are never imported.
+- Imported rows are described by the other party: the shop or person paid on
+  money going out, the payer on money coming in. Any further detail goes in the
   notes, and your categorisation rules run on them like on any other import.
 
 ### Consent expiry
 
-Bank access under PSD2 is granted for **90 days**. The connection card shows
-*Active*, then *Expiring Soon* during the last 14 days, then *Expired*; an
-expired connection stops syncing and the Expenses screen warns you. Click
+Bank access under PSD2 is granted for a limited time. PriPerFin asks for the
+longest your bank allows: **180 days** at many banks, **90 days** at others,
+and 90 days when the bank doesn't say. The connection card shows when it ends.
+It shows *Active*, then *Expiring Soon* during the last 14 days, then
+*Expired*. An expired connection stops syncing and the Expenses screen warns
+you. If you withdraw access from your bank's own app or website, the next sync
+notices and asks you to connect again. Click
 **Re-authenticate** to go through the bank approval again. The accounts you
 linked are moved to the renewed connection automatically, matched by bank
-account, and their history is kept.
-**Disconnect** removes the bank connection; the PriPerFin accounts and the
-transactions already imported stay.
+account, and their history is kept. Connecting a second login at the same
+bank (a joint or business account) adds a separate connection and leaves the
+first one alone.
+**Disconnect** withdraws PriPerFin's access at the bank and removes the
+connection. The PriPerFin accounts and the transactions already imported stay.
 
 ### Where the credentials live, and what is not backed up
 
@@ -353,9 +365,12 @@ transactions already imported stay.
   credentials and connect the banks again. The transactions themselves are in
   the backup.
 - A profile with a connected bank can only ever read its own accounts.
-  Enable Banking's own terms limit how often an unattended sync may run; the
-  daily schedule stays well inside that limit, and manual syncs count too, so
-  avoid clicking **Sync Now** repeatedly.
+- Banks limit how often PriPerFin may read an account while you're away
+  (typically four times a day). The daily sync is one of those reads.
+  **Sync Now** and **Sync Bank** send the bank your browser's address and
+  name so the bank knows you started them. That way they don't count as reads
+  while you're away. Some banks still count them, or reject the details and
+  get a plain request instead, so there's no point clicking repeatedly.
 
 ## Configuration
 

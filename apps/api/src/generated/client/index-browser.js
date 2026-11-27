@@ -139,6 +139,7 @@ exports.Prisma.AccountScalarFieldEnum = {
   bankConnectionId: 'bankConnectionId',
   bankAccountUid: 'bankAccountUid',
   lastSyncedAt: 'lastSyncedAt',
+  bankPendingFrom: 'bankPendingFrom',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 };

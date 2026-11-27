@@ -1023,7 +1023,7 @@ export const es = {
         expires_in: 'Expira en {days} días',
         reauthorize: 'Re-autenticar',
         disconnect: 'Desconectar',
-        disconnect_confirm: '¿Estás seguro de que deseas desconectar {bank}? Las cuentas vinculadas se conservarán pero dejarán de sincronizarse.',
+        disconnect_confirm: '¿Estás seguro de que deseas desconectar {bank}? También se retira el acceso de PriPerFin en tu banco. Las cuentas vinculadas y sus movimientos se conservan, pero dejan de sincronizarse.',
         
         link_account_title: 'Vincular a Cuenta de PriPerFin',
         discovered_accounts: 'Cuentas Bancarias Detectadas',
@@ -1042,5 +1042,6 @@ export const es = {
         sync_success: 'Sincronización completada: {newCount} transacciones nuevas importadas, {duplicateCount} duplicados omitidos.',
         sync_failed: 'Error al sincronizar con el banco.',
         sync_expired_warning: 'La autorización de tu banco ha expirado. Por favor re-autentica en Ajustes.',
+        sync_revoked_warning: 'Se retiró el acceso a este banco. Vuelve a conectarlo en Configuración.',
     },
 };

@@ -6,15 +6,36 @@ import {
   Body,
   Param,
   Query,
+  Req,
   UseGuards,
   UsePipes,
   ValidationPipe,
 } from '@nestjs/common';
+import type { Request } from 'express';
 import { BankSyncService } from './bank-sync.service';
 import { SessionAuthGuard } from '../auth/guards/session-auth.guard';
 import { CurrentProfile } from '../auth/decorators/current-profile.decorator';
 import { Profile } from '../generated/client';
-import { BankSyncSettingsDto } from './interfaces/enable-banking.interface';
+import {
+  BankSyncSettingsDto,
+  PsuContext,
+} from './interfaces/enable-banking.interface';
+
+/**
+ * The person behind a request, for the bank's `Psu-*` headers. Behind Home
+ * Assistant Ingress or a reverse proxy the browser's address is the first
+ * X-Forwarded-For entry; otherwise it is the socket's peer.
+ */
+export function psuFromRequest(req: Request): PsuContext {
+  const forwarded = req.headers['x-forwarded-for'];
+  const first = (Array.isArray(forwarded) ? forwarded[0] : forwarded)
+    ?.split(',')[0]
+    ?.trim();
+  return {
+    ipAddress: first || req.socket?.remoteAddress || undefined,
+    userAgent: req.headers['user-agent'] || undefined,
+  };
+}
 
 @Controller('bank-sync')
 @UseGuards(SessionAuthGuard)
@@ -52,8 +73,13 @@ export class BankSyncController {
   handleCallback(
     @Body() body: { code: string },
     @CurrentProfile() profile: Profile,
+    @Req() req: Request,
   ) {
-    return this.bankSyncService.handleCallback(body.code, profile.id);
+    return this.bankSyncService.handleCallback(
+      body.code,
+      profile.id,
+      psuFromRequest(req),
+    );
   }
 
   @Get('connections')
@@ -99,7 +125,12 @@ export class BankSyncController {
   syncTransactions(
     @Body() body: { accountId?: string },
     @CurrentProfile() profile: Profile,
+    @Req() req: Request,
   ) {
-    return this.bankSyncService.syncTransactions(body?.accountId, profile.id);
+    return this.bankSyncService.syncTransactions(
+      body?.accountId,
+      profile.id,
+      psuFromRequest(req),
+    );
   }
 }

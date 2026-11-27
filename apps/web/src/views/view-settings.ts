@@ -1610,9 +1610,9 @@ export class ViewSettings extends LitElement {
             const errorAcc = result?.accountsSynced?.find((a: any) => a.status === 'ERROR');
 
             if (expiredAcc) {
-                this.notify(`⚠️ ${expiredAcc.accountName}: ${expiredAcc.message || 'La sesión del banco ha expirado. Por favor, haz clic en "Re-autenticar" en Configuración.'}`);
+                this.notify(`⚠️ ${expiredAcc.accountName}: ${i18n.t(expiredAcc.reason === 'REVOKED' ? 'bank_sync.sync_revoked_warning' : 'bank_sync.sync_expired_warning')}`);
             } else if (errorAcc && (result?.newCount ?? 0) === 0 && (result?.duplicateCount ?? 0) === 0) {
-                this.notify(`⚠️ ${errorAcc.accountName}: ${errorAcc.message || 'Error al sincronizar con el banco.'}`);
+                this.notify(`⚠️ ${errorAcc.accountName}: ${errorAcc.message || i18n.t('bank_sync.sync_failed')}`);
             } else {
                 const msg = i18n.t('bank_sync.sync_success')
                     .replace('{newCount}', String(result?.newCount || '0'))

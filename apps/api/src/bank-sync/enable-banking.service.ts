@@ -12,7 +12,35 @@ import {
   SessionResponse,
   BankAccountDetails,
   TransactionsResponse,
+  PsuContext,
+  SessionStatusResponse,
 } from './interfaces/enable-banking.interface';
+
+/**
+ * An error answer from Enable Banking. Still a 400 to our own client, but it
+ * keeps the upstream HTTP status and error name so callers can tell an expired
+ * or revoked session apart from any other failure.
+ */
+export class EnableBankingApiError extends BadRequestException {
+  constructor(
+    message: string,
+    readonly upstreamStatus: number,
+    readonly errorName?: string,
+  ) {
+    super(message);
+  }
+}
+
+/** Builds the `Psu-*` headers for a request a person started. */
+export function psuHeaders(psu?: PsuContext): Record<string, string> {
+  const headers: Record<string, string> = {};
+  if (!psu) return headers;
+  const ip = psu.ipAddress?.trim().replace(/^::ffff:/, '');
+  if (ip) headers['Psu-Ip-Address'] = ip;
+  const ua = psu.userAgent?.trim();
+  if (ua) headers['Psu-User-Agent'] = ua.slice(0, 512);
+  return headers;
+}
 
 @Injectable()
 export class EnableBankingService {
@@ -68,6 +96,43 @@ export class EnableBankingService {
     appId: string,
     privateKeyPem: string,
     body?: any,
+    psu?: PsuContext,
+  ): Promise<T> {
+    const extra = psuHeaders(psu);
+    try {
+      return await this.send<T>(
+        endpoint,
+        method,
+        appId,
+        privateKeyPem,
+        body,
+        extra,
+      );
+    } catch (error) {
+      // A bank that rejects the PSU headers themselves (some validate the IP
+      // format) should not cost the user a sync: retry once as a background
+      // request, which is what every request was before the headers existed.
+      if (
+        Object.keys(extra).length > 0 &&
+        error instanceof EnableBankingApiError &&
+        /psu/i.test(`${error.errorName ?? ''} ${error.message}`)
+      ) {
+        this.logger.warn(
+          `Bank rejected the PSU headers on ${method} ${endpoint}; retrying without them`,
+        );
+        return this.send<T>(endpoint, method, appId, privateKeyPem, body, {});
+      }
+      throw error;
+    }
+  }
+
+  private async send<T>(
+    endpoint: string,
+    method: 'GET' | 'POST' | 'DELETE',
+    appId: string,
+    privateKeyPem: string,
+    body: any,
+    extraHeaders: Record<string, string>,
   ): Promise<T> {
     const token = this.generateJwt(appId, privateKeyPem);
     const url = `${this.baseUrl}${endpoint}`;
@@ -76,42 +141,51 @@ export class EnableBankingService {
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
       Accept: 'application/json',
+      ...extraHeaders,
     };
 
+    let response: Response;
     try {
-      const response = await fetch(url, {
+      response = await fetch(url, {
         method,
         headers,
         body: body ? JSON.stringify(body) : undefined,
       });
-
-      if (!response.ok) {
-        let errorBody: any;
-        try {
-          errorBody = await response.json();
-        } catch {
-          errorBody = await response.text();
-        }
-        this.logger.error(
-          `Enable Banking API error [${response.status}] ${method} ${endpoint}:`,
-          errorBody,
-        );
-        throw new BadRequestException(
-          errorBody?.message ||
-            `Enable Banking API returned HTTP ${response.status}`,
-        );
-      }
-
-      return (await response.json()) as T;
     } catch (error) {
-      if (error instanceof BadRequestException) {
-        throw error;
-      }
       this.logger.error(`Failed request to ${method} ${endpoint}:`, error);
       throw new InternalServerErrorException(
         `Failed to communicate with Enable Banking API: ${error.message}`,
       );
     }
+
+    const text = await response.text();
+    let parsed: any = undefined;
+    try {
+      parsed = text ? JSON.parse(text) : undefined;
+    } catch {
+      parsed = text;
+    }
+
+    if (!response.ok) {
+      this.logger.error(
+        `Enable Banking API error [${response.status}] ${method} ${endpoint}:`,
+        parsed,
+      );
+      const message =
+        (typeof parsed === 'object' && parsed?.message) ||
+        `Enable Banking API returned HTTP ${response.status}`;
+      const errorName =
+        typeof parsed === 'object' && typeof parsed?.error === 'string'
+          ? parsed.error
+          : undefined;
+      throw new EnableBankingApiError(
+        String(message),
+        response.status,
+        errorName,
+      );
+    }
+
+    return parsed as T;
   }
 
   /**
@@ -132,7 +206,7 @@ export class EnableBankingService {
   }
 
   /**
-   * Initiates bank authorization flow with Abanca / specified ASPSP
+   * Initiates the bank authorization flow for the given ASPSP
    */
   async startAuth(
     request: AuthRequest,
@@ -172,12 +246,15 @@ export class EnableBankingService {
     accountUid: string,
     appId: string,
     privateKeyPem: string,
+    psu?: PsuContext,
   ): Promise<BankAccountDetails> {
     return this.request<BankAccountDetails>(
       `/accounts/${encodeURIComponent(accountUid)}/details`,
       'GET',
       appId,
       privateKeyPem,
+      undefined,
+      psu,
     );
   }
 
@@ -188,12 +265,15 @@ export class EnableBankingService {
     accountUid: string,
     appId: string,
     privateKeyPem: string,
+    psu?: PsuContext,
   ): Promise<any> {
     return this.request<any>(
       `/accounts/${encodeURIComponent(accountUid)}/balances`,
       'GET',
       appId,
       privateKeyPem,
+      undefined,
+      psu,
     );
   }
 
@@ -207,6 +287,7 @@ export class EnableBankingService {
     dateFrom?: string,
     dateTo?: string,
     continuationKey?: string,
+    psu?: PsuContext,
   ): Promise<TransactionsResponse> {
     const params = new URLSearchParams();
     if (dateFrom) params.set('date_from', dateFrom);
@@ -217,6 +298,39 @@ export class EnableBankingService {
     return this.request<TransactionsResponse>(
       `/accounts/${encodeURIComponent(accountUid)}/transactions${qs}`,
       'GET',
+      appId,
+      privateKeyPem,
+      undefined,
+      psu,
+    );
+  }
+
+  /**
+   * Session state at Enable Banking (AUTHORIZED, EXPIRED, REVOKED, ...).
+   * Reads Enable Banking's own record, not the bank, so it costs no bank access.
+   */
+  async getSession(
+    sessionId: string,
+    appId: string,
+    privateKeyPem: string,
+  ): Promise<SessionStatusResponse> {
+    return this.request<SessionStatusResponse>(
+      `/sessions/${encodeURIComponent(sessionId)}`,
+      'GET',
+      appId,
+      privateKeyPem,
+    );
+  }
+
+  /** Ends the session, which withdraws the consent given at the bank. */
+  async deleteSession(
+    sessionId: string,
+    appId: string,
+    privateKeyPem: string,
+  ): Promise<void> {
+    await this.request<unknown>(
+      `/sessions/${encodeURIComponent(sessionId)}`,
+      'DELETE',
       appId,
       privateKeyPem,
     );

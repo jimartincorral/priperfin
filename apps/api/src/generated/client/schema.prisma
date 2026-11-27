@@ -47,6 +47,9 @@ model Account {
   bankConnection       BankConnection?  @relation(fields: [bankConnectionId], references: [id], onDelete: SetNull)
   bankAccountUid       String?
   lastSyncedAt         DateTime?
+  /// Date of the oldest transaction the bank still reported as pending at the
+  /// last sync; the next sync reaches back to it so the booked version arrives.
+  bankPendingFrom      DateTime?
   transactions         Transaction[]
   transferTransactions Transaction[]    @relation("AccountTransferTarget")
   monthlyBalances      MonthlyBalance[]

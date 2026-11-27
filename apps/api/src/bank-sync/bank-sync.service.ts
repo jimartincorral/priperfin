@@ -6,16 +6,58 @@ import {
 } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service';
-import { EnableBankingService } from './enable-banking.service';
+import {
+  EnableBankingService,
+  EnableBankingApiError,
+} from './enable-banking.service';
 import { TransactionsService } from '../transactions/transactions.service';
 import {
   BankSyncSettingsDto,
   BankSyncSettingsResponse,
   BankAccountDetails,
+  BankTransaction,
+  PsuContext,
   TransactionsResponse,
 } from './interfaces/enable-banking.interface';
 import { CreateTransactionDto } from '../transactions/create-transaction.dto';
+import {
+  bankTransactionDate,
+  bankTransactionState,
+  mapBankTransaction,
+  pickBankBalance,
+} from './bank-transaction-mapper';
 import * as crypto from 'crypto';
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+/** PSD2's baseline consent, used when a bank does not say how long it allows. */
+const DEFAULT_CONSENT_SECONDS = 90 * 24 * 60 * 60;
+/** Requested a little short of the bank's maximum so clock skew can't exceed it. */
+const CONSENT_MARGIN_SECONDS = 10 * 60;
+/** How far back a sync keeps looking for a pending transaction to be booked. */
+const PENDING_LOOKBACK_MAX_DAYS = 30;
+
+function safeParseArray(json: string): any[] {
+  try {
+    const parsed = JSON.parse(json);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function ibansOf(accounts: any[]): Set<string> {
+  const ibans = new Set<string>();
+  for (const a of accounts) {
+    const iban = a?.account_id?.iban || a?.iban;
+    if (typeof iban === 'string' && iban) {
+      ibans.add(iban.replace(/\s+/g, '').toUpperCase());
+    }
+  }
+  return ibans;
+}
+
+/** Why a bank connection stopped working. */
+export type ConnectionProblem = 'EXPIRED' | 'REVOKED';
 
 @Injectable()
 export class BankSyncService {
@@ -235,9 +277,14 @@ export class BankSyncService {
     }
 
     const state = crypto.randomUUID();
-    // 90 days validity for PSD2 consent
+    const consentSeconds = await this.consentSecondsFor(
+      aspspName,
+      country,
+      appId,
+      key,
+    );
     const validUntil = new Date(
-      Date.now() + 90 * 24 * 60 * 60 * 1000,
+      Date.now() + (consentSeconds - CONSENT_MARGIN_SECONDS) * 1000,
     ).toISOString();
 
     const authResponse = await this.enableBankingService.startAuth(
@@ -262,10 +309,60 @@ export class BankSyncService {
     return {
       url: authResponse.url,
       state,
+      validUntil,
     };
   }
 
-  async handleCallback(code: string, profileId: string) {
+  /**
+   * The longest consent this bank grants (many allow 180 days since the 2023
+   * PSD2 change). Falls back to 90 days when the bank list can't be read or
+   * doesn't say, which is what every connection used before.
+   */
+  private async consentSecondsFor(
+    aspspName: string,
+    country: string,
+    appId: string,
+    key: string,
+  ): Promise<number> {
+    try {
+      const { aspsps } = await this.enableBankingService.getBanks(
+        country,
+        appId,
+        key,
+      );
+      const bank = (aspsps || []).find(
+        (a) =>
+          a.name === aspspName &&
+          (a.country || '').toUpperCase() === country.toUpperCase(),
+      );
+      const max = Number(bank?.maximum_consent_validity);
+      if (Number.isFinite(max) && max > CONSENT_MARGIN_SECONDS * 2) {
+        return max;
+      }
+    } catch (err) {
+      this.logger.warn(
+        `Could not read the consent limit for ${aspspName}; asking for 90 days`,
+        err,
+      );
+    }
+    return DEFAULT_CONSENT_SECONDS;
+  }
+
+  /** Withdraws a session at Enable Banking. Best effort: never throws. */
+  private async revokeSession(sessionId: string): Promise<void> {
+    try {
+      const { appId, key } = await this.getCredentials();
+      await this.enableBankingService.deleteSession(sessionId, appId, key);
+      this.logger.log(`Revoked Enable Banking session ${sessionId}`);
+    } catch (err) {
+      // Already expired or revoked at the bank, or credentials removed: the
+      // local record goes either way.
+      this.logger.warn(`Could not revoke Enable Banking session ${sessionId}`);
+      this.logger.debug(err);
+    }
+  }
+
+  async handleCallback(code: string, profileId: string, psu?: PsuContext) {
     const { appId, key } = await this.getCredentials();
     this.logger.log(
       `Exchanging authorization code for session on profile ${profileId}`,
@@ -302,6 +399,7 @@ export class BankSyncService {
             accountUid,
             appId,
             key,
+            psu,
           );
           accountsDetails.push({
             ...(typeof rawAcc === 'object' ? rawAcc : {}),
@@ -357,7 +455,19 @@ export class BankSyncService {
         include: { accounts: true },
       });
 
+      const newIbans = ibansOf(accountsDetails);
       for (const oldConn of oldConnections) {
+        // A second login at the same bank (a joint account, a business
+        // account) is a separate connection, not a renewal: leave it alone.
+        // Renewal is recognised by a shared IBAN, or assumed when the old one
+        // has expired or either side lists no IBANs to compare.
+        const oldIbans = ibansOf(safeParseArray(oldConn.accountsJson));
+        const expired = new Date(oldConn.validUntil) < new Date();
+        const overlaps = [...oldIbans].some((iban) => newIbans.has(iban));
+        if (!expired && !overlaps && oldIbans.size > 0 && newIbans.size > 0) {
+          continue;
+        }
+
         for (const linkedAcc of oldConn.accounts) {
           let newMatchedUid: string | null = null;
           let oldIban: string | null = null;
@@ -404,7 +514,11 @@ export class BankSyncService {
           }
         }
 
-        // Remove old superseded connection
+        // Remove the superseded connection, and end its session at the bank
+        // so the old consent doesn't linger next to the new one.
+        if (oldConn.sessionId !== session.session_id) {
+          await this.revokeSession(oldConn.sessionId);
+        }
         await this.prisma.bankConnection
           .delete({ where: { id: oldConn.id } })
           .catch(() => {});
@@ -480,6 +594,9 @@ export class BankSyncService {
     if (!connection) {
       throw new NotFoundException('Bank connection not found or access denied');
     }
+
+    // End the consent at the bank, not just our record of it.
+    await this.revokeSession(connection.sessionId);
 
     // Unlink associated accounts
     await this.prisma.account.updateMany({
@@ -563,7 +680,16 @@ export class BankSyncService {
     return updated;
   }
 
-  async syncTransactions(accountId?: string, profileId?: string) {
+  /**
+   * @param psu who started the sync, when a person did. Passed on to the bank
+   *   so a manual sync counts as user-present access. The daily background
+   *   sync passes nothing.
+   */
+  async syncTransactions(
+    accountId?: string,
+    profileId?: string,
+    psu?: PsuContext,
+  ) {
     if (!profileId) {
       throw new BadRequestException('Profile ID required');
     }
@@ -600,6 +726,8 @@ export class BankSyncService {
     let totalNew = 0;
     let totalDuplicates = 0;
     const accountResults = [];
+    // One session lookup per connection per run, however many accounts fail.
+    const problemByConnection = new Map<string, ConnectionProblem | null>();
 
     for (const account of linkedAccounts) {
       if (!account.bankAccountUid || !account.bankConnection) {
@@ -629,6 +757,19 @@ export class BankSyncService {
         if (account.lastSyncedAt) {
           const syncStart = new Date(account.lastSyncedAt);
           syncStart.setDate(syncStart.getDate() - 5); // 5 days safety overlap
+          // Reach back to the oldest transaction that was still pending last
+          // time, so it is picked up once booked even if the bank files it
+          // under its original date. Capped, so a hold that never books
+          // doesn't widen every sync forever.
+          if (account.bankPendingFrom) {
+            const pendingStart = new Date(account.bankPendingFrom);
+            pendingStart.setDate(pendingStart.getDate() - 2);
+            const cap = new Date(
+              Date.now() - PENDING_LOOKBACK_MAX_DAYS * DAY_MS,
+            );
+            const start = pendingStart < cap ? cap : pendingStart;
+            if (start < syncStart) syncStart.setTime(start.getTime());
+          }
           dateFrom = syncStart.toISOString().split('T')[0];
         } else {
           const syncSettings = await this.getSettings();
@@ -690,7 +831,7 @@ export class BankSyncService {
           continue;
         }
 
-        const rawTransactions: any[] = [];
+        const rawTransactions: BankTransaction[] = [];
         let continuationKey: string | undefined = undefined;
         let pageCount = 0;
         const maxPages = 25; // safety ceiling (supports thousands of transactions)
@@ -705,6 +846,7 @@ export class BankSyncService {
               dateFrom,
               dateTo,
               continuationKey,
+              psu,
             );
 
           if (response?.transactions && Array.isArray(response.transactions)) {
@@ -718,62 +860,28 @@ export class BankSyncService {
           `Received ${rawTransactions.length} raw transactions across ${pageCount} page(s) for ${account.name}`,
         );
 
-        // Map to CreateTransactionDto
-        const dtos: CreateTransactionDto[] = rawTransactions
-          .map((tx: any) => {
-            const rawAmount = parseFloat(tx.transaction_amount?.amount || '0');
-            if (isNaN(rawAmount) || rawAmount === 0) return null;
-
-            // In Open Banking: credit (CRDT) is inflow (income/refund), debit (DBIT) is outflow (expense)
-            const isDebit =
-              tx.credit_debit_indicator === 'DBIT' ||
-              (tx.credit_debit_indicator === undefined && rawAmount < 0);
-
-            const finalAmount = isDebit
-              ? -Math.abs(rawAmount)
-              : Math.abs(rawAmount);
-
-            const txDate =
-              tx.value_date ||
-              tx.booking_date ||
-              new Date().toISOString().split('T')[0];
-
-            const descriptionParts = [
-              tx.creditor?.name,
-              tx.debtor?.name,
-              tx.remittance_information?.join(' '),
-              tx.additional_information,
-              tx.creditor_name,
-              tx.debtor_name,
-            ].filter(Boolean);
-
-            const description =
-              descriptionParts.length > 0
-                ? String(descriptionParts[0]!).trim()
-                : 'Bank Transaction';
-
-            const externalId =
-              tx.entry_reference ||
-              tx.transaction_id ||
-              this.generateTransactionHash(
-                account.id,
-                txDate,
-                finalAmount,
-                description,
-              );
-
-            const notes = descriptionParts.slice(1).join(' - ') || null;
-
-            return {
-              date: new Date(txDate).toISOString(),
-              amount: finalAmount,
-              description,
-              accountId: account.id,
-              notes,
-              externalId,
-            } as CreateTransactionDto;
-          })
-          .filter((d): d is CreateTransactionDto => d !== null);
+        // Only booked transactions are imported. Pending ones are left for
+        // a later sync (see bankPendingFrom); cancelled or rejected ones never.
+        let oldestPending: string | null = null;
+        let pendingCount = 0;
+        const dtos: CreateTransactionDto[] = [];
+        for (const tx of rawTransactions) {
+          const state = bankTransactionState(tx);
+          if (state === 'pending') {
+            pendingCount++;
+            const d = tx.transaction_date || bankTransactionDate(tx);
+            if (!oldestPending || d < oldestPending) oldestPending = d;
+            continue;
+          }
+          if (state === 'void') continue;
+          const dto = mapBankTransaction(tx, account.id);
+          if (dto) dtos.push(dto);
+        }
+        if (pendingCount > 0) {
+          this.logger.log(
+            `Left ${pendingCount} pending transaction(s) on ${account.name} for a later sync`,
+          );
+        }
 
         // Fetch existing transactions in the relevant date window to detect CSV/manual duplicates
         const windowStart = new Date(dateFrom);
@@ -911,38 +1019,21 @@ export class BankSyncService {
         // Try updating verified bank balance if available
         try {
           const balances = await this.enableBankingService.getAccountBalances(
-            account.bankAccountUid,
+            targetUid,
             appId,
             key,
+            psu,
           );
-          if (
-            balances?.balances &&
-            Array.isArray(balances.balances) &&
-            balances.balances.length > 0
-          ) {
-            const closingBooked =
-              balances.balances.find(
-                (b: any) =>
-                  b.balance_type === 'CLBD' ||
-                  b.balance_type === 'closingBooked' ||
-                  b.balance_type === 'INTERIM_BOOKED',
-              ) || balances.balances[0];
-
-            if (closingBooked?.balance_amount?.amount) {
-              const balanceAmt = parseFloat(
-                closingBooked.balance_amount.amount,
-              );
-              if (!isNaN(balanceAmt)) {
-                await this.prisma.setting.upsert({
-                  where: { key: `balance_verified_account_${account.id}` },
-                  update: { value: balanceAmt.toString() },
-                  create: {
-                    key: `balance_verified_account_${account.id}`,
-                    value: balanceAmt.toString(),
-                  },
-                });
-              }
-            }
+          const balanceAmt = pickBankBalance(balances?.balances);
+          if (balanceAmt !== null) {
+            await this.prisma.setting.upsert({
+              where: { key: `balance_verified_account_${account.id}` },
+              update: { value: balanceAmt.toString() },
+              create: {
+                key: `balance_verified_account_${account.id}`,
+                value: balanceAmt.toString(),
+              },
+            });
           }
         } catch (balanceErr) {
           this.logger.warn(
@@ -954,7 +1045,10 @@ export class BankSyncService {
         // Update lastSyncedAt on account
         await this.prisma.account.update({
           where: { id: account.id },
-          data: { lastSyncedAt: new Date() },
+          data: {
+            lastSyncedAt: new Date(),
+            bankPendingFrom: oldestPending ? new Date(oldestPending) : null,
+          },
         });
 
         accountResults.push({
@@ -966,29 +1060,42 @@ export class BankSyncService {
         });
       } catch (syncErr: any) {
         this.logger.error(`Error syncing account ${account.name}:`, syncErr);
-        const errMsg = syncErr?.message || syncErr?.response?.message || '';
-        const isSessionExpired =
-          errMsg.toLowerCase().includes('expired') ||
-          syncErr?.status === 401 ||
-          syncErr?.response?.statusCode === 401;
+        const connectionId = account.bankConnectionId!;
+        if (!problemByConnection.has(connectionId)) {
+          problemByConnection.set(
+            connectionId,
+            await this.diagnoseConnection(
+              account.bankConnection.sessionId,
+              syncErr,
+              appId,
+              key,
+            ),
+          );
+        }
+        const problem = problemByConnection.get(connectionId) ?? null;
 
-        if (isSessionExpired && account.bankConnectionId) {
-          // Immediately mark connection as expired so UI updates badge
+        if (problem) {
+          // Mark the connection expired so the UI and Home Assistant show it.
           await this.prisma.bankConnection
             .update({
-              where: { id: account.bankConnectionId },
+              where: { id: connectionId },
               data: { validUntil: new Date() },
             })
             .catch(() => {});
         }
 
+        const errMsg = syncErr?.message || syncErr?.response?.message || '';
         accountResults.push({
           accountId: account.id,
           accountName: account.name,
-          status: isSessionExpired ? 'EXPIRED' : 'ERROR',
-          message: isSessionExpired
-            ? 'La sesión de autenticación bancaria ha expirado. Por favor, haz clic en "Re-autenticar" en Configuración.'
-            : errMsg || 'Error al sincronizar con el banco',
+          status: problem ? 'EXPIRED' : 'ERROR',
+          reason: problem ?? undefined,
+          message:
+            problem === 'REVOKED'
+              ? 'Access to this bank was withdrawn. Connect it again in Settings.'
+              : problem === 'EXPIRED'
+                ? 'Bank authorization expired. Please re-authenticate in Settings.'
+                : errMsg || 'Bank synchronization failed.',
           newCount: 0,
           duplicateCount: 0,
         });
@@ -1029,13 +1136,47 @@ export class BankSyncService {
     };
   }
 
-  private generateTransactionHash(
-    accountId: string,
-    date: string,
-    amount: number,
-    description: string,
-  ): string {
-    const raw = `${accountId}|${date}|${amount.toFixed(2)}|${description.trim().toLowerCase()}`;
-    return crypto.createHash('sha256').update(raw).digest('hex');
+  /**
+   * After a failed sync, whether the connection itself is the problem. Asks
+   * Enable Banking for the session's state, which also catches consent the
+   * user withdrew at their bank; falls back to reading the error.
+   */
+  private async diagnoseConnection(
+    sessionId: string,
+    syncErr: any,
+    appId: string,
+    key: string,
+  ): Promise<ConnectionProblem | null> {
+    try {
+      const session = await this.enableBankingService.getSession(
+        sessionId,
+        appId,
+        key,
+      );
+      const status = (session?.status || '').toUpperCase();
+      if (status === 'REVOKED' || status === 'CANCELLED') return 'REVOKED';
+      if (status === 'EXPIRED' || status === 'CLOSED' || status === 'INVALID') {
+        return 'EXPIRED';
+      }
+      if (status === 'AUTHORIZED') return null;
+    } catch (err) {
+      if (
+        err instanceof EnableBankingApiError &&
+        (err.upstreamStatus === 404 || err.upstreamStatus === 401)
+      ) {
+        return 'EXPIRED';
+      }
+      this.logger.debug(`Could not read session ${sessionId} state`);
+    }
+
+    const upstream =
+      syncErr instanceof EnableBankingApiError
+        ? syncErr.upstreamStatus
+        : undefined;
+    const text =
+      `${syncErr?.errorName ?? ''} ${syncErr?.message ?? ''}`.toLowerCase();
+    if (upstream === 401 || text.includes('expired')) return 'EXPIRED';
+    if (text.includes('revoked')) return 'REVOKED';
+    return null;
   }
 }
